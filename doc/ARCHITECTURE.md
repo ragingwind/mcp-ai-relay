@@ -1,9 +1,9 @@
 # ARCHITECTURE — mcp-openai-relay
 
 A relay server that exposes the OpenAI Chat Completions API as an MCP
-(Model Context Protocol) tool. Deployed on Vercel: when an MCP host such as
-Claude Code calls in, this server calls OpenAI and returns the response back
-to the host.
+(Model Context Protocol) tool. Deployable on Vercel (managed serverless) or
+as a Docker container (self-hosted): when an MCP host such as Claude Code
+calls in, this server calls OpenAI and returns the response back to the host.
 
 This document is the single source of truth (SSOT) for v1 architecture.
 For background research, tradeoffs, and alternatives considered, see the
@@ -23,28 +23,25 @@ sources in the [Reference index](#reference-index).
 | D6 | **Streamable HTTP transport only** (SSE disabled) | Stateless. Avoids Redis dependency |
 | D7 | **OpenAI streams are accumulated server-side and returned as a single `CallToolResult`** | MCP `tools/call` returns a single result; there is no token-level streaming channel |
 
-> **Note on D2**: "Completion" refers to the existing Chat Completions API, not OpenAI's newer Responses API.
-> If the original intent was different, update D2 in this document.
-
 ---
 
 ## 2. System diagram
 
 ```
 ┌──────────────────────┐                ┌─────────────────────────────┐                 ┌───────────────────┐
-│  MCP Host            │  Streamable    │  Vercel Function (Node 20)  │  HTTPS/SSE      │  OpenAI API       │
-│  (Claude Code, etc.) │  HTTP + Bearer │  Next.js App Router         │  stream:true    │  /v1/chat/        │
+│  MCP Host            │  Streamable    │  Relay  (Node 20.x)         │  HTTPS/SSE      │  OpenAI API       │
+│  (Claude Code, etc.) │  HTTP + Bearer │  Vercel Function or Docker  │  stream:true    │  /v1/chat/        │
 │                      │ ─────────────► │  /api/[transport]/route.ts  │ ─────────────► │  completions      │
 │                      │                │   ├─ withMcpAuth(bearer)    │                 │                   │
 │                      │ ◄───────────── │   ├─ mcp-handler            │ ◄───────────── │                   │
-│                      │  CallToolResult│   │   └─ tool: completion_chat │  delta chunks   │                   │
+│                      │  CallToolResult│   │   └─ completion_chat    │  delta chunks   │                   │
 └──────────────────────┘                │   └─ accumulate stream      │                 └───────────────────┘
                                         │       → single text content │
                                         └─────────────────────────────┘
                                                      │
                                                      ▼
-                                          OPENAI_API_KEY (Sensitive env var)
-                                          RELAY_AUTH_TOKEN (Sensitive env var)
+                                          OPENAI_API_KEY
+                                          RELAY_AUTH_TOKEN
 ```
 
 ---
@@ -127,25 +124,35 @@ mcp-openai-relay/
 ├── app/
 │   └── api/
 │       └── [transport]/
-│           └── route.ts          # mcp-handler entry point, withMcpAuth applied
+│           └── route.ts                # MCP entry — withMcpAuth + mcp-handler
 ├── lib/
-│   ├── env.ts                    # env var loading + zod validation
-│   ├── openai-client.ts          # openai SDK instance (singleton)
-│   ├── auth.ts                   # bearer token verifyToken (timing-safe compare)
+│   ├── env.ts                          # env var loading + zod validation
+│   ├── openai-client.ts                # openai SDK singleton
+│   ├── auth.ts                         # bearer verifyToken (timing-safe compare)
 │   └── tools/
-│       └── completion-chat.ts    # completion_chat tool handler + zod schema
-├── doc/
-│   └── ARCHITECTURE.md           # this document
+│       └── completion-chat.ts          # completion_chat handler + zod schema
 ├── tests/
 │   ├── unit/
-│   │   └── completion-chat.test.ts
+│   │   └── completion-chat.test.ts     # tool handler — input validation, error mapping
 │   └── integration/
-│       └── route.test.ts         # invokes route directly via Web Request → Response
-├── CLAUDE.md                     # agent collaboration guide
+│       └── route.test.ts               # invokes route via Web Request → Response
+├── scripts/
+│   ├── verify.mjs                      # automated C1/C2/C5 smoke against pnpm dev
+│   └── mcp-inspect.mjs                 # ad-hoc tools/call wrapping MCP Inspector CLI
+├── doc/
+│   ├── ARCHITECTURE.md                 # this document — design SSOT
+│   ├── DEPLOY.md                       # Vercel + Docker runbook
+│   └── QA-MCP-INSPECTOR.md             # manual verification procedure
+├── CLAUDE.md                           # AI agent collaboration guide
+├── Dockerfile                          # multi-stage, node:20-alpine digest-pinned
+├── compose.yml                         # single-host self-hosted launch
+├── vercel.json                         # pins maxDuration: 300, region: iad1
 ├── package.json
 ├── tsconfig.json
 ├── biome.json
-├── vercel.json                   # pins maxDuration, region
+├── vitest.config.ts
+├── vitest.workspace.ts
+├── next.config.ts
 ├── .env.example
 └── .gitignore
 ```

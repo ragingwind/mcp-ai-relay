@@ -1,19 +1,26 @@
-# QA — MCP Inspector manual E2E verification
+# QA — MCP verification
 
-This is v1's **single manual verification procedure**. Run it once before
-every PR merge AND once after every production deploy. It exists because v1
-has no UI (`evidence-mode: none` per `CLAUDE.md` §3) and therefore no
-automated browser evidence; the MCP Inspector is the closest substitute for
-end-to-end verification against a real OpenAI API call.
+This is v1's **single verification procedure**. Run it once before every PR
+merge AND once after every production deploy. It exists because v1 has no UI
+(`evidence-mode: none` per `CLAUDE.md` §3) and therefore no automated browser
+evidence; the MCP Inspector is the closest substitute for end-to-end
+verification against a real OpenAI API call.
 
-**Time budget**: ~3 minutes once you have the env set up.
+Two ways to run it:
+
+- **Automated smoke** — `pnpm verify` covers C1, C2, C5 in ~10 seconds.
+  Use this on most PRs.
+- **Manual five-scenario** — required when C4 (clamp) or C6 (cancellation)
+  is in scope, and after every production deploy.
+
+**Time budget**: ~3 minutes for the manual procedure once your env is set up.
 
 > **For automated scenarios (Playwright, etc.) and periodic production health
 > checks**, see [`ARCHITECTURE.md` §11](./ARCHITECTURE.md#11-future-work-v2-backlog) — both are v2 candidates.
 
 ---
 
-## Quick path: `pnpm verify` and `pnpm inspect`
+## Automated smoke (`pnpm verify` / `pnpm inspect`)
 
 Two scripts wrap the smoke flow against a running `pnpm dev`. Run either in a
 second terminal.
@@ -72,6 +79,12 @@ Flags (priority: `--flag=` > `process.env` > `.env.local` > default):
 | `--method=`  | —             | `tools/call` (also `tools/list`) |
 
 ---
+
+## Manual procedure
+
+`pnpm verify` covers only the client-assertable subset (C1, C2, C5). For
+C4 (clamp), C6 (cancellation), and production re-verification, fall through
+to the manual procedure below (sections A–E).
 
 ## A. Preparation
 
@@ -151,7 +164,7 @@ MCP Inspector verification — <YYYY-MM-DD HH:MM TZ>
 Verifier:  <your name / handle>
 Branch:    <branch name>
 Commit:    <git rev-parse --short HEAD>
-Endpoint:  http://localhost:3000/api/mcp  (or production URL if §5 of doc/DEPLOY.md)
+Endpoint:  http://localhost:3000/api/mcp  (or production URL — see doc/DEPLOY.md §3)
 
 C1 tools/list                — PASS / FAIL  <one-line note>
 C2 completion_chat happy path    — PASS / FAIL  usage: {prompt_tokens: N, completion_tokens: N, total_tokens: N}
@@ -171,7 +184,7 @@ metadata only per `CLAUDE.md` §4).
 
 ## E. After production deploy
 
-After running [`doc/DEPLOY.md` §5 first-deployment checklist](./DEPLOY.md#5-first-deployment),
+After running [`doc/DEPLOY.md` §3.5 verification checklist](./DEPLOY.md#35-verification-checklist),
 re-run **C1, C2, C5** against the production URL
 (`https://<project>.vercel.app/api/mcp`) using the **production**
 `RELAY_AUTH_TOKEN` and the prod-issued `OPENAI_API_KEY`.
@@ -199,5 +212,5 @@ cancellation observation is harder to confirm in production).
 - [`CLAUDE.md` §3](../CLAUDE.md#3-verify-commands) — evidence policy (`evidence-mode: none`)
 - [`CLAUDE.md` §7](../CLAUDE.md#7-testing--what-goes-where) — test matrix (last row is this procedure)
 - [`CLAUDE.md` §9](../CLAUDE.md#9-frequently-forgotten-items) — Proxy Session Token
-- [`README.md` §Verify with MCP Inspector](../README.md#verify-with-mcp-inspector) — the local quick-start version
-- [`doc/DEPLOY.md` §5](./DEPLOY.md#5-first-deployment) — production-side application of this procedure
+- [`doc/DEPLOY.md` §3](./DEPLOY.md#3-vercel-deployment) — Vercel deployment (this procedure is referenced from §3.5)
+- [`doc/DEPLOY.md` §4](./DEPLOY.md#4-docker-self-hosted) — Docker deployment (smoke flow uses `pnpm inspect`)
