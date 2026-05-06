@@ -1,5 +1,7 @@
 # mcp-openai-relay
 
+> 한국어: [README.ko.md](./README.ko.md)
+
 A relay server that exposes the OpenAI Chat Completions API as an
 [MCP (Model Context Protocol)](https://modelcontextprotocol.io) tool.
 When you register this server with an MCP host such as Claude Code, the
@@ -117,6 +119,12 @@ commands are listed in
 | Deployment runbook (Vercel + Docker, operations) | [`doc/DEPLOY.md`](./doc/DEPLOY.md) |
 | Manual verification (pre-PR, post-deploy) | [`doc/QA-MCP-INSPECTOR.md`](./doc/QA-MCP-INSPECTOR.md) |
 | AI agent collaboration | [`CLAUDE.md`](./CLAUDE.md) |
+
+Korean translations of the user-facing docs (English remains canonical):
+[`README.ko.md`](./README.ko.md) ·
+[`doc/ARCHITECTURE.ko.md`](./doc/ARCHITECTURE.ko.md) ·
+[`doc/DEPLOY.ko.md`](./doc/DEPLOY.ko.md) ·
+[`doc/QA-MCP-INSPECTOR.ko.md`](./doc/QA-MCP-INSPECTOR.ko.md).
 
 ---
 

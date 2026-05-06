@@ -1,5 +1,7 @@
 # QA — MCP verification
 
+> 한국어: [QA-MCP-INSPECTOR.ko.md](./QA-MCP-INSPECTOR.ko.md)
+
 This is v1's **single verification procedure**. Run it once before every PR
 merge AND once after every production deploy. It exists because v1 has no UI
 (`evidence-mode: none` per `CLAUDE.md` §3) and therefore no automated browser

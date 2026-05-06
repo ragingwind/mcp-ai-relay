@@ -1,5 +1,7 @@
 # DEPLOY — mcp-openai-relay
 
+> 한국어: [DEPLOY.ko.md](./DEPLOY.ko.md)
+
 This runbook covers v1 deployment via two paths: **Vercel** (managed
 serverless) and **Docker** (self-hosted container). Architecture decisions
 live in [`ARCHITECTURE.md`](./ARCHITECTURE.md) (§6 `vercel.json`, §7 env

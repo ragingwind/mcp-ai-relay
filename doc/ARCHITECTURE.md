@@ -1,5 +1,7 @@
 # ARCHITECTURE — mcp-openai-relay
 
+> 한국어: [ARCHITECTURE.ko.md](./ARCHITECTURE.ko.md)
+
 A relay server that exposes the OpenAI Chat Completions API as an MCP
 (Model Context Protocol) tool. Deployable on Vercel (managed serverless) or
 as a Docker container (self-hosted): when an MCP host such as Claude Code
