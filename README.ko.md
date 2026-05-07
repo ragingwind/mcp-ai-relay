@@ -92,6 +92,31 @@ claude mcp add --transport http openai-relay \
 
 ---
 
+## 자기 MCP 서버에 임베드
+
+이 릴레이 앱을 그대로 띄우는 대신 자기 MCP 서버(Vercel/Next.js,
+Cloudflare Workers, Claude Desktop 직결용 stdio, Hono 등)에
+`completion_chat` 기능만 심고 싶다면 SDK 패키지를 설치합니다:
+
+```bash
+npm install @ragingwind/mcp-ai-relay @modelcontextprotocol/sdk openai
+```
+
+```ts
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { registerOpenAIChat } from "@ragingwind/mcp-ai-relay/openai";
+
+const server = new McpServer({ name: "my-relay", version: "0.1.0" });
+registerOpenAIChat(server, { apiKey: process.env.OPENAI_API_KEY! });
+```
+
+`registerOpenAIChat`은 closure로 격리되므로, 같은 서버가 여러 업스트림
+(OpenAI proper + Azure + 로컬 vLLM, …)을 별개의 이름을 가진 도구로
+호스팅할 수 있습니다. 전체 API 레퍼런스와 런타임별 레시피:
+[`packages/sdk/README.md`](./packages/sdk/README.md) (영문).
+
+---
+
 ## 기여하기
 
 로컬 개발에는 Node.js 20.x + pnpm 9가 필요합니다:

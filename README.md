@@ -93,6 +93,32 @@ Or register directly in `.mcp.json`:
 
 ---
 
+## Embed in your own MCP server
+
+If you want to host the `completion_chat` capability in your own MCP
+server (Vercel/Next.js, Cloudflare Workers, raw stdio for Claude Desktop
+direct, Hono, etc.) instead of running this relay app, install the
+SDK package:
+
+```bash
+npm install @ragingwind/mcp-ai-relay @modelcontextprotocol/sdk openai
+```
+
+```ts
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { registerOpenAIChat } from "@ragingwind/mcp-ai-relay/openai";
+
+const server = new McpServer({ name: "my-relay", version: "0.1.0" });
+registerOpenAIChat(server, { apiKey: process.env.OPENAI_API_KEY! });
+```
+
+`registerOpenAIChat` is closure-isolated, so the same server may host
+multiple upstreams (OpenAI proper + Azure + local vLLM, …) as distinct
+named tools. Full API reference and runtime-specific recipes:
+[`packages/sdk/README.md`](./packages/sdk/README.md).
+
+---
+
 ## Contributing
 
 Local development needs Node.js 20.x + pnpm 9:
