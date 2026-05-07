@@ -9,7 +9,7 @@
 //   1. `withMcpAuth(handler, ...)` — bearer-token gate. Unauthenticated
 //      requests get 401 + `WWW-Authenticate: Bearer ...` automatically.
 //   2. `createMcpHandler((server) => registerOpenAIChat(server, ...))` —
-//      registers the `completion_chat` tool on each request boundary.
+//      registers the `openai_chat` tool on each request boundary.
 //
 // Vercel-specific exports (kept here, NOT in the SDK):
 //   • `runtime = "nodejs"` — Edge runtime would hit the 25 s TTFB cap and

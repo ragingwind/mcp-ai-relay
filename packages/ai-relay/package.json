@@ -12,14 +12,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./auth": {
-      "types": "./dist/auth.d.ts",
-      "import": "./dist/auth.js"
-    },
-    "./env": {
-      "types": "./dist/env.d.ts",
-      "import": "./dist/env.js"
-    },
     "./openai": {
       "types": "./dist/openai/index.d.ts",
       "import": "./dist/openai/index.js"

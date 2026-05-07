@@ -4,7 +4,7 @@
 // What "integration" means here (per plan OQ-3 / CLAUDE.md §7): the route
 // handler is invoked end-to-end through Next.js's exported HTTP method
 // surface (`POST`, `GET`, `DELETE`) with real Web `Request` and `Response`
-// instances, exercising mcp-handler + withMcpAuth + zod + the completion_chat
+// instances, exercising mcp-handler + withMcpAuth + zod + the openai_chat
 // tool wiring as one stack. Only the OpenAI HTTP boundary is mocked (MSW).
 // We never mock `mcp-handler` itself — that would defeat the purpose.
 //
@@ -26,10 +26,10 @@
 // in `Accept`; missing either yields HTTP 406. We send both on every
 // authed request below.
 
-import { parseEnv } from "ai-relay/env";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { parseEnv } from "../../app/lib/env.js";
 
 // Parse the test-seeded env once. The setup file (tests/setup-env.ts) sets
 // process.env BEFORE this module loads, so the parse succeeds with defaults.
@@ -95,7 +95,7 @@ function makeCallRequest(
       jsonrpc: "2.0",
       id: 1,
       method: "tools/call",
-      params: { name: "completion_chat", arguments: args },
+      params: { name: "openai_chat", arguments: args },
     }),
   };
   if (opts.signal) init.signal = opts.signal;
@@ -217,14 +217,14 @@ describe("route /api/mcp — bearer auth", () => {
 // =========================================================================
 
 describe("route /api/mcp — tools/list", () => {
-  // B4: returns exactly one tool, name "completion_chat"
-  it("P1: exposes a single tool named completion_chat", async () => {
+  // B4: returns exactly one tool, name "openai_chat"
+  it("P1: exposes a single tool named openai_chat", async () => {
     const res = await POST(makeListRequest());
     expect(res.status).toBe(200);
     const envelope = await readJsonRpcResponse(res);
     const tools = (envelope.result?.tools ?? []) as Array<{ name: string }>;
     expect(tools).toHaveLength(1);
-    expect(tools[0]?.name).toBe("completion_chat");
+    expect(tools[0]?.name).toBe("openai_chat");
   });
 
   // B5: tools/list response includes the input schema.
