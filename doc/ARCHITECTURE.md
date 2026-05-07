@@ -122,25 +122,40 @@ Invokes OpenAI Chat Completions once and returns the accumulated text.
 ## 5. Directory structure
 
 ```
-mcp-ai-relay/
+mcp-ai-relay/                              # repo root — Next.js relay app
 ├── app/
 │   └── api/
 │       └── [transport]/
-│           └── route.ts                # MCP entry — withMcpAuth + mcp-handler
-├── lib/
-│   ├── env.ts                          # env var loading + zod validation
-│   ├── openai-client.ts                # openai SDK singleton
-│   ├── auth.ts                         # bearer verifyToken (timing-safe compare)
-│   └── tools/
-│       └── completion-chat.ts          # completion_chat handler + zod schema
+│           └── route.ts                # MCP entry — imports the SDK package
+├── packages/
+│   └── sdk/                            # @ragingwind/mcp-ai-relay (publishable)
+│       ├── src/
+│       │   ├── index.ts                # public re-exports (auth)
+│       │   ├── auth.ts                 # verifyBearer (portable, no node:crypto)
+│       │   ├── env.ts                  # parseEnv (opt-in subpath)
+│       │   └── openai/
+│       │       ├── index.ts            # provider re-exports
+│       │       ├── chat.ts             # registerOpenAIChat + makeOpenAIChatHandler
+│       │       └── client.ts           # createOpenAIClient factory
+│       ├── tests/
+│       │   ├── setup-env.ts
+│       │   └── unit/
+│       │       ├── auth.test.ts
+│       │       ├── chat.test.ts
+│       │       ├── env.test.ts
+│       │       └── multi-registration.test.ts
+│       ├── package.json                # exports map + peerDeps + tsc build
+│       ├── tsconfig.json               # extends root (typecheck mode)
+│       ├── tsconfig.build.json         # emits dist/ for npm consumers
+│       └── vitest.config.ts
 ├── tests/
-│   ├── unit/
-│   │   └── completion-chat.test.ts     # tool handler — input validation, error mapping
+│   ├── setup-env.ts                    # seeds process.env for the route test
 │   └── integration/
 │       └── route.test.ts               # invokes route via Web Request → Response
 ├── scripts/
 │   ├── verify.mjs                      # automated C1/C2/C5 smoke against pnpm dev
-│   └── mcp-inspect.mjs                 # ad-hoc tools/call wrapping MCP Inspector CLI
+│   ├── mcp-inspect.mjs                 # ad-hoc tools/call wrapping MCP Inspector CLI
+│   └── check-dev-env.mjs               # pre-flight env check for pnpm dev
 ├── doc/
 │   ├── ARCHITECTURE.md                 # this document — design SSOT
 │   ├── DEPLOY.md                       # Vercel + Docker runbook
@@ -149,12 +164,12 @@ mcp-ai-relay/
 ├── Dockerfile                          # multi-stage, node:20-alpine digest-pinned
 ├── compose.yml                         # single-host self-hosted launch
 ├── vercel.json                         # pins maxDuration: 300, region: iad1
-├── package.json
+├── pnpm-workspace.yaml                 # workspace declares packages/*
+├── package.json                        # depends on @ragingwind/mcp-ai-relay (workspace:*)
 ├── tsconfig.json
 ├── biome.json
-├── vitest.config.ts
-├── vitest.workspace.ts
-├── next.config.ts
+├── vitest.workspace.ts                 # SDK unit + integration projects
+├── next.config.ts                      # transpilePackages: [@ragingwind/mcp-ai-relay]
 ├── .env.example
 └── .gitignore
 ```
@@ -176,6 +191,7 @@ mcp-ai-relay/
 | Lint/Format | Biome `^2` |
 | Test | vitest + msw (mock at the HTTP boundary) |
 | Deployment | Vercel Pro, region `iad1`, `maxDuration: 300` |
+| SDK build | `tsc -p tsconfig.build.json` → `packages/sdk/dist/`; ESM, peerDeps for `@modelcontextprotocol/sdk` and `openai` (optional) |
 
 ### `vercel.json`
 ```json
@@ -276,7 +292,8 @@ These items are listed as v2 candidates in §11.
 
 | Layer | Tools | Scope |
 |---|---|---|
-| Unit | vitest + msw | The `completion_chat` tool handler — input validation, max_tokens clamp, error mapping |
+| Unit (SDK) | vitest + msw, run inside `packages/sdk/` | `verifyBearer`, `parseEnv`, `registerOpenAIChat` factory — input validation, max_tokens clamp, error mapping |
+| Multi-registration | vitest + msw, real `McpServer` | Same server registered against multiple times with different `name` + `apiKey` + `baseURL` — each handler routes to its own upstream with no cross-talk |
 | Integration | vitest, route invoked directly via Web `Request`/`Response` | Bearer auth (present/missing/invalid), MCP `tools/list` and `tools/call` JSON-RPC flows |
 | Manual E2E | MCP Inspector | Locally run `pnpm dev` → `npx @modelcontextprotocol/inspector` → Streamable HTTP, connect to `http://localhost:3000/api/mcp` |
 

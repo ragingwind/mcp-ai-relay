@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type EnvSource, parseEnv } from "../../lib/env.js";
+import { type EnvSource, parseEnv } from "../../src/env.js";
 
 // A minimal-valid input — every behavior test starts from this and overrides
 // the one or two keys it cares about. Avoids re-declaring boilerplate per case.

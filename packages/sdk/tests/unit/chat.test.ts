@@ -27,7 +27,7 @@ import {
   type OpenAIChatConfig,
   type OpenAIChatHandlerBundle,
   type OpenAIChatResult,
-} from "../../lib/openai/chat.js";
+} from "../../src/openai/chat.js";
 
 // --- shared MSW server lifecycle -----------------------------------------
 

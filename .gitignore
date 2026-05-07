@@ -15,3 +15,4 @@ tsconfig.tsbuildinfo
 # Claude Code agent harness local state (per-machine, do not commit)
 .claude/
 .vercel
+packages/*/dist

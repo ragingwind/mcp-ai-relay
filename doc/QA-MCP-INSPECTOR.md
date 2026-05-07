@@ -141,7 +141,11 @@ to the manual procedure below (sections A–E).
 
 ## C. Verification scenarios
 
-All five MUST pass before PR merge.
+All scenarios MUST pass before PR merge. C7 only applies when the relay
+registers more than one upstream (the default v1 relay registers a single
+`completion_chat` tool, so C7 is exercised in the SDK's
+`multi-registration` example or in any consumer that registers multiple
+upstreams on one server).
 
 | # | Scenario | Steps | Expected result |
 |---|---|---|---|
@@ -150,6 +154,7 @@ All five MUST pass before PR merge.
 | **C4** | max_tokens clamp | Same as C2 but `max_tokens: 999999` (well above `MAX_OUTPUT_TOKENS_CEILING`) | Response succeeds; the value was silently clamped to `MAX_OUTPUT_TOKENS_CEILING` (default 4096) before the upstream call. No error. |
 | **C5** | Bearer rejection | In Inspector, **Disconnect**, change the Header to `Authorization: Bearer wrong-token`, **Connect** | Connection fails with HTTP 401 + `WWW-Authenticate: Bearer` header. Reconnect with the correct token to continue. |
 | **C6** | Cancellation (manual) | Run C2 with a long prompt (e.g., "Write a 500-word essay about sourdough"). Mid-stream, **Disconnect** in the Inspector | Server logs show the SDK call aborted; OpenAI usage page (refreshed in ~1 minute) does NOT show full output cost. (Imprecise visual confirmation — manual observation only.) |
+| **C7** | Multi-registration *(SDK consumers only)* | On a server that registered `registerOpenAIChat` against two distinct names (e.g. `openai_chat` + `azure_chat` with different `apiKey` + `baseURL`), open **Tools** then run each one. | `tools/list` returns both entries. Each `tools/call` answers from its own upstream (verify by switching upstreams between calls and confirming responses do not cross). |
 
 ---
 

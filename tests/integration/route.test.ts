@@ -26,10 +26,10 @@
 // in `Accept`; missing either yields HTTP 406. We send both on every
 // authed request below.
 
+import { parseEnv } from "@ragingwind/mcp-ai-relay/env";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { parseEnv } from "../../lib/env.js";
 
 // Parse the test-seeded env once. The setup file (tests/setup-env.ts) sets
 // process.env BEFORE this module loads, so the parse succeeds with defaults.

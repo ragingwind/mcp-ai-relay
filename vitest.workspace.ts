@@ -1,21 +1,15 @@
 import { defineWorkspace } from "vitest/config";
 
-// Vitest 2 uses the workspace API (Vitest 3's `projects` is unavailable on
-// the `^2` line pinned in ARCHITECTURE.md §6 / plan OQ-5). The two named
-// projects below back `pnpm test:unit` and `pnpm test:integration`.
+// Two test surfaces:
+//   • SDK unit tests  — in packages/sdk/, configured by its own vitest.config.ts.
+//   • App integration — exercises the Next.js route end-to-end against the
+//     workspace-installed `@ragingwind/mcp-ai-relay`.
 //
-// `setupFiles` registers `tests/setup-env.ts` in BOTH projects so that any
-// test that transitively imports `lib/env.ts` has minimal valid `process.env`
-// values seeded before module-level `parseEnv(process.env)` runs (per OQ-5).
+// The `tests/setup-env.ts` setup file seeds `process.env` BEFORE the route
+// module loads (the route still calls `parseEnv(process.env)` at module
+// load — that's app-side concern, not SDK-side).
 export default defineWorkspace([
-  {
-    test: {
-      name: "unit",
-      include: ["tests/unit/**/*.test.ts"],
-      environment: "node",
-      setupFiles: ["./tests/setup-env.ts"],
-    },
-  },
+  "./packages/sdk/vitest.config.ts",
   {
     test: {
       name: "integration",

@@ -131,25 +131,40 @@ OpenAI Chat Completions를 한 번 호출하고 누적된 텍스트를 반환합
 ## 5. 디렉토리 구조
 
 ```
-mcp-ai-relay/
+mcp-ai-relay/                              # 저장소 루트 — Next.js 릴레이 앱
 ├── app/
 │   └── api/
 │       └── [transport]/
-│           └── route.ts                # MCP 진입점 — withMcpAuth + mcp-handler
-├── lib/
-│   ├── env.ts                          # 환경변수 로딩 + zod 검증
-│   ├── openai-client.ts                # openai SDK 싱글턴
-│   ├── auth.ts                         # bearer verifyToken (timing-safe 비교)
-│   └── tools/
-│       └── completion-chat.ts          # completion_chat 핸들러 + zod 스키마
+│           └── route.ts                # MCP 진입점 — SDK 패키지 import
+├── packages/
+│   └── sdk/                            # @ragingwind/mcp-ai-relay (publishable)
+│       ├── src/
+│       │   ├── index.ts                # 공개 re-export (auth)
+│       │   ├── auth.ts                 # verifyBearer (portable, node:crypto 불필요)
+│       │   ├── env.ts                  # parseEnv (opt-in subpath)
+│       │   └── openai/
+│       │       ├── index.ts            # provider re-export
+│       │       ├── chat.ts             # registerOpenAIChat + makeOpenAIChatHandler
+│       │       └── client.ts           # createOpenAIClient 팩토리
+│       ├── tests/
+│       │   ├── setup-env.ts
+│       │   └── unit/
+│       │       ├── auth.test.ts
+│       │       ├── chat.test.ts
+│       │       ├── env.test.ts
+│       │       └── multi-registration.test.ts
+│       ├── package.json                # exports map + peerDeps + tsc 빌드
+│       ├── tsconfig.json               # 루트 extends (typecheck 모드)
+│       ├── tsconfig.build.json         # npm consumer용 dist/ 생성
+│       └── vitest.config.ts
 ├── tests/
-│   ├── unit/
-│   │   └── completion-chat.test.ts     # 도구 핸들러 — 입력 검증, 오류 매핑
+│   ├── setup-env.ts                    # 라우트 테스트용 process.env 시드
 │   └── integration/
 │       └── route.test.ts               # 라우트를 Web Request → Response로 직접 호출
 ├── scripts/
 │   ├── verify.mjs                      # pnpm dev 대상 자동 C1/C2/C5 스모크
-│   └── mcp-inspect.mjs                 # MCP Inspector CLI 래핑 — 단발 tools/call
+│   ├── mcp-inspect.mjs                 # MCP Inspector CLI 래핑 — 단발 tools/call
+│   └── check-dev-env.mjs               # pnpm dev 사전 env 체크
 ├── doc/
 │   ├── ARCHITECTURE.md                 # 영문 SSOT
 │   ├── ARCHITECTURE.ko.md              # 이 문서
@@ -161,12 +176,12 @@ mcp-ai-relay/
 ├── Dockerfile                          # multi-stage, node:20-alpine digest pin
 ├── compose.yml                         # 단일 호스트 셀프 호스팅 런처
 ├── vercel.json                         # maxDuration: 300, region: iad1 고정
-├── package.json
+├── pnpm-workspace.yaml                 # workspace에 packages/* 등록
+├── package.json                        # @ragingwind/mcp-ai-relay (workspace:*) 의존
 ├── tsconfig.json
 ├── biome.json
-├── vitest.config.ts
-├── vitest.workspace.ts
-├── next.config.ts
+├── vitest.workspace.ts                 # SDK unit + integration 프로젝트
+├── next.config.ts                      # transpilePackages: [@ragingwind/mcp-ai-relay]
 ├── .env.example
 └── .gitignore
 ```
@@ -188,6 +203,7 @@ mcp-ai-relay/
 | Lint/Format | Biome `^2` |
 | Test | vitest + msw (HTTP 경계에서 mock) |
 | Deployment | Vercel Pro, region `iad1`, `maxDuration: 300` |
+| SDK 빌드 | `tsc -p tsconfig.build.json` → `packages/sdk/dist/`; ESM, peerDeps는 `@modelcontextprotocol/sdk` + `openai`(optional) |
 
 ### `vercel.json`
 ```json
@@ -293,7 +309,8 @@ export function verifyToken(req: Request, bearerToken: string | undefined) {
 
 | 레이어 | 도구 | 범위 |
 |---|---|---|
-| Unit | vitest + msw | `completion_chat` 도구 핸들러 — 입력 검증, max_tokens 클램프, 오류 매핑 |
+| Unit (SDK) | vitest + msw, `packages/sdk/` 안에서 실행 | `verifyBearer`, `parseEnv`, `registerOpenAIChat` 팩토리 — 입력 검증, max_tokens 클램프, 오류 매핑 |
+| Multi-registration | vitest + msw, 실제 `McpServer` | 같은 server에 다른 `name` + `apiKey` + `baseURL`로 여러 번 등록 — 각 핸들러가 자기 업스트림으로 라우팅, 상호 영향 없음 |
 | Integration | vitest, 라우트를 Web `Request`/`Response`로 직접 호출 | Bearer auth (있음/없음/잘못됨), MCP `tools/list` / `tools/call` JSON-RPC 흐름 |
 | Manual E2E | MCP Inspector | 로컬에서 `pnpm dev` → `npx @modelcontextprotocol/inspector` → Streamable HTTP, `http://localhost:3000/api/mcp` 연결 |
 
