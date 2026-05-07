@@ -36,6 +36,57 @@ compatibility — Bun, Deno, Cloudflare Workers with `nodejs_compat`).
 
 ## Quick start
 
+### Zero-config CLI (no code, no install — `npx`)
+
+Easiest path for the single-OpenAI use case. The SDK ships a `bin`
+named `mcp-ai-relay`; pass a provider flag and the package launches a
+stdio MCP server that registers the matching tool.
+
+Register directly in `claude_desktop_config.json` (Claude Desktop):
+
+```json
+{
+  "mcpServers": {
+    "openai-relay": {
+      "command": "npx",
+      "args": ["-y", "@ragingwind/mcp-ai-relay", "--openai-completion"],
+      "env": {
+        "OPENAI_API_KEY": "sk-..."
+      }
+    }
+  }
+}
+```
+
+CLI surface:
+
+```
+mcp-ai-relay <provider-flag> [--name <name>] [--description <desc>]
+
+Provider flags (exactly one required):
+  --openai-completion   OpenAI Chat Completions
+                        Required env: OPENAI_API_KEY
+                        Optional env: OPENAI_BASE_URL,
+                                      OPENAI_MAX_OUTPUT_TOKENS_CEILING,
+                                      OPENAI_REQUEST_TIMEOUT_MS
+
+Options:
+  --name <name>         Override the registered MCP tool name
+                        (default: completion_chat)
+  --description <desc>  Override the tool description
+  --help, -h            Show this message
+  --version, -V         Print SDK version
+```
+
+Future flags (reserved): `--anthropic-messages`, `--gemini-generate`,
+`--ai-gateway-chat`. Each follows the same pattern: provider-prefixed
+env vars supply the credentials.
+
+**Multi-upstream is intentionally not expressible via the CLI.** Use
+the SDK API directly when you want one server hosting OpenAI + Azure +
+local LLM as distinct named tools — see
+[examples/multi-upstream/](https://github.com/ragingwind/mcp-ai-relay/tree/main/examples/multi-upstream).
+
 ### Embed in a Vercel/Next.js MCP route
 
 ```ts

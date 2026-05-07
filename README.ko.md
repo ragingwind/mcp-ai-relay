@@ -96,7 +96,25 @@ claude mcp add --transport http openai-relay \
 
 이 릴레이 앱을 그대로 띄우는 대신 자기 MCP 서버(Vercel/Next.js,
 Cloudflare Workers, Claude Desktop 직결용 stdio, Hono 등)에
-`completion_chat` 기능만 심고 싶다면 SDK 패키지를 설치합니다:
+`completion_chat` 기능만 심고 싶다면 두 가지 경로가 있습니다:
+
+**Zero-config (코드 없이) — `npx`**
+
+Claude Desktop의 `claude_desktop_config.json`에 바로 등록:
+
+```json
+{
+  "mcpServers": {
+    "openai-relay": {
+      "command": "npx",
+      "args": ["-y", "@ragingwind/mcp-ai-relay", "--openai-completion"],
+      "env": { "OPENAI_API_KEY": "sk-..." }
+    }
+  }
+}
+```
+
+**라이브러리 API (전체 제어권)**
 
 ```bash
 npm install @ragingwind/mcp-ai-relay @modelcontextprotocol/sdk openai

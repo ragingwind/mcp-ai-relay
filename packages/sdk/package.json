@@ -25,13 +25,16 @@
       "import": "./dist/openai/index.js"
     }
   },
+  "bin": {
+    "mcp-ai-relay": "./dist/bin/cli.js"
+  },
   "files": [
     "dist",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').chmodSync('dist/bin/cli.js', 0o755)\"",
     "build:watch": "tsc -p tsconfig.build.json --watch",
     "test": "vitest run --passWithNoTests",
     "clean": "rm -rf dist"

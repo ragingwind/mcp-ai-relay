@@ -97,8 +97,26 @@ Or register directly in `.mcp.json`:
 
 If you want to host the `completion_chat` capability in your own MCP
 server (Vercel/Next.js, Cloudflare Workers, raw stdio for Claude Desktop
-direct, Hono, etc.) instead of running this relay app, install the
-SDK package:
+direct, Hono, etc.) instead of running this relay app, the SDK supports
+two paths:
+
+**Zero-config (no code) — `npx`**
+
+Register directly in Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "openai-relay": {
+      "command": "npx",
+      "args": ["-y", "@ragingwind/mcp-ai-relay", "--openai-completion"],
+      "env": { "OPENAI_API_KEY": "sk-..." }
+    }
+  }
+}
+```
+
+**Library API (full control)**
 
 ```bash
 npm install @ragingwind/mcp-ai-relay @modelcontextprotocol/sdk openai

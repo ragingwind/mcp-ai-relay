@@ -14,6 +14,16 @@ publishable npm package.
 
 ### Added
 
+- **CLI bin `mcp-ai-relay`** — zero-config stdio MCP server launcher.
+  `npx -y @ragingwind/mcp-ai-relay --openai-completion` registers the
+  `completion_chat` tool and connects via stdio. Provider flag set is
+  designed for forward extension (`--anthropic-messages`,
+  `--gemini-generate`, `--ai-gateway-chat` reserved). `--name` and
+  `--description` flags override the default tool descriptor; env vars
+  (`OPENAI_API_KEY`, optional `OPENAI_BASE_URL`,
+  `OPENAI_MAX_OUTPUT_TOKENS_CEILING`, `OPENAI_REQUEST_TIMEOUT_MS`)
+  supply the runtime config. Multi-upstream registration stays a
+  code-based use case — the CLI ships one tool per invocation.
 - **`registerOpenAIChat(server, config)`** — register the
   `completion_chat` MCP tool on any `McpServer`. Each call creates an
   independent closure; the same server may be registered against
