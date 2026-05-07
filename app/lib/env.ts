@@ -37,11 +37,10 @@ export type Env = z.infer<typeof envSchema>;
 // itself satisfies this signature, so callers passing it still type-check.
 export type EnvSource = Record<string, string | undefined>;
 
+// Mirrors redactZodError in packages/ai-relay/src/config.ts; keep the two in lock-step.
 export function parseEnv(source: EnvSource): Env {
   const result = envSchema.safeParse(source);
   if (result.success) return result.data;
-  // Redacted error: only path + message text from each zod issue. Never include
-  // `issue.input` / `issue.received` / any value-derived strings.
   const failures = result.error.issues
     .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
     .join("; ");

@@ -27,9 +27,11 @@ const providerConfigSchema = z
   })
   .strict();
 
-const relayConfigSchema = z.object({
-  providers: z.array(providerConfigSchema).min(1),
-});
+const relayConfigSchema = z
+  .object({
+    providers: z.array(providerConfigSchema).min(1),
+  })
+  .strict();
 
 export type ProviderConfig = z.infer<typeof providerConfigSchema>;
 export type RelayConfig = z.infer<typeof relayConfigSchema>;
@@ -56,6 +58,7 @@ export type LoadConfigSource = {
 const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
 const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
 
+// Mirrors redactZodError in app/lib/env.ts; keep the two in lock-step.
 function redactZodError(prefix: string, error: z.ZodError): Error {
   const failures = error.issues
     .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
@@ -67,7 +70,7 @@ function parsePositiveInt(value: string | undefined): number | undefined {
   if (value === undefined || value === "") return undefined;
   const n = Number(value);
   if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) {
-    throw new Error(`Invalid positive integer: ${value.length > 0 ? "(redacted)" : ""}`);
+    throw new Error("Invalid positive integer (env value redacted)");
   }
   return n;
 }
@@ -132,7 +135,26 @@ function buildFromEnvOnly(env: EnvSource): RelayConfig {
   return { providers: [withDefaults(materialiseId(parsed.data))] };
 }
 
-function buildFromFile(file: string, env: EnvSource | undefined): RelayConfig {
+function applyArgsOverrides(p: ProviderConfig, args: ArgsSource): ProviderConfig {
+  // Match contract: provider must equal; if args.capability is set it must equal too.
+  if (args.provider !== undefined && args.provider !== p.provider) return p;
+  if (args.capability !== undefined && args.capability !== p.capability) return p;
+  return {
+    ...p,
+    ...(args.id !== undefined ? { id: args.id } : {}),
+    ...(args.apiKey !== undefined ? { apiKey: args.apiKey } : {}),
+    ...(args.baseURL !== undefined ? { baseURL: args.baseURL } : {}),
+    ...(args.maxOutputTokens !== undefined ? { maxOutputTokens: args.maxOutputTokens } : {}),
+    ...(args.requestTimeoutMs !== undefined ? { requestTimeoutMs: args.requestTimeoutMs } : {}),
+    ...(args.description !== undefined ? { description: args.description } : {}),
+  };
+}
+
+function buildFromFile(
+  file: string,
+  env: EnvSource | undefined,
+  args: ArgsSource | undefined,
+): RelayConfig {
   let raw: string;
   try {
     raw = readFileSync(file, "utf8");
@@ -154,15 +176,16 @@ function buildFromFile(file: string, env: EnvSource | undefined): RelayConfig {
 
   const envPartial = env ? envOpenAIPartial(env) : {};
   const filled = parsed.data.providers.map((p) => {
-    const merged: ProviderConfig = {
+    const withEnv: ProviderConfig = {
       ...p,
-      apiKey: p.apiKey || envPartial.apiKey || p.apiKey,
+      apiKey: p.apiKey,
       ...(p.baseURL
         ? { baseURL: p.baseURL }
         : envPartial.baseURL
           ? { baseURL: envPartial.baseURL }
           : {}),
     };
+    const merged = args ? applyArgsOverrides(withEnv, args) : withEnv;
     return withDefaults(materialiseId(merged));
   });
 
@@ -173,7 +196,7 @@ export function loadConfig(source: LoadConfigSource): RelayConfig {
   const { env, file, args } = source;
 
   if (file !== undefined) {
-    return buildFromFile(file, env);
+    return buildFromFile(file, env, args);
   }
 
   if (args && args.provider !== undefined) {
