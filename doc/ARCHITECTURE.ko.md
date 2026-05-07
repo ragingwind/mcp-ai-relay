@@ -203,7 +203,7 @@ mcp-ai-relay/                              # 저장소 루트 — Next.js 릴레
 | Lint/Format | Biome `^2` |
 | Test | vitest + msw (HTTP 경계에서 mock) |
 | Deployment | Vercel Pro, region `iad1`, `maxDuration: 300` |
-| SDK 빌드 | `tsc -p tsconfig.build.json` → `packages/sdk/dist/`; ESM, peerDeps는 `@modelcontextprotocol/sdk` + `openai`(optional) |
+| SDK 빌드 | `tsc -p tsconfig.build.json` → `packages/ai-relay/dist/`; ESM, peerDeps는 `@modelcontextprotocol/sdk` + `openai`(optional) |
 
 ### `vercel.json`
 ```json
@@ -309,7 +309,7 @@ export function verifyToken(req: Request, bearerToken: string | undefined) {
 
 | 레이어 | 도구 | 범위 |
 |---|---|---|
-| Unit (SDK) | vitest + msw, `packages/sdk/` 안에서 실행 | `verifyBearer`, `parseEnv`, `registerOpenAIChat` 팩토리 — 입력 검증, max_tokens 클램프, 오류 매핑 |
+| Unit (SDK) | vitest + msw, `packages/ai-relay/` 안에서 실행 | `verifyBearer`, `parseEnv`, `registerOpenAIChat` 팩토리 — 입력 검증, max_tokens 클램프, 오류 매핑 |
 | Multi-registration | vitest + msw, 실제 `McpServer` | 같은 server에 다른 `name` + `apiKey` + `baseURL`로 여러 번 등록 — 각 핸들러가 자기 업스트림으로 라우팅, 상호 영향 없음 |
 | Integration | vitest, 라우트를 Web `Request`/`Response`로 직접 호출 | Bearer auth (있음/없음/잘못됨), MCP `tools/list` / `tools/call` JSON-RPC 흐름 |
 | Manual E2E | MCP Inspector | 로컬에서 `pnpm dev` → `npx @modelcontextprotocol/inspector` → Streamable HTTP, `http://localhost:3000/api/mcp` 연결 |

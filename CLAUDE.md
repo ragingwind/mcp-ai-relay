@@ -81,9 +81,9 @@ The following items extend or override the global `core.md`.
 
 ```
 app/api/[transport]/route.ts        ← MCP entry point, single route. No other routes are allowed (v1)
-packages/sdk/src/                   ← framework-agnostic SDK (@ragingwind/ai-relay)
-packages/sdk/src/<provider>/        ← provider-specific tools (today: openai/; future: anthropic/, gemini/, ai-gateway/)
-packages/sdk/tests/unit/            ← SDK unit tests; MSW mocks only the OpenAI HTTP boundary; the SDK module itself is real
+packages/ai-relay/src/                   ← framework-agnostic SDK (@ragingwind/ai-relay)
+packages/ai-relay/src/<provider>/        ← provider-specific tools (today: openai/; future: anthropic/, gemini/, ai-gateway/)
+packages/ai-relay/tests/unit/            ← SDK unit tests; MSW mocks only the OpenAI HTTP boundary; the SDK module itself is real
 tests/integration/                  ← invokes the route handler directly with Web Request/Response
 doc/                                ← ARCHITECTURE.md (SSOT) plus future diagrams/ADRs
 ```
@@ -128,12 +128,12 @@ Details: [`doc/ARCHITECTURE.md` §7](./doc/ARCHITECTURE.md#7-environment-variabl
 
 | Case | Location | Notes |
 |---|---|---|
-| Tool input zod validation | `packages/sdk/tests/unit/chat.test.ts` | Enumerate schema-violation cases |
-| `max_tokens` clamp | `packages/sdk/tests/unit/chat.test.ts` | Caller value > ceiling case + injected ceiling override |
-| OpenAI error mapping (401/429/400/5xx) | `packages/sdk/tests/unit/chat.test.ts` | Forge responses with MSW |
-| `verifyBearer` constant-time comparison | `packages/sdk/tests/unit/auth.test.ts` | Length mismatch, single-byte change, NFC vs NFD |
-| `parseEnv` validation + redaction | `packages/sdk/tests/unit/env.test.ts` | Failing-key path included; sentinel values never echoed |
-| **Multi-registration** (same server, multiple upstreams) | `packages/sdk/tests/unit/multi-registration.test.ts` | Distinct names, no cross-talk, independent cancellation |
+| Tool input zod validation | `packages/ai-relay/tests/unit/chat.test.ts` | Enumerate schema-violation cases |
+| `max_tokens` clamp | `packages/ai-relay/tests/unit/chat.test.ts` | Caller value > ceiling case + injected ceiling override |
+| OpenAI error mapping (401/429/400/5xx) | `packages/ai-relay/tests/unit/chat.test.ts` | Forge responses with MSW |
+| `verifyBearer` constant-time comparison | `packages/ai-relay/tests/unit/auth.test.ts` | Length mismatch, single-byte change, NFC vs NFD |
+| `parseEnv` validation + redaction | `packages/ai-relay/tests/unit/env.test.ts` | Failing-key path included; sentinel values never echoed |
+| **Multi-registration** (same server, multiple upstreams) | `packages/ai-relay/tests/unit/multi-registration.test.ts` | Distinct names, no cross-talk, independent cancellation |
 | Bearer auth (present/missing/invalid) | `tests/integration/route.test.ts` | Verify 401 + `WWW-Authenticate` header |
 | `tools/list` JSON-RPC | `tests/integration/route.test.ts` | Confirm a single tool is exposed |
 | `tools/call` happy path | `tests/integration/route.test.ts` | Mock OpenAI with MSW |

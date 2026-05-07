@@ -191,7 +191,7 @@ mcp-ai-relay/                              # repo root — Next.js relay app
 | Lint/Format | Biome `^2` |
 | Test | vitest + msw (mock at the HTTP boundary) |
 | Deployment | Vercel Pro, region `iad1`, `maxDuration: 300` |
-| SDK build | `tsc -p tsconfig.build.json` → `packages/sdk/dist/`; ESM, peerDeps for `@modelcontextprotocol/sdk` and `openai` (optional) |
+| SDK build | `tsc -p tsconfig.build.json` → `packages/ai-relay/dist/`; ESM, peerDeps for `@modelcontextprotocol/sdk` and `openai` (optional) |
 
 ### `vercel.json`
 ```json
@@ -292,7 +292,7 @@ These items are listed as v2 candidates in §11.
 
 | Layer | Tools | Scope |
 |---|---|---|
-| Unit (SDK) | vitest + msw, run inside `packages/sdk/` | `verifyBearer`, `parseEnv`, `registerOpenAIChat` factory — input validation, max_tokens clamp, error mapping |
+| Unit (SDK) | vitest + msw, run inside `packages/ai-relay/` | `verifyBearer`, `parseEnv`, `registerOpenAIChat` factory — input validation, max_tokens clamp, error mapping |
 | Multi-registration | vitest + msw, real `McpServer` | Same server registered against multiple times with different `name` + `apiKey` + `baseURL` — each handler routes to its own upstream with no cross-talk |
 | Integration | vitest, route invoked directly via Web `Request`/`Response` | Bearer auth (present/missing/invalid), MCP `tools/list` and `tools/call` JSON-RPC flows |
 | Manual E2E | MCP Inspector | Locally run `pnpm dev` → `npx @modelcontextprotocol/inspector` → Streamable HTTP, connect to `http://localhost:3000/api/mcp` |
