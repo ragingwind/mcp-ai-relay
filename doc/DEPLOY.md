@@ -27,6 +27,14 @@ For **Docker**:
 - A reverse proxy / load balancer if exposing publicly (handles TLS and
   long-running request timeouts).
 
+For **Embed via SDK** (host the capability inside your own MCP server —
+Cloudflare Workers, raw stdio for Claude Desktop, Hono, Express, etc.):
+- `npm install @ragingwind/mcp-ai-relay @modelcontextprotocol/sdk openai`.
+- Full API + runtime-specific recipes (Vercel/Next.js, stdio,
+  Cloudflare Workers, multi-upstream): [`packages/sdk/README.md`](../packages/sdk/README.md).
+- Operations (rotation + troubleshooting) below still apply at the env
+  level; deployment surface is whatever your MCP server ships on.
+
 ---
 
 ## 2. OpenAI hard usage cap (MANDATORY)
