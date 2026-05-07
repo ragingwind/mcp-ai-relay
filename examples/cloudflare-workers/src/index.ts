@@ -1,0 +1,66 @@
+// @ts-nocheck — illustrative sketch.
+//
+// Cloudflare Workers MCP server using @cloudflare/agents.
+//
+// This sketch shows how `registerOpenAIChat` plugs into a Workers MCP
+// stack built on the `agents/mcp` framework. The framework handles the
+// Streamable HTTP transport, session state via Durable Objects, and
+// routing — we just register tools in `init()`.
+//
+// **Why @ts-nocheck**: the `agents` package API is still evolving
+// (mid-2026). Its export shape and `McpAgent` lifecycle methods may
+// shift between minor versions. The PIN your project uses determines
+// the exact import paths and method names; treat the code below as a
+// pattern, not a copy-paste-ready file. The KEY takeaway is the
+// `registerOpenAIChat(this.server, ...)` call in `init()` — that is
+// where this SDK plugs in, regardless of which Workers MCP framework
+// you adopt.
+//
+// For production: enable `compatibility_flags = ["nodejs_compat"]` in
+// wrangler.toml so AsyncLocalStorage (used by the SDK for
+// upstream-error redaction) is available. Without it the request still
+// succeeds; only the redacted error-body snippet is dropped.
+//
+// Reference: https://developers.cloudflare.com/agents/model-context-protocol/
+
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { verifyBearer } from "@ragingwind/mcp-ai-relay";
+import { registerOpenAIChat } from "@ragingwind/mcp-ai-relay/openai";
+import { McpAgent } from "agents/mcp";
+
+interface Env {
+  OPENAI_API_KEY: string;
+  OPENAI_BASE_URL?: string;
+  RELAY_AUTH_TOKEN: string;
+  MCP_OBJECT: DurableObjectNamespace;
+}
+
+export class OpenAIRelay extends McpAgent<Env> {
+  server = new McpServer({
+    name: "openai-relay-worker",
+    version: "0.1.0",
+  });
+
+  async init() {
+    registerOpenAIChat(this.server, {
+      apiKey: this.env.OPENAI_API_KEY,
+      ...(this.env.OPENAI_BASE_URL ? { baseURL: this.env.OPENAI_BASE_URL } : {}),
+    });
+  }
+}
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    // Bearer gate: identical pattern to the Vercel/Next.js relay.
+    const auth = request.headers.get("authorization") ?? "";
+    const token = auth.replace(/^Bearer\s+/i, "");
+    if (!verifyBearer(token, env.RELAY_AUTH_TOKEN)) {
+      return new Response("unauthorized", {
+        status: 401,
+        headers: { "WWW-Authenticate": "Bearer" },
+      });
+    }
+
+    return OpenAIRelay.serveSSE("/sse").fetch(request, env, ctx);
+  },
+};

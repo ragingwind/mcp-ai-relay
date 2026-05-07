@@ -112,8 +112,16 @@ registerOpenAIChat(server, { apiKey: process.env.OPENAI_API_KEY! });
 
 `registerOpenAIChat`은 closure로 격리되므로, 같은 서버가 여러 업스트림
 (OpenAI proper + Azure + 로컬 vLLM, …)을 별개의 이름을 가진 도구로
-호스팅할 수 있습니다. 전체 API 레퍼런스와 런타임별 레시피:
+호스팅할 수 있습니다. 전체 API 레퍼런스:
 [`packages/sdk/README.md`](./packages/sdk/README.md) (영문).
+
+[`examples/`](./examples/) 의 실행 가능 예제:
+
+| 예제 | 용도 |
+|---|---|
+| [`stdio/`](./examples/stdio/) | Claude Desktop 직결용 단일 도구 stdio launcher |
+| [`multi-upstream/`](./examples/multi-upstream/) | 한 서버에 여러 업스트림 등록 (OpenAI + Azure + 로컬 LLM) — C7 다중 등록 시나리오 |
+| [`cloudflare-workers/`](./examples/cloudflare-workers/) | `agents/mcp` 프레임워크 기반 Workers MCP |
 
 ---
 

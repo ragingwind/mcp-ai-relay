@@ -1,0 +1,21 @@
+{
+  "name": "@example/multi-upstream",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "One MCP server registering multiple upstreams (OpenAI + Azure + local LLM) as distinct tools.",
+  "scripts": {
+    "start": "tsx server.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26",
+    "@ragingwind/mcp-ai-relay": "workspace:*",
+    "openai": "^6"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

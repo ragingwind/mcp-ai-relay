@@ -1,0 +1,23 @@
+name = "openai-relay-worker"
+main = "src/index.ts"
+compatibility_date = "2026-04-01"
+# nodejs_compat is required for AsyncLocalStorage (used internally by
+# the SDK to capture upstream-error bodies for redaction). Without it
+# the request still succeeds, but the redacted snippet is omitted from
+# error result text.
+compatibility_flags = ["nodejs_compat"]
+
+# Durable Object binding for the McpAgent — the agents/mcp framework
+# uses a DO to give each MCP session its own state.
+[[durable_objects.bindings]]
+name = "MCP_OBJECT"
+class_name = "OpenAIRelay"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["OpenAIRelay"]
+
+# Secrets (set via `wrangler secret put OPENAI_API_KEY`):
+#   OPENAI_API_KEY        — required
+#   OPENAI_BASE_URL       — optional override
+#   RELAY_AUTH_TOKEN      — bearer token for the gate (32+ bytes)
