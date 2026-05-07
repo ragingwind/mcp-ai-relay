@@ -141,7 +141,10 @@ through (섹션 A–E).
 
 ## C. 검증 시나리오
 
-PR 머지 전에 5개 모두 PASS여야 합니다.
+PR 머지 전에 모두 PASS여야 합니다. C7은 릴레이가 둘 이상의 업스트림을
+등록한 경우에만 해당합니다 (v1 기본 릴레이는 단일 `completion_chat`만
+등록하므로, C7은 SDK의 `multi-registration` 예제 또는 다중 업스트림을
+한 서버에 등록한 컨슈머에서 검증).
 
 | # | 시나리오 | 단계 | 기대 결과 |
 |---|---|---|---|
@@ -150,6 +153,7 @@ PR 머지 전에 5개 모두 PASS여야 합니다.
 | **C4** | max_tokens 클램프 | C2와 동일하되 `max_tokens: 999999` (`MAX_OUTPUT_TOKENS_CEILING`보다 훨씬 큼) | 응답 성공; 값이 업스트림 호출 전에 `MAX_OUTPUT_TOKENS_CEILING`(기본 4096)로 조용히 클램프됨. 오류 없음. |
 | **C5** | Bearer 거부 | Inspector에서 **Disconnect**, Header를 `Authorization: Bearer wrong-token`으로 변경, **Connect** | HTTP 401 + `WWW-Authenticate: Bearer` 헤더로 연결 실패. 올바른 토큰으로 재연결해 계속 진행. |
 | **C6** | 취소 (수동) | C2를 긴 프롬프트(예: "Write a 500-word essay about sourdough")로 실행. 스트림 도중 Inspector에서 **Disconnect** | 서버 로그에 SDK 호출 abort 표시; OpenAI usage 페이지(~1분 뒤 새로고침)에 전체 출력 비용이 안 보임. (시각적 확인이 부정확 — 수동 관찰만.) |
+| **C7** | 다중 등록 *(SDK 컨슈머 전용)* | 서버가 `registerOpenAIChat`을 두 이름(예: `openai_chat` + `azure_chat`, 서로 다른 `apiKey` + `baseURL`)으로 등록한 경우. **Tools** 탭에서 각각 실행. | `tools/list`에 두 entry 모두 표시. 각 `tools/call`이 자기 업스트림에서 응답 (호출 사이에 업스트림을 바꿔보며 응답이 섞이지 않는지 확인). |
 
 ---
 

@@ -1,9 +1,9 @@
 // MCP route entry point — Vercel/Next.js deployment.
 //
-// Consumes the SDK's framework-agnostic primitives (`registerOpenAIChat`,
-// `verifyBearer`) and wires them into mcp-handler's Next.js adapter. All
-// environment reading happens here, at the deployment-specific boundary —
-// `lib/` modules stay portable.
+// Consumes the framework-agnostic primitives published as
+// `@ragingwind/mcp-ai-relay` and wires them into mcp-handler's Next.js
+// adapter. All environment reading happens here, at the deployment
+// boundary — the SDK package itself is side-effect-free on import.
 //
 // Wiring layers, outermost first:
 //   1. `withMcpAuth(handler, ...)` — bearer-token gate. Unauthenticated
@@ -16,10 +16,10 @@
 //     break streaming chat completions.
 //   • `maxDuration = 300` — defense in depth with vercel.json.
 
+import { verifyBearer } from "@ragingwind/mcp-ai-relay";
+import { parseEnv } from "@ragingwind/mcp-ai-relay/env";
+import { registerOpenAIChat } from "@ragingwind/mcp-ai-relay/openai";
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
-import { verifyBearer } from "../../../lib/auth.js";
-import { parseEnv } from "../../../lib/env.js";
-import { registerOpenAIChat } from "../../../lib/openai/chat.js";
 
 const env = parseEnv(process.env);
 

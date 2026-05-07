@@ -80,13 +80,15 @@ The following items extend or override the global `core.md`.
 ## 5. Directory rules
 
 ```
-app/api/[transport]/route.ts   ← MCP entry point, single route. No other routes are allowed (v1)
-lib/                            ← tool, env, auth, OpenAI client modules
-lib/tools/                      ← one MCP tool per file
-tests/unit/                     ← MSW mocks only the OpenAI HTTP boundary; the SDK itself is real
-tests/integration/              ← invokes the route handler directly with Web Request/Response
-doc/                            ← ARCHITECTURE.md (SSOT) plus future diagrams/ADRs
+app/api/[transport]/route.ts        ← MCP entry point, single route. No other routes are allowed (v1)
+packages/sdk/src/                   ← framework-agnostic SDK (@ragingwind/mcp-ai-relay)
+packages/sdk/src/<provider>/        ← provider-specific tools (today: openai/; future: anthropic/, gemini/, ai-gateway/)
+packages/sdk/tests/unit/            ← SDK unit tests; MSW mocks only the OpenAI HTTP boundary; the SDK module itself is real
+tests/integration/                  ← invokes the route handler directly with Web Request/Response
+doc/                                ← ARCHITECTURE.md (SSOT) plus future diagrams/ADRs
 ```
+
+Tool registration convention: each provider exports `register<Provider><Capability>(server, config)` (e.g. `registerOpenAIChat`). The default MCP tool name is overridable via `config.name` so a single server may register multiple instances of the same registrar against different upstreams.
 
 Full tree: [`doc/ARCHITECTURE.md` §5](./doc/ARCHITECTURE.md#5-directory-structure).
 
@@ -126,9 +128,12 @@ Details: [`doc/ARCHITECTURE.md` §7](./doc/ARCHITECTURE.md#7-environment-variabl
 
 | Case | Location | Notes |
 |---|---|---|
-| Tool input zod validation | `tests/unit/completion-chat.test.ts` | Enumerate schema-violation cases |
-| `max_tokens` clamp | `tests/unit/completion-chat.test.ts` | Caller value > ceiling case |
-| OpenAI error mapping (401/429/400/5xx) | `tests/unit/completion-chat.test.ts` | Forge responses with MSW |
+| Tool input zod validation | `packages/sdk/tests/unit/chat.test.ts` | Enumerate schema-violation cases |
+| `max_tokens` clamp | `packages/sdk/tests/unit/chat.test.ts` | Caller value > ceiling case + injected ceiling override |
+| OpenAI error mapping (401/429/400/5xx) | `packages/sdk/tests/unit/chat.test.ts` | Forge responses with MSW |
+| `verifyBearer` constant-time comparison | `packages/sdk/tests/unit/auth.test.ts` | Length mismatch, single-byte change, NFC vs NFD |
+| `parseEnv` validation + redaction | `packages/sdk/tests/unit/env.test.ts` | Failing-key path included; sentinel values never echoed |
+| **Multi-registration** (same server, multiple upstreams) | `packages/sdk/tests/unit/multi-registration.test.ts` | Distinct names, no cross-talk, independent cancellation |
 | Bearer auth (present/missing/invalid) | `tests/integration/route.test.ts` | Verify 401 + `WWW-Authenticate` header |
 | `tools/list` JSON-RPC | `tests/integration/route.test.ts` | Confirm a single tool is exposed |
 | `tools/call` happy path | `tests/integration/route.test.ts` | Mock OpenAI with MSW |

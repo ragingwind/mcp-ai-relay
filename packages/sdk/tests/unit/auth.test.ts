@@ -1,11 +1,8 @@
-// Unit tests for `lib/auth.ts` — `verifyBearer(actual, expected)` returns
+// Unit tests for `src/auth.ts` — `verifyBearer(actual, expected)` returns
 // boolean and is fully runtime-portable (no `node:crypto`, no env reads).
-//
-// Tests cover the same nine behaviors the previous `verifyToken` form did
-// (B1-B9 in the original plan), now phrased against the simpler primitive.
 
 import { describe, expect, it } from "vitest";
-import { verifyBearer } from "../../lib/auth.js";
+import { verifyBearer } from "../../src/auth.js";
 
 const EXPECTED = "x".repeat(32);
 

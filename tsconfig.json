@@ -30,13 +30,13 @@
     "*.config.ts",
     "*.ts",
     "app/**/*",
-    "lib/**/*",
     "tests/**/*",
     "vitest.workspace.ts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "packages"
   ]
 }

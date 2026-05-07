@@ -10,7 +10,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { makeOpenAIChatHandler, registerOpenAIChat } from "../../lib/openai/chat.js";
+import { makeOpenAIChatHandler, registerOpenAIChat } from "../../src/openai/chat.js";
 
 const mswServer = setupServer();
 beforeAll(() => mswServer.listen({ onUnhandledRequest: "error" }));
