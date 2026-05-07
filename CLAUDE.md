@@ -81,7 +81,7 @@ The following items extend or override the global `core.md`.
 
 ```
 app/api/[transport]/route.ts        ← MCP entry point, single route. No other routes are allowed (v1)
-packages/ai-relay/src/                   ← framework-agnostic SDK (@ragingwind/ai-relay)
+packages/ai-relay/src/                   ← framework-agnostic SDK (ai-relay)
 packages/ai-relay/src/<provider>/        ← provider-specific tools (today: openai/; future: anthropic/, gemini/, ai-gateway/)
 packages/ai-relay/tests/unit/            ← SDK unit tests; MSW mocks only the OpenAI HTTP boundary; the SDK module itself is real
 tests/integration/                  ← invokes the route handler directly with Web Request/Response

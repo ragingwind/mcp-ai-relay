@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26",
-    "@ragingwind/ai-relay": "workspace:*",
+    "ai-relay": "workspace:*",
     "agents": "^0.0.40",
     "openai": "^6"
   },

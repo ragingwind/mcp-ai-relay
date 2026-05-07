@@ -24,9 +24,9 @@
 // Reference: https://developers.cloudflare.com/agents/model-context-protocol/
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { verifyBearer } from "@ragingwind/ai-relay";
-import { registerOpenAIChat } from "@ragingwind/ai-relay/openai";
 import { McpAgent } from "agents/mcp";
+import { verifyBearer } from "ai-relay";
+import { registerOpenAIChat } from "ai-relay/openai";
 
 interface Env {
   OPENAI_API_KEY: string;

@@ -41,12 +41,13 @@ beforeAll(async () => {
   }
   execFileSync("npm", ["pack"], { cwd: SDK_DIR, stdio: "pipe" });
   const tarballs = readdirSync(SDK_DIR).filter((f) => f.endsWith(".tgz"));
-  if (tarballs.length !== 1) {
+  const firstTarball = tarballs[0];
+  if (tarballs.length !== 1 || !firstTarball) {
     throw new Error(
       `Expected 1 tarball after npm pack, got ${tarballs.length}: ${tarballs.join(", ")}`,
     );
   }
-  const tarball = join(SDK_DIR, tarballs[0]!);
+  const tarball = join(SDK_DIR, firstTarball);
 
   scratchDir = mkdtempSync(join(tmpdir(), "mcp-ai-relay-bin-"));
   // A bare ESM package so `npm install` resolves transitive ESM deps cleanly.

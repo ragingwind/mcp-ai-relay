@@ -21,7 +21,7 @@ Three ways to consume it:
    custom logic, multi-upstream registration, or non-Node runtimes.
 
 The npm package is
-[`@ragingwind/ai-relay`](https://www.npmjs.com/package/@ragingwind/ai-relay).
+[`ai-relay`](https://www.npmjs.com/package/ai-relay).
 Pick a path below.
 
 ---
@@ -42,7 +42,7 @@ In a terminal — replace `sk-...` with your real key:
 
 ```bash
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
-  | OPENAI_API_KEY=sk-... npx -y @ragingwind/ai-relay --openai-completion
+  | OPENAI_API_KEY=sk-... npx -y ai-relay --openai-completion
 ```
 
 Expected: a single-line JSON-RPC response that contains
@@ -63,7 +63,7 @@ MCP host.
   "mcpServers": {
     "openai-relay": {
       "command": "npx",
-      "args": ["-y", "@ragingwind/ai-relay", "--openai-completion"],
+      "args": ["-y", "ai-relay", "--openai-completion"],
       "env": {
         "OPENAI_API_KEY": "sk-..."
       }
@@ -86,7 +86,7 @@ In a project directory:
 ```bash
 claude mcp add openai-relay \
   -e OPENAI_API_KEY=sk-... \
-  -- npx -y @ragingwind/ai-relay --openai-completion
+  -- npx -y ai-relay --openai-completion
 ```
 
 Or write `.mcp.json` directly:
@@ -96,7 +96,7 @@ Or write `.mcp.json` directly:
   "mcpServers": {
     "openai-relay": {
       "command": "npx",
-      "args": ["-y", "@ragingwind/ai-relay", "--openai-completion"],
+      "args": ["-y", "ai-relay", "--openai-completion"],
       "env": {
         "OPENAI_API_KEY": "sk-..."
       }
@@ -125,7 +125,7 @@ Returns the accumulated assistant message text plus token usage.
 ### CLI options (full)
 
 ```
-npx -y @ragingwind/ai-relay <provider-flag> [--name <name>] [--description <desc>]
+npx -y ai-relay <provider-flag> [--name <name>] [--description <desc>]
 
 Provider flags (exactly one required, one tool per invocation):
   --openai-completion   OpenAI Chat Completions
@@ -193,12 +193,12 @@ If you're building a custom MCP server (Cloudflare Workers, Hono/Express, your
 own Next.js route, etc.) the SDK package is the import surface:
 
 ```bash
-npm install @ragingwind/ai-relay @modelcontextprotocol/sdk openai
+npm install ai-relay @modelcontextprotocol/sdk openai
 ```
 
 ```ts
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerOpenAIChat } from "@ragingwind/ai-relay/openai";
+import { registerOpenAIChat } from "ai-relay/openai";
 
 const server = new McpServer({ name: "my-relay", version: "0.1.0" });
 registerOpenAIChat(server, { apiKey: process.env.OPENAI_API_KEY! });

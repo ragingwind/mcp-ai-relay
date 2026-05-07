@@ -10,7 +10,7 @@ transport assumes the local process is trusted.
 ```bash
 # from the repo root
 pnpm install
-pnpm --filter @ragingwind/ai-relay build
+pnpm --filter ai-relay build
 
 OPENAI_API_KEY=sk-... pnpm --filter @example/stdio start
 ```
@@ -24,14 +24,14 @@ OPENAI_API_KEY=sk-... npx @modelcontextprotocol/inspector --cli \
   -- pnpm --filter @example/stdio start
 ```
 
-## Run from npm (after `@ragingwind/ai-relay@0.1.0` is published)
+## Run from npm (after `ai-relay@0.1.0` is published)
 
 Outside this monorepo, in any new directory:
 
 ```bash
 npm init -y
 npm pkg set type=module
-npm install @ragingwind/ai-relay @modelcontextprotocol/sdk openai
+npm install ai-relay @modelcontextprotocol/sdk openai
 npm install --save-dev tsx
 ```
 

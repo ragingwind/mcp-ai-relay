@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to `@ragingwind/ai-relay` are recorded here.
+All notable changes to `ai-relay` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 the project adheres to [Semantic Versioning](https://semver.org/) once
 v1.0 ships. Pre-v1.0 minor bumps may include breaking changes — read
@@ -15,7 +15,7 @@ publishable npm package.
 ### Added
 
 - **CLI bin `mcp-ai-relay`** — zero-config stdio MCP server launcher.
-  `npx -y @ragingwind/ai-relay --openai-completion` registers the
+  `npx -y ai-relay --openai-completion` registers the
   `completion_chat` tool and connects via stdio. Provider flag set is
   designed for forward extension (`--anthropic-messages`,
   `--gemini-generate`, `--ai-gateway-chat` reserved). `--name` and

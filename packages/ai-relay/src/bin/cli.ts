@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 //
-// Zero-config CLI for @ragingwind/ai-relay.
+// Zero-config CLI for ai-relay.
 //
 // Launches a single-tool stdio MCP server using the SDK's registrar
 // for the provider/capability selected by a flag. Designed for direct
@@ -10,7 +10,7 @@
 //     "mcpServers": {
 //       "openai-relay": {
 //         "command": "npx",
-//         "args": ["-y", "@ragingwind/ai-relay", "--openai-completion"],
+//         "args": ["-y", "ai-relay", "--openai-completion"],
 //         "env": { "OPENAI_API_KEY": "sk-..." }
 //       }
 //     }
@@ -55,7 +55,7 @@ Options:
   --version, -V         Print SDK version
 
 Example:
-  OPENAI_API_KEY=sk-... npx -y @ragingwind/ai-relay --openai-completion
+  OPENAI_API_KEY=sk-... npx -y ai-relay --openai-completion
 
 Multi-upstream registration is not expressible via the CLI; use the
 SDK API directly. See:

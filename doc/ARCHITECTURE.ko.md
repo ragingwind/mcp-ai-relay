@@ -137,7 +137,7 @@ mcp-ai-relay/                              # 저장소 루트 — Next.js 릴레
 │       └── [transport]/
 │           └── route.ts                # MCP 진입점 — SDK 패키지 import
 ├── packages/
-│   └── sdk/                            # @ragingwind/ai-relay (publishable)
+│   └── sdk/                            # ai-relay (publishable)
 │       ├── src/
 │       │   ├── index.ts                # 공개 re-export (auth)
 │       │   ├── auth.ts                 # verifyBearer (portable, node:crypto 불필요)
@@ -177,11 +177,11 @@ mcp-ai-relay/                              # 저장소 루트 — Next.js 릴레
 ├── compose.yml                         # 단일 호스트 셀프 호스팅 런처
 ├── vercel.json                         # maxDuration: 300, region: iad1 고정
 ├── pnpm-workspace.yaml                 # workspace에 packages/* 등록
-├── package.json                        # @ragingwind/ai-relay (workspace:*) 의존
+├── package.json                        # ai-relay (workspace:*) 의존
 ├── tsconfig.json
 ├── biome.json
 ├── vitest.workspace.ts                 # SDK unit + integration 프로젝트
-├── next.config.ts                      # transpilePackages: [@ragingwind/ai-relay]
+├── next.config.ts                      # transpilePackages: [ai-relay]
 ├── .env.example
 └── .gitignore
 ```

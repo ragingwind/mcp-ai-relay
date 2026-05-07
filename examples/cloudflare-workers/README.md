@@ -18,7 +18,7 @@ registers the SDK's tool in `init()` and adds a bearer-token gate.
 ```bash
 # from the repo root
 pnpm install
-pnpm --filter @ragingwind/ai-relay build
+pnpm --filter ai-relay build
 
 # Set Workers secrets (use wrangler from the example dir)
 cd examples/cloudflare-workers
@@ -36,12 +36,12 @@ pnpm deploy
 
 The Worker will be available at `https://<name>.<subdomain>.workers.dev/sse`.
 
-## Run from npm (after `@ragingwind/ai-relay@0.1.0` is published)
+## Run from npm (after `ai-relay@0.1.0` is published)
 
 ```bash
 mkdir my-relay-worker && cd my-relay-worker
 npm init -y && npm pkg set type=module
-npm install @ragingwind/ai-relay @modelcontextprotocol/sdk openai agents
+npm install ai-relay @modelcontextprotocol/sdk openai agents
 npm install --save-dev wrangler @cloudflare/workers-types
 ```
 
