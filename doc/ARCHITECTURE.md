@@ -1,4 +1,4 @@
-# ARCHITECTURE — mcp-openai-relay
+# ARCHITECTURE — mcp-ai-relay
 
 > 한국어: [ARCHITECTURE.ko.md](./ARCHITECTURE.ko.md)
 
@@ -122,7 +122,7 @@ Invokes OpenAI Chat Completions once and returns the accumulated text.
 ## 5. Directory structure
 
 ```
-mcp-openai-relay/
+mcp-ai-relay/
 ├── app/
 │   └── api/
 │       └── [transport]/

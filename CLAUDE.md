@@ -1,4 +1,4 @@
-# CLAUDE.md — mcp-openai-relay
+# CLAUDE.md — mcp-ai-relay
 
 This file is the collaboration guide for every AI agent (builder/reviewer/tester/debugger, etc.)
 working in this repository. **It overrides the global rules at `~/.claude/CLAUDE.md`.**

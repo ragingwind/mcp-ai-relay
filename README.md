@@ -1,4 +1,4 @@
-# mcp-openai-relay
+# mcp-ai-relay
 
 > 한국어: [README.ko.md](./README.ko.md)
 
@@ -21,8 +21,8 @@ Runs on **Vercel** (managed serverless) or as a **Docker container**
 The fastest way to run the relay locally or on a single host:
 
 ```bash
-git clone https://github.com/ragingwind/mcp-openai-relay.git
-cd mcp-openai-relay
+git clone https://github.com/ragingwind/mcp-ai-relay.git
+cd mcp-ai-relay
 cp .env.example .env.local
 # Fill OPENAI_API_KEY and RELAY_AUTH_TOKEN (32+ bytes — `openssl rand -hex 32`)
 docker compose up -d

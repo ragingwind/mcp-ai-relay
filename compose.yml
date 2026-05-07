@@ -1,7 +1,7 @@
 services:
   relay:
     build: .
-    image: mcp-openai-relay
+    image: mcp-ai-relay
     ports:
       - "${HOST_PORT:-8787}:3000"
     env_file:

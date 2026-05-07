@@ -18,7 +18,7 @@ function fail(lines) {
 if (!existsSync(ENV_PATH)) {
   fail([
     "",
-    "[mcp-openai-relay] .env.local is missing.",
+    "[mcp-ai-relay] .env.local is missing.",
     "",
     "  cp .env.example .env.local",
     "  # then set RELAY_AUTH_TOKEN (required) and OPENAI_API_KEY (optional)",
@@ -51,7 +51,7 @@ const missing = REQUIRED.filter((key) => !dotenv[key]);
 if (missing.length > 0) {
   fail([
     "",
-    `[mcp-openai-relay] .env.local missing required values: ${missing.join(", ")}`,
+    `[mcp-ai-relay] .env.local missing required values: ${missing.join(", ")}`,
     "",
     "  Edit .env.local and set:",
     ...missing.map((k) => `    ${k}=...`),
@@ -64,7 +64,7 @@ if (missing.length > 0) {
 if (Buffer.byteLength(dotenv.RELAY_AUTH_TOKEN, "utf8") < 32) {
   fail([
     "",
-    "[mcp-openai-relay] RELAY_AUTH_TOKEN must be at least 32 bytes.",
+    "[mcp-ai-relay] RELAY_AUTH_TOKEN must be at least 32 bytes.",
     "  Regenerate:  openssl rand -hex 32",
     "",
   ]);

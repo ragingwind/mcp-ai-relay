@@ -1,4 +1,4 @@
-# DEPLOY — mcp-openai-relay
+# DEPLOY — mcp-ai-relay
 
 > 한국어: [DEPLOY.ko.md](./DEPLOY.ko.md)
 
@@ -14,7 +14,7 @@ vars, §9 security). Coding rules live in [`../CLAUDE.md`](../CLAUDE.md).
 Universal:
 - An OpenAI (or OpenAI-compatible) API key.
 - A 32+ byte bearer token: `openssl rand -hex 32`.
-- The repository cloned: `git clone https://github.com/ragingwind/mcp-openai-relay.git`.
+- The repository cloned: `git clone https://github.com/ragingwind/mcp-ai-relay.git`.
 
 For **Vercel**:
 - A Vercel account (Pro plan recommended — needed for `maxDuration: 300`).
@@ -206,7 +206,7 @@ into the container's process env. Same env contract as raw `docker run`
 Build:
 
 ```bash
-docker build -t mcp-openai-relay .
+docker build -t mcp-ai-relay .
 ```
 
 Final image size should be under 200 MB. The build does not need real
@@ -221,13 +221,13 @@ docker run --rm -p 8787:3000 \
   -e OPENAI_BASE_URL=https://your-gateway.example.com/v1 \
   -e MAX_OUTPUT_TOKENS_CEILING=4096 \
   -e REQUEST_TIMEOUT_MS=60000 \
-  mcp-openai-relay
+  mcp-ai-relay
 ```
 
 Or with `--env-file`:
 
 ```bash
-docker run --rm -p 8787:3000 --env-file .env.production mcp-openai-relay
+docker run --rm -p 8787:3000 --env-file .env.production mcp-ai-relay
 ```
 
 `OPENAI_API_KEY` and `RELAY_AUTH_TOKEN` are required. `OPENAI_BASE_URL`,
@@ -259,7 +259,7 @@ Expect a single tool named `completion_chat`. For the full pre-PR procedure
 ### 4.4 Confirm no secrets baked in
 
 ```bash
-docker history mcp-openai-relay --no-trunc | grep -iE 'OPENAI_API_KEY|RELAY_AUTH_TOKEN'
+docker history mcp-ai-relay --no-trunc | grep -iE 'OPENAI_API_KEY|RELAY_AUTH_TOKEN'
 ```
 
 Only `pnpm build`'s dummy values (`build-dummy`, 32×`x`) should appear —

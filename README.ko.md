@@ -1,4 +1,4 @@
-# mcp-openai-relay
+# mcp-ai-relay
 
 > English: [README.md](./README.md)
 
@@ -20,8 +20,8 @@ OpenAI Chat Completions API를 [MCP (Model Context Protocol)](https://modelconte
 로컬이나 단일 호스트에서 가장 빠르게 띄우는 방법:
 
 ```bash
-git clone https://github.com/ragingwind/mcp-openai-relay.git
-cd mcp-openai-relay
+git clone https://github.com/ragingwind/mcp-ai-relay.git
+cd mcp-ai-relay
 cp .env.example .env.local
 # OPENAI_API_KEY 와 RELAY_AUTH_TOKEN(32바이트 이상 — `openssl rand -hex 32`) 채우기
 docker compose up -d

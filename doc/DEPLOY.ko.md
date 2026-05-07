@@ -1,4 +1,4 @@
-# DEPLOY — mcp-openai-relay
+# DEPLOY — mcp-ai-relay
 
 > English: [DEPLOY.md](./DEPLOY.md)
 
@@ -14,7 +14,7 @@
 공통:
 - OpenAI (또는 OpenAI 호환) API 키.
 - 32바이트 이상 Bearer 토큰: `openssl rand -hex 32`.
-- 저장소 클론: `git clone https://github.com/ragingwind/mcp-openai-relay.git`.
+- 저장소 클론: `git clone https://github.com/ragingwind/mcp-ai-relay.git`.
 
 **Vercel용**:
 - Vercel 계정 (Pro 플랜 권장 — `maxDuration: 300`에 필요).
@@ -204,7 +204,7 @@ process env로 전달. raw `docker run`과 동일한 환경변수 계약 (§4.2)
 빌드:
 
 ```bash
-docker build -t mcp-openai-relay .
+docker build -t mcp-ai-relay .
 ```
 
 최종 이미지 크기는 200 MB 미만이 정상. 빌드는 실제 비밀이 필요 없습니다 —
@@ -219,13 +219,13 @@ docker run --rm -p 8787:3000 \
   -e OPENAI_BASE_URL=https://your-gateway.example.com/v1 \
   -e MAX_OUTPUT_TOKENS_CEILING=4096 \
   -e REQUEST_TIMEOUT_MS=60000 \
-  mcp-openai-relay
+  mcp-ai-relay
 ```
 
 또는 `--env-file`:
 
 ```bash
-docker run --rm -p 8787:3000 --env-file .env.production mcp-openai-relay
+docker run --rm -p 8787:3000 --env-file .env.production mcp-ai-relay
 ```
 
 `OPENAI_API_KEY`와 `RELAY_AUTH_TOKEN`은 필수. `OPENAI_BASE_URL`,
@@ -256,7 +256,7 @@ pnpm inspect --url=http://localhost:8787/api/mcp --method=tools/list
 ### 4.4 비밀이 이미지에 박혀 있지 않은지 확인
 
 ```bash
-docker history mcp-openai-relay --no-trunc | grep -iE 'OPENAI_API_KEY|RELAY_AUTH_TOKEN'
+docker history mcp-ai-relay --no-trunc | grep -iE 'OPENAI_API_KEY|RELAY_AUTH_TOKEN'
 ```
 
 `pnpm build`의 더미 값(`build-dummy`, 32×`x`)만 보여야 함 — 실제 자격증명

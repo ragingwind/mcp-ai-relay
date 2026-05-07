@@ -1,4 +1,4 @@
-# ARCHITECTURE — mcp-openai-relay
+# ARCHITECTURE — mcp-ai-relay
 
 > English: [ARCHITECTURE.md](./ARCHITECTURE.md)
 
@@ -131,7 +131,7 @@ OpenAI Chat Completions를 한 번 호출하고 누적된 텍스트를 반환합
 ## 5. 디렉토리 구조
 
 ```
-mcp-openai-relay/
+mcp-ai-relay/
 ├── app/
 │   └── api/
 │       └── [transport]/
