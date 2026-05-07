@@ -33,7 +33,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerOpenAIChat } from "../openai/index.js";
-import { buildOpenAIChatConfig, parseArgs, type ParsedArgs } from "./helpers.js";
+import { buildOpenAIChatConfig, type ParsedArgs, parseArgs } from "./helpers.js";
 
 // Bumped in lockstep with package.json on every release.
 const VERSION = "0.1.0";
