@@ -1,12 +1,14 @@
-// Zod-validated environment loader (#2).
+// Zod-validated environment parser.
 //
-// Single point of entry for configuration. Every `lib/*` consumer that needs
-// an env var imports from this module — no `process.env` access elsewhere.
-// Validation runs once at module load (Vercel cold start) so misconfiguration
-// fails fast at boot, not mid-request.
+// Side-effect-free module: importing this file does NOT read process.env.
+// Consumers (the route file, scripts, tests) call `parseEnv(source)`
+// explicitly with whatever object they want validated. Keeping import
+// time clean is the prerequisite for embedding the SDK in environments
+// that don't expose `process.env` at module load (Cloudflare Workers,
+// Deno, stdio launchers).
 //
-// CLAUDE.md §4: error messages MUST never echo any env var value. Failure
-// messages are built strictly from `issue.path` + `issue.message` text.
+// Error messages MUST never echo any env var value. Failure messages
+// are built strictly from `issue.path` + `issue.message` text.
 
 import { z } from "zod";
 
@@ -29,19 +31,16 @@ export type Env = z.infer<typeof envSchema>;
 // `NodeJS.ProcessEnv` because `next/types/global.d.ts` augments that
 // interface with a required `NODE_ENV` key — `parseEnv` doesn't consume
 // `NODE_ENV` and forcing tests to set it would be noise. `process.env`
-// itself satisfies this signature, so the module-level call below still
-// type-checks against the real Node process env.
+// itself satisfies this signature, so callers passing it still type-check.
 export type EnvSource = Record<string, string | undefined>;
 
 export function parseEnv(source: EnvSource): Env {
   const result = envSchema.safeParse(source);
   if (result.success) return result.data;
   // Redacted error: only path + message text from each zod issue. Never include
-  // `issue.input` / `issue.received` / any value-derived strings (CLAUDE.md §4).
+  // `issue.input` / `issue.received` / any value-derived strings.
   const failures = result.error.issues
     .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
     .join("; ");
   throw new Error(`Invalid environment: ${failures}`);
 }
-
-export const env: Env = parseEnv(process.env);

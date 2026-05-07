@@ -8,11 +8,11 @@
 // tool wiring as one stack. Only the OpenAI HTTP boundary is mocked (MSW).
 // We never mock `mcp-handler` itself — that would defeat the purpose.
 //
-// MSW server lifecycle pattern (mirrored from tests/unit/completion-chat.test.ts):
-// MSW listens FIRST in beforeAll, then the route module is dynamically
-// imported. The openai SDK captures `fetch` at module construction inside
-// `lib/openai-client.ts`; if MSW patches `globalThis.fetch` AFTER that
-// capture, the SDK still holds the real fetch and tests hit api.openai.com.
+// MSW server lifecycle pattern: MSW listens FIRST in beforeAll, then the
+// route module is dynamically imported. The openai SDK captures `fetch` at
+// constructor time inside `createOpenAIClient`; if MSW patches
+// `globalThis.fetch` AFTER that capture, the SDK still holds the real fetch
+// and tests hit api.openai.com.
 //
 // URL convention: route is `app/api/[transport]/route.ts` and `basePath`
 // in the route file is `"/api"`, so mcp-handler matches the streamable HTTP
@@ -29,7 +29,11 @@
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { env } from "../../lib/env.js";
+import { parseEnv } from "../../lib/env.js";
+
+// Parse the test-seeded env once. The setup file (tests/setup-env.ts) sets
+// process.env BEFORE this module loads, so the parse succeeds with defaults.
+const env = parseEnv(process.env);
 
 // --- shared MSW server lifecycle ----------------------------------------
 
@@ -41,8 +45,9 @@ let DELETE: (req: Request) => Promise<Response>;
 beforeAll(async () => {
   server.listen({ onUnhandledRequest: "error" });
   // Dynamic import AFTER MSW listens. The openai SDK is constructed lazily
-  // inside lib/openai-client.ts at first import; by importing the route
-  // module here, the SDK captures the MSW-patched fetch reference.
+  // inside createOpenAIClient when the route registers its tool; by
+  // importing the route module here, the SDK captures the MSW-patched fetch
+  // reference.
   const mod = await import("../../app/api/[transport]/route.js");
   POST = mod.POST;
   GET = mod.GET;

@@ -1,60 +1,60 @@
-// MCP route entry point (#5).
+// MCP route entry point — Vercel/Next.js deployment.
 //
-// Single route per ARCHITECTURE.md §5 / CLAUDE.md §5. The Next.js dynamic
-// `[transport]` segment lets `mcp-handler` route by transport type (Streamable
-// HTTP for v1; SSE deprecated upstream).
+// Consumes the SDK's framework-agnostic primitives (`registerOpenAIChat`,
+// `verifyBearer`) and wires them into mcp-handler's Next.js adapter. All
+// environment reading happens here, at the deployment-specific boundary —
+// `lib/` modules stay portable.
 //
 // Wiring layers, outermost first:
-//   1. `withMcpAuth(handler, verifyToken, { required: true, requiredScopes })`
-//      — Bearer-token gate. Unauthenticated requests get 401 +
-//        `WWW-Authenticate: Bearer ...` + a `/.well-known/oauth-protected-resource`
-//        discovery URL pointer. Authenticated requests reach the inner handler.
-//   2. `createMcpHandler((server) => server.tool(...))` — registers exactly one
-//      tool: `completion_chat` (v1 scope). Routes JSON-RPC `tools/list` and
-//      `tools/call` internally.
+//   1. `withMcpAuth(handler, ...)` — bearer-token gate. Unauthenticated
+//      requests get 401 + `WWW-Authenticate: Bearer ...` automatically.
+//   2. `createMcpHandler((server) => registerOpenAIChat(server, ...))` —
+//      registers the `completion_chat` tool on each request boundary.
 //
-// CLAUDE.md §9 invariants enforced here:
-//   • `withMcpAuth` wrapper is applied — without it, the route would accept
-//     unauthenticated traffic.
-//   • `export const maxDuration = 300` — defense in depth with vercel.json,
-//     so the route does not silently fall back to the dashboard default.
-//   • `export const runtime = "nodejs"` — Edge runtime would hit the 25s TTFB
-//     cap and break streaming chat completions.
+// Vercel-specific exports (kept here, NOT in the SDK):
+//   • `runtime = "nodejs"` — Edge runtime would hit the 25 s TTFB cap and
+//     break streaming chat completions.
+//   • `maxDuration = 300` — defense in depth with vercel.json.
 
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
-import { verifyToken } from "../../../lib/auth.js";
-import { completionChatTool } from "../../../lib/tools/completion-chat.js";
+import { verifyBearer } from "../../../lib/auth.js";
+import { parseEnv } from "../../../lib/env.js";
+import { registerOpenAIChat } from "../../../lib/openai/chat.js";
+
+const env = parseEnv(process.env);
 
 const handler = createMcpHandler(
   (server) => {
-    // `server.tool(name, description, paramsSchema, cb)` — the schema
-    // parameter is the Zod RawShape (i.e. `inputSchema.shape`), not the full
-    // Zod object. mcp-handler reconstructs the schema internally; passing
-    // the shape is the documented signature in @modelcontextprotocol/sdk's
-    // McpServer.
-    server.tool(
-      completionChatTool.name,
-      completionChatTool.description,
-      completionChatTool.inputSchema.shape,
-      (args, extra) => completionChatTool.handler(args, extra),
-    );
+    registerOpenAIChat(server, {
+      apiKey: env.OPENAI_API_KEY,
+      ...(env.OPENAI_BASE_URL ? { baseURL: env.OPENAI_BASE_URL } : {}),
+      maxOutputTokensCeiling: env.MAX_OUTPUT_TOKENS_CEILING,
+      requestTimeoutMs: env.REQUEST_TIMEOUT_MS,
+    });
   },
   {},
   {
-    // Our route is `app/api/[transport]/route.ts` so Next maps the URL
-    // pathname to `/api/<transport>` (e.g. `/api/mcp`). Without `basePath`,
-    // mcp-handler compares against `/mcp` only and rejects every request
-    // with "url not matched". Setting `basePath: "/api"` derives
-    // `/api/mcp`, `/api/sse`, and `/api/message` — matching what Next.js
-    // serves.
+    // mcp-handler matches against the URL pathname starting from `basePath`.
+    // Our route lives at `app/api/[transport]/route.ts` so Next.js serves
+    // `/api/<transport>` (e.g. `/api/mcp`); matching `basePath: "/api"`
+    // is required for mcp-handler to accept the request.
     basePath: "/api",
   },
 );
 
-const wrapped = withMcpAuth(handler, verifyToken, {
-  required: true,
-  requiredScopes: ["openai:chat"],
-});
+const wrapped = withMcpAuth(
+  handler,
+  (_req, token) => {
+    if (!verifyBearer(token, env.RELAY_AUTH_TOKEN)) return undefined;
+    // `token` is the validated bearer; echoing it back to the SDK lets
+    // downstream handlers attribute calls without re-parsing the header.
+    return { token: token as string, clientId: "shared-secret", scopes: ["openai:chat"] };
+  },
+  {
+    required: true,
+    requiredScopes: ["openai:chat"],
+  },
+);
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
