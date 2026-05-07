@@ -46,11 +46,6 @@
     "@modelcontextprotocol/sdk": "^1.26",
     "openai": "^6"
   },
-  "peerDependenciesMeta": {
-    "openai": {
-      "optional": true
-    }
-  },
   "engines": {
     "node": ">=20"
   },
