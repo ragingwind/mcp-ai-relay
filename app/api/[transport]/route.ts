@@ -17,9 +17,9 @@
 //   • `maxDuration = 300` — defense in depth with vercel.json.
 
 import { verifyBearer } from "ai-relay";
-import { parseEnv } from "ai-relay/env";
 import { registerOpenAIChat } from "ai-relay/openai";
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
+import { parseEnv } from "../../lib/env.js";
 
 const env = parseEnv(process.env);
 
