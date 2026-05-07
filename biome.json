@@ -1,7 +1,14 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.4.13/schema.json",
   "files": {
-    "includes": ["app/**", "packages/*/src/**", "packages/*/tests/**", "tests/**"],
+    "includes": [
+      "app/**",
+      "packages/*/src/**",
+      "packages/*/tests/**",
+      "tests/**",
+      "examples/*/server.ts",
+      "examples/*/src/**"
+    ],
     "ignoreUnknown": true
   },
   "formatter": {

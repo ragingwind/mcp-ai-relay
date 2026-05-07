@@ -114,8 +114,15 @@ registerOpenAIChat(server, { apiKey: process.env.OPENAI_API_KEY! });
 
 `registerOpenAIChat` is closure-isolated, so the same server may host
 multiple upstreams (OpenAI proper + Azure + local vLLM, …) as distinct
-named tools. Full API reference and runtime-specific recipes:
-[`packages/sdk/README.md`](./packages/sdk/README.md).
+named tools. Full API reference: [`packages/sdk/README.md`](./packages/sdk/README.md).
+
+Runnable examples in [`examples/`](./examples/):
+
+| Example | Use case |
+|---|---|
+| [`stdio/`](./examples/stdio/) | Single-tool stdio launcher for Claude Desktop direct registration |
+| [`multi-upstream/`](./examples/multi-upstream/) | One server, multiple upstreams (OpenAI + Azure + local LLM) — exercises the C7 multi-registration scenario |
+| [`cloudflare-workers/`](./examples/cloudflare-workers/) | Workers MCP via `agents/mcp` framework |
 
 ---
 

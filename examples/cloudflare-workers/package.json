@@ -1,0 +1,24 @@
+{
+  "name": "@example/cloudflare-workers",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Workers MCP server using the SDK + agents/mcp framework.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26",
+    "@ragingwind/mcp-ai-relay": "workspace:*",
+    "agents": "^0.0.40",
+    "openai": "^6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240924.0",
+    "wrangler": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
