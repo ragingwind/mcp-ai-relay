@@ -1,5 +1,5 @@
 {
-  "name": "@ragingwind/mcp-ai-relay",
+  "name": "@ragingwind/ai-relay",
   "version": "0.1.0",
   "description": "Provider-agnostic MCP relay SDK — embed Chat Completions and (future) Anthropic Messages, Gemini, and unified-gateway tools in any MCP server.",
   "license": "MIT",

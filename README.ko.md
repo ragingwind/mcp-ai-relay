@@ -107,7 +107,7 @@ Claude Desktop의 `claude_desktop_config.json`에 바로 등록:
   "mcpServers": {
     "openai-relay": {
       "command": "npx",
-      "args": ["-y", "@ragingwind/mcp-ai-relay", "--openai-completion"],
+      "args": ["-y", "@ragingwind/ai-relay", "--openai-completion"],
       "env": { "OPENAI_API_KEY": "sk-..." }
     }
   }
@@ -117,12 +117,12 @@ Claude Desktop의 `claude_desktop_config.json`에 바로 등록:
 **라이브러리 API (전체 제어권)**
 
 ```bash
-npm install @ragingwind/mcp-ai-relay @modelcontextprotocol/sdk openai
+npm install @ragingwind/ai-relay @modelcontextprotocol/sdk openai
 ```
 
 ```ts
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerOpenAIChat } from "@ragingwind/mcp-ai-relay/openai";
+import { registerOpenAIChat } from "@ragingwind/ai-relay/openai";
 
 const server = new McpServer({ name: "my-relay", version: "0.1.0" });
 registerOpenAIChat(server, { apiKey: process.env.OPENAI_API_KEY! });

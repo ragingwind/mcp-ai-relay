@@ -4,7 +4,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { registerOpenAIChat } from "@ragingwind/mcp-ai-relay/openai";
+import { registerOpenAIChat } from "@ragingwind/ai-relay/openai";
 
 const apiKey = process.env.OPENAI_API_KEY;
 if (!apiKey) {

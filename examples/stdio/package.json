@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26",
-    "@ragingwind/mcp-ai-relay": "workspace:*",
+    "@ragingwind/ai-relay": "workspace:*",
     "openai": "^6"
   },
   "devDependencies": {

@@ -12,7 +12,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { registerOpenAIChat } from "@ragingwind/mcp-ai-relay/openai";
+import { registerOpenAIChat } from "@ragingwind/ai-relay/openai";
 
 const server = new McpServer({
   name: "multi-upstream-relay",

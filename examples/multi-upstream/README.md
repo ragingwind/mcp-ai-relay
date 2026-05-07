@@ -26,7 +26,7 @@ This is the **C7 (multi-registration) scenario** referenced in
 ```bash
 # from the repo root
 pnpm install
-pnpm --filter @ragingwind/mcp-ai-relay build
+pnpm --filter @ragingwind/ai-relay build
 
 # enable the upstreams you have credentials for
 OPENAI_API_KEY=sk-... \
@@ -67,12 +67,12 @@ working independently.
 Add more upstreams by copying the `registerOpenAIChat` block in
 `server.ts` and choosing a unique `name` value.
 
-## Run from npm (after `@ragingwind/mcp-ai-relay@0.1.0` is published)
+## Run from npm (after `@ragingwind/ai-relay@0.1.0` is published)
 
 ```bash
 npm init -y
 npm pkg set type=module
-npm install @ragingwind/mcp-ai-relay @modelcontextprotocol/sdk openai
+npm install @ragingwind/ai-relay @modelcontextprotocol/sdk openai
 npm install --save-dev tsx
 # Copy server.ts from this directory.
 OPENAI_API_KEY=sk-... npx tsx server.ts
