@@ -25,10 +25,7 @@
 
 const encoder = new TextEncoder();
 
-export function verifyBearer(
-  actual: string | undefined,
-  expected: string | undefined,
-): boolean {
+export function verifyBearer(actual: string | undefined, expected: string | undefined): boolean {
   if (!actual || !expected) return false;
 
   const a = encoder.encode(actual);

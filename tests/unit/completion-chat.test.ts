@@ -220,9 +220,7 @@ describe("openai chat — streaming accumulation, usage, finish_reason, tool_cal
       http.post(ENDPOINT, () =>
         sseResponse([
           JSON.stringify({
-            choices: [
-              { delta: { tool_calls: [{ index: 0, function: { name: "lookup" } }] } },
-            ],
+            choices: [{ delta: { tool_calls: [{ index: 0, function: { name: "lookup" } }] } }],
           }),
           JSON.stringify({ choices: [{ delta: {}, finish_reason: "tool_calls" }] }),
         ]),
