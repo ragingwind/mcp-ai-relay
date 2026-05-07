@@ -11,7 +11,7 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 1.29.0
         version: 1.29.0(zod@4.3.6)
-      '@ragingwind/mcp-ai-relay':
+      '@ragingwind/ai-relay':
         specifier: workspace:*
         version: link:packages/sdk
       mcp-handler:
@@ -51,7 +51,7 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.26
         version: 1.29.0(zod@4.3.6)
-      '@ragingwind/mcp-ai-relay':
+      '@ragingwind/ai-relay':
         specifier: workspace:*
         version: link:../../packages/sdk
       agents:
@@ -73,7 +73,7 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.26
         version: 1.29.0(zod@4.3.6)
-      '@ragingwind/mcp-ai-relay':
+      '@ragingwind/ai-relay':
         specifier: workspace:*
         version: link:../../packages/sdk
       openai:
@@ -89,7 +89,7 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.26
         version: 1.29.0(zod@4.3.6)
-      '@ragingwind/mcp-ai-relay':
+      '@ragingwind/ai-relay':
         specifier: workspace:*
         version: link:../../packages/sdk
       openai:

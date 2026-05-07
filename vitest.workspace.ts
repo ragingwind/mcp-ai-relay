@@ -3,7 +3,7 @@ import { defineWorkspace } from "vitest/config";
 // Two test surfaces:
 //   • SDK unit tests  — in packages/sdk/, configured by its own vitest.config.ts.
 //   • App integration — exercises the Next.js route end-to-end against the
-//     workspace-installed `@ragingwind/mcp-ai-relay`.
+//     workspace-installed `@ragingwind/ai-relay`.
 //
 // The `tests/setup-env.ts` setup file seeds `process.env` BEFORE the route
 // module loads (the route still calls `parseEnv(process.env)` at module
