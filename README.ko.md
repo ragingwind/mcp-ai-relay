@@ -131,7 +131,7 @@ registerOpenAIChat(server, { apiKey: process.env.OPENAI_API_KEY! });
 `registerOpenAIChat`은 closure로 격리되므로, 같은 서버가 여러 업스트림
 (OpenAI proper + Azure + 로컬 vLLM, …)을 별개의 이름을 가진 도구로
 호스팅할 수 있습니다. 전체 API 레퍼런스:
-[`packages/sdk/README.md`](./packages/sdk/README.md) (영문).
+[`packages/ai-relay/README.md`](./packages/ai-relay/README.md) (영문).
 
 [`examples/`](./examples/) 의 실행 가능 예제:
 

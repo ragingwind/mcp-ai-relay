@@ -8,7 +8,7 @@
 // import-resolution time.
 //
 // Test flow:
-//   1. `npm pack` from packages/sdk/ → ragingwind-mcp-ai-relay-<v>.tgz
+//   1. `npm pack` from packages/ai-relay/ → ragingwind-mcp-ai-relay-<v>.tgz
 //   2. Install the tarball + declared peer deps in a temp dir.
 //   3. Run the installed bin's `node_modules/.bin/mcp-ai-relay`:
 //        --version, --help, tools/list, missing-flag, missing-env

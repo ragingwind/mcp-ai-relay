@@ -132,7 +132,7 @@ registerOpenAIChat(server, { apiKey: process.env.OPENAI_API_KEY! });
 
 `registerOpenAIChat` is closure-isolated, so the same server may host
 multiple upstreams (OpenAI proper + Azure + local vLLM, …) as distinct
-named tools. Full API reference: [`packages/sdk/README.md`](./packages/sdk/README.md).
+named tools. Full API reference: [`packages/ai-relay/README.md`](./packages/ai-relay/README.md).
 
 Runnable examples in [`examples/`](./examples/):
 
