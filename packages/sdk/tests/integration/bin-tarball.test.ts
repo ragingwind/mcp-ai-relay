@@ -42,7 +42,9 @@ beforeAll(async () => {
   execFileSync("npm", ["pack"], { cwd: SDK_DIR, stdio: "pipe" });
   const tarballs = readdirSync(SDK_DIR).filter((f) => f.endsWith(".tgz"));
   if (tarballs.length !== 1) {
-    throw new Error(`Expected 1 tarball after npm pack, got ${tarballs.length}: ${tarballs.join(", ")}`);
+    throw new Error(
+      `Expected 1 tarball after npm pack, got ${tarballs.length}: ${tarballs.join(", ")}`,
+    );
   }
   const tarball = join(SDK_DIR, tarballs[0]!);
 
@@ -91,9 +93,7 @@ describe("cli bin — installed tarball", () => {
       encoding: "utf8",
     });
     expect(r.status).toBe(0);
-    const responseLine = r.stdout
-      .split("\n")
-      .find((l) => l.trim().startsWith("{"));
+    const responseLine = r.stdout.split("\n").find((l) => l.trim().startsWith("{"));
     expect(responseLine).toBeDefined();
     const response = JSON.parse(responseLine as string);
     expect(response.result.tools).toHaveLength(1);
@@ -111,9 +111,7 @@ describe("cli bin — installed tarball", () => {
       },
     );
     expect(r.status).toBe(0);
-    const responseLine = r.stdout
-      .split("\n")
-      .find((l) => l.trim().startsWith("{"));
+    const responseLine = r.stdout.split("\n").find((l) => l.trim().startsWith("{"));
     const response = JSON.parse(responseLine as string);
     expect(response.result.tools[0].name).toBe("azure_chat");
     expect(response.result.tools[0].description).toBe("Azure deployment");
