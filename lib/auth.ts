@@ -1,40 +1,40 @@
-// Bearer-token verification for the MCP route (#3).
+// Bearer-token verification — portable across runtimes.
 //
-// `verifyToken` is the contract `mcp-handler`'s `withMcpAuth` consumes. It
-// validates the `Authorization: Bearer <token>` header value against
-// `env.RELAY_AUTH_TOKEN` in constant time using `node:crypto.timingSafeEqual`.
+// Returns `true` only when both `actual` and `expected` are non-empty,
+// have equal byte-length, and match every byte. Comparison runs in
+// constant time using a manual XOR-OR loop with no early termination,
+// so the function is safe on any runtime (Node, Bun, Deno, Cloudflare
+// Workers without `nodejs_compat`).
 //
-// CLAUDE.md §4 absolute prohibitions enforced here:
-//   • Never use `===` to compare bearer tokens — `timingSafeEqual` only.
-//   • Never log/echo `RELAY_AUTH_TOKEN` (this module emits no diagnostic strings).
+// Why a manual loop instead of `node:crypto.timingSafeEqual`:
+//   - `node:crypto` requires Workers' `nodejs_compat` flag.
+//   - For ≤32-byte secrets, an XOR-OR accumulation matches the same
+//     constant-time guarantee that `timingSafeEqual` provides.
+//   - Keeping the SDK runtime-agnostic at this layer means consumers
+//     don't need to opt into Node compatibility just to validate a
+//     bearer token.
 //
-// Length-mismatch defense: `timingSafeEqual` throws on differing-length
-// inputs. We return `undefined` BEFORE calling it when lengths differ —
-// this leaks 1 bit (lengths differ), but the alternative (catching the
-// throw) leaks more via timing of the exception path. For 32+ byte fixed
-// tokens this tradeoff is acceptable (plan §2, OQ-1).
+// Building the consumer's auth-info shape (clientId, scopes, etc.) is
+// the consumer's responsibility — this primitive returns a boolean only,
+// so it composes cleanly with `mcp-handler`'s `withMcpAuth`, a Hono
+// middleware, or any other gate.
+//
+// Length-mismatch defense: returning false BEFORE the loop when lengths
+// differ leaks 1 bit (the lengths differ), which is identical to what
+// `timingSafeEqual` does — it throws on length mismatch.
 
-import { timingSafeEqual } from "node:crypto";
-import type { AuthInfo as SdkAuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
-import { env } from "./env.js";
+const encoder = new TextEncoder();
 
-// Re-export the SDK's AuthInfo type. `withMcpAuth` consumes this exact shape:
-// `token` (the validated bearer string), `clientId`, and `scopes: string[]`.
-// We reuse the SDK type rather than redeclare so an SDK upgrade that widens
-// or narrows the contract surfaces here as a compile error.
-export type AuthInfo = SdkAuthInfo;
+export function verifyBearer(actual: string | undefined, expected: string | undefined): boolean {
+  if (!actual || !expected) return false;
 
-export function verifyToken(_req: Request, bearerToken: string | undefined): AuthInfo | undefined {
-  if (!bearerToken) return undefined;
-  const expected = env.RELAY_AUTH_TOKEN;
-  if (!expected) return undefined; // fail-closed
-  const a = Buffer.from(bearerToken);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return undefined; // length-oracle defense
-  if (!timingSafeEqual(a, b)) return undefined;
-  // `token` echoes the validated bearer back to the SDK so downstream
-  // request handlers can attribute calls without re-parsing the header.
-  // CLAUDE.md §4 forbids logging the token — `req.auth.token` is in-process
-  // state only and is never serialized into a response or log line.
-  return { token: bearerToken, clientId: "shared-secret", scopes: ["openai:chat"] };
+  const a = encoder.encode(actual);
+  const b = encoder.encode(expected);
+  if (a.length !== b.length) return false;
+
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= (a[i] as number) ^ (b[i] as number);
+  }
+  return mismatch === 0;
 }
