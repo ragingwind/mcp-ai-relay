@@ -21,7 +21,7 @@ OpenAI Chat Completions API를 [MCP (Model Context Protocol)](https://modelconte
    업스트림 등록, 또는 비-Node 런타임이 필요할 때.
 
 npm 패키지 이름은
-[`@ragingwind/ai-relay`](https://www.npmjs.com/package/@ragingwind/ai-relay)
+[`ai-relay`](https://www.npmjs.com/package/ai-relay)
 입니다. 아래에서 한 가지를 골라 진행하세요.
 
 ---
@@ -42,7 +42,7 @@ npm 패키지 이름은
 
 ```bash
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
-  | OPENAI_API_KEY=sk-... npx -y @ragingwind/ai-relay --openai-completion
+  | OPENAI_API_KEY=sk-... npx -y ai-relay --openai-completion
 ```
 
 기대 결과: 한 줄짜리 JSON-RPC 응답에 `"name":"completion_chat"`이 포함됩니다.
@@ -62,7 +62,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
   "mcpServers": {
     "openai-relay": {
       "command": "npx",
-      "args": ["-y", "@ragingwind/ai-relay", "--openai-completion"],
+      "args": ["-y", "ai-relay", "--openai-completion"],
       "env": {
         "OPENAI_API_KEY": "sk-..."
       }
@@ -85,7 +85,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
 ```bash
 claude mcp add openai-relay \
   -e OPENAI_API_KEY=sk-... \
-  -- npx -y @ragingwind/ai-relay --openai-completion
+  -- npx -y ai-relay --openai-completion
 ```
 
 또는 `.mcp.json` 에 직접 작성:
@@ -95,7 +95,7 @@ claude mcp add openai-relay \
   "mcpServers": {
     "openai-relay": {
       "command": "npx",
-      "args": ["-y", "@ragingwind/ai-relay", "--openai-completion"],
+      "args": ["-y", "ai-relay", "--openai-completion"],
       "env": {
         "OPENAI_API_KEY": "sk-..."
       }
@@ -124,7 +124,7 @@ claude mcp add openai-relay \
 ### CLI 옵션 (전체)
 
 ```
-npx -y @ragingwind/ai-relay <provider-flag> [--name <name>] [--description <desc>]
+npx -y ai-relay <provider-flag> [--name <name>] [--description <desc>]
 
 Provider flags (정확히 1개 필수, 호출당 1개 도구):
   --openai-completion   OpenAI Chat Completions
@@ -189,12 +189,12 @@ usage cap)는 [`doc/DEPLOY.md`](./doc/DEPLOY.md) 참고.
 직접 만든다면 SDK 패키지가 import 표면입니다:
 
 ```bash
-npm install @ragingwind/ai-relay @modelcontextprotocol/sdk openai
+npm install ai-relay @modelcontextprotocol/sdk openai
 ```
 
 ```ts
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerOpenAIChat } from "@ragingwind/ai-relay/openai";
+import { registerOpenAIChat } from "ai-relay/openai";
 
 const server = new McpServer({ name: "my-relay", version: "0.1.0" });
 registerOpenAIChat(server, { apiKey: process.env.OPENAI_API_KEY! });

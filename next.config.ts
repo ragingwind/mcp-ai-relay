@@ -11,7 +11,7 @@ import type { NextConfig } from "next";
 // "webpack config without turbopack config" build error in Next 16.
 //
 // `transpilePackages`: pnpm workspace packages are symlinked into
-// node_modules/. The `@ragingwind/ai-relay` package ships a built
+// node_modules/. The `ai-relay` package ships a built
 // `dist/` for npm consumers, but during local dev/build Turbopack reads
 // the package's `exports.import` (which points at dist) — so the SDK
 // build runs as a `prebuild`/`predev` step. `transpilePackages` is here
@@ -20,7 +20,7 @@ const config: NextConfig = {
   outputFileTracingRoot: __dirname,
   output: "standalone",
   turbopack: {},
-  transpilePackages: ["@ragingwind/ai-relay"],
+  transpilePackages: ["ai-relay"],
 };
 
 export default config;

@@ -29,7 +29,7 @@
 
 **Embed via SDK** (자기 MCP 서버 — Cloudflare Workers, Claude Desktop
 직결 stdio, Hono, Express 등 — 안에 기능을 임베드):
-- `npm install @ragingwind/ai-relay @modelcontextprotocol/sdk openai`.
+- `npm install ai-relay @modelcontextprotocol/sdk openai`.
 - 전체 API + 런타임별 레시피 (Vercel/Next.js, stdio, Cloudflare
   Workers, 다중 업스트림): [`packages/ai-relay/README.md`](../packages/ai-relay/README.md) (영문).
 - 아래 운영 절차 (회전 + 트러블슈팅)는 env 레벨에서 그대로 적용 — 배포

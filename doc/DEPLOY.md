@@ -29,7 +29,7 @@ For **Docker**:
 
 For **Embed via SDK** (host the capability inside your own MCP server —
 Cloudflare Workers, raw stdio for Claude Desktop, Hono, Express, etc.):
-- `npm install @ragingwind/ai-relay @modelcontextprotocol/sdk openai`.
+- `npm install ai-relay @modelcontextprotocol/sdk openai`.
 - Full API + runtime-specific recipes (Vercel/Next.js, stdio,
   Cloudflare Workers, multi-upstream): [`packages/ai-relay/README.md`](../packages/ai-relay/README.md).
 - Operations (rotation + troubleshooting) below still apply at the env

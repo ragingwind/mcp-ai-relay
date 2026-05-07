@@ -1,4 +1,4 @@
-// @ragingwind/ai-relay/openai — OpenAI Chat Completions provider.
+// ai-relay/openai — OpenAI Chat Completions provider.
 //
 // Compatible with any OpenAI Chat Completions-shaped API: OpenAI proper,
 // Azure OpenAI, vLLM, Ollama, OpenRouter, Vercel AI Gateway (OpenAI mode).

@@ -128,7 +128,7 @@ mcp-ai-relay/                              # repo root — Next.js relay app
 │       └── [transport]/
 │           └── route.ts                # MCP entry — imports the SDK package
 ├── packages/
-│   └── sdk/                            # @ragingwind/ai-relay (publishable)
+│   └── sdk/                            # ai-relay (publishable)
 │       ├── src/
 │       │   ├── index.ts                # public re-exports (auth)
 │       │   ├── auth.ts                 # verifyBearer (portable, no node:crypto)
@@ -165,11 +165,11 @@ mcp-ai-relay/                              # repo root — Next.js relay app
 ├── compose.yml                         # single-host self-hosted launch
 ├── vercel.json                         # pins maxDuration: 300, region: iad1
 ├── pnpm-workspace.yaml                 # workspace declares packages/*
-├── package.json                        # depends on @ragingwind/ai-relay (workspace:*)
+├── package.json                        # depends on ai-relay (workspace:*)
 ├── tsconfig.json
 ├── biome.json
 ├── vitest.workspace.ts                 # SDK unit + integration projects
-├── next.config.ts                      # transpilePackages: [@ragingwind/ai-relay]
+├── next.config.ts                      # transpilePackages: [ai-relay]
 ├── .env.example
 └── .gitignore
 ```

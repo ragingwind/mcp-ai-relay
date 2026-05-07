@@ -1,4 +1,4 @@
-# @ragingwind/ai-relay
+# ai-relay
 
 Provider-agnostic MCP relay SDK. Embed `completion_chat` (OpenAI Chat
 Completions, OpenAI-compatible APIs, and unified gateways) — and future
@@ -19,9 +19,9 @@ see its README for self-hosted Docker and Vercel deployment paths.
 ## Install
 
 ```bash
-npm install @ragingwind/ai-relay @modelcontextprotocol/sdk openai
+npm install ai-relay @modelcontextprotocol/sdk openai
 # or
-pnpm add @ragingwind/ai-relay @modelcontextprotocol/sdk openai
+pnpm add ai-relay @modelcontextprotocol/sdk openai
 ```
 
 `@modelcontextprotocol/sdk` and `openai` are declared as **peer
@@ -49,7 +49,7 @@ Register directly in `claude_desktop_config.json` (Claude Desktop):
   "mcpServers": {
     "openai-relay": {
       "command": "npx",
-      "args": ["-y", "@ragingwind/ai-relay", "--openai-completion"],
+      "args": ["-y", "ai-relay", "--openai-completion"],
       "env": {
         "OPENAI_API_KEY": "sk-..."
       }
@@ -91,9 +91,9 @@ local LLM as distinct named tools — see
 
 ```ts
 // app/api/[transport]/route.ts
-import { verifyBearer } from "@ragingwind/ai-relay";
-import { parseEnv } from "@ragingwind/ai-relay/env";
-import { registerOpenAIChat } from "@ragingwind/ai-relay/openai";
+import { verifyBearer } from "ai-relay";
+import { parseEnv } from "ai-relay/env";
+import { registerOpenAIChat } from "ai-relay/openai";
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 
 const env = parseEnv(process.env);
@@ -131,7 +131,7 @@ export { wrapped as GET, wrapped as POST, wrapped as DELETE };
 // server.ts
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { registerOpenAIChat } from "@ragingwind/ai-relay/openai";
+import { registerOpenAIChat } from "ai-relay/openai";
 
 const server = new McpServer({ name: "openai-relay", version: "0.1.0" });
 registerOpenAIChat(server, {
@@ -161,7 +161,7 @@ Add to `claude_desktop_config.json`:
 // src/index.ts
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerOpenAIChat } from "@ragingwind/ai-relay/openai";
+import { registerOpenAIChat } from "ai-relay/openai";
 
 export class OpenAIRelay extends McpAgent {
   server = new McpServer({ name: "openai-relay", version: "0.1.0" });
@@ -186,7 +186,7 @@ distinct tools.
 
 ```ts
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerOpenAIChat } from "@ragingwind/ai-relay/openai";
+import { registerOpenAIChat } from "ai-relay/openai";
 
 const server = new McpServer({ name: "multi-relay", version: "0.1.0" });
 
@@ -227,7 +227,7 @@ affect the others.
 ```ts
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type OpenAI from "openai";
-import type { RequestScope } from "@ragingwind/ai-relay/openai";
+import type { RequestScope } from "ai-relay/openai";
 
 export interface OpenAIChatConfig {
   /** Registered MCP tool name. Default `"completion_chat"`.
@@ -284,7 +284,7 @@ export function verifyBearer(
 ### `parseEnv(source)` (opt-in subpath)
 
 ```ts
-import { parseEnv } from "@ragingwind/ai-relay/env";
+import { parseEnv } from "ai-relay/env";
 
 const env = parseEnv(process.env);  // explicit — no auto-load on import
 ```
