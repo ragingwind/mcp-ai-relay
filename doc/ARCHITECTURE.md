@@ -42,7 +42,7 @@ sources in the [Reference index](#reference-index).
                                         └─────────────────────────────┘
                                                      │
                                                      ▼
-                                          OPENAI_API_KEY
+                                          AI_RELAY_API_KEY
                                           RELAY_AUTH_TOKEN
 ```
 
@@ -96,7 +96,7 @@ Invokes OpenAI Chat Completions once and returns the accumulated text.
 | `model` | `string` | ✅ | Forwarded as-is to the upstream Chat Completions endpoint |
 | `messages` | `Array<{role: "system"|"user"|"assistant", content: string}>` | ✅ | OpenAI Chat shape |
 | `temperature` | `number` (0~2) | ❌ | OpenAI default applies |
-| `max_tokens` | `number` (1~`MAX_OUTPUT_TOKENS_CEILING`, default 4096) | ❌ | Clamped to the server ceiling |
+| `max_tokens` | `number` (1~`AI_RELAY_MAX_OUTPUT_TOKENS`, default 4096) | ❌ | Clamped to the server ceiling |
 | `top_p` | `number` (0~1) | ❌ | |
 | `stop` | `string | string[]` | ❌ | |
 
@@ -233,11 +233,11 @@ mcp-ai-relay/                              # repo root — Next.js relay app
 
 | Key | Required | Secret | Description |
 |---|---|---|---|
-| `OPENAI_API_KEY` | ✅ | Sensitive | OpenAI API key. Recommend separate keys for Production/Preview. |
-| `OPENAI_BASE_URL` | ❌ | Plain | Override the OpenAI SDK base URL. Default: SDK built-in. Use to point at Azure OpenAI, a self-hosted vLLM/Ollama gateway, or a local mock. |
+| `AI_RELAY_API_KEY` | ✅ | Sensitive | Upstream API key. Recommend separate keys for Production/Preview. |
+| `AI_RELAY_BASE_URL` | ❌ | Plain | Override the upstream base URL. Default: SDK built-in. Use to point at Azure OpenAI, a self-hosted vLLM/Ollama gateway, or a local mock. |
 | `RELAY_AUTH_TOKEN` | ✅ | Sensitive | Bearer token sent by the MCP host. 32+ random bytes. |
-| `MAX_OUTPUT_TOKENS_CEILING` | ❌ | Plain | Integer. Default `4096`. Overrides caller's value. |
-| `REQUEST_TIMEOUT_MS` | ❌ | Plain | Integer. Default `60000`. OpenAI call timeout. |
+| `AI_RELAY_MAX_OUTPUT_TOKENS` | ❌ | Plain | Integer. Default `4096`. Overrides caller's value. |
+| `AI_RELAY_REQUEST_TIMEOUT_MS` | ❌ | Plain | Integer. Default `60000`. Upstream call timeout. |
 
 Record keys only in `.env.example`; never commit values. Register the secrets in the Vercel dashboard with the Sensitive flag.
 
@@ -270,7 +270,7 @@ On unauthenticated requests, `mcp-handler` automatically responds with 401 + `WW
 
 ## 9. Security — v1 minimum set
 
-- Never echo `OPENAI_API_KEY` in responses, logs, or error messages.
+- Never echo `AI_RELAY_API_KEY` in responses, logs, or error messages.
 - Always compare bearer tokens with `timingSafeEqual`.
 - All tool inputs must be strictly validated with zod (use `.strict()`).
 - `max_tokens` accepts the caller's value but is clamped to the server ceiling.

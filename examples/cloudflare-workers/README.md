@@ -22,10 +22,10 @@ pnpm --filter ai-relay build
 
 # Set Workers secrets (use wrangler from the example dir)
 cd examples/cloudflare-workers
-pnpm exec wrangler secret put OPENAI_API_KEY    # paste your key when prompted
+pnpm exec wrangler secret put AI_RELAY_API_KEY    # paste your key when prompted
 pnpm exec wrangler secret put RELAY_AUTH_TOKEN  # paste a 32+ byte token
 # Optional:
-# pnpm exec wrangler secret put OPENAI_BASE_URL
+# pnpm exec wrangler secret put AI_RELAY_BASE_URL
 
 # Local dev (hot reload)
 pnpm dev
@@ -64,9 +64,9 @@ snippet is omitted from result text.
 
 | Secret | Required | Notes |
 |---|---|---|
-| `OPENAI_API_KEY` | ✅ | Set via `wrangler secret put` |
+| `AI_RELAY_API_KEY` | ✅ | Set via `wrangler secret put` |
 | `RELAY_AUTH_TOKEN` | ✅ | Bearer token sent by the MCP host (32+ bytes) |
-| `OPENAI_BASE_URL` | ❌ | Override for Azure / vLLM / Ollama / AI Gateway |
+| `AI_RELAY_BASE_URL` | ❌ | Override for Azure / vLLM / Ollama / AI Gateway |
 
 `max_tokens` ceiling and request timeout default to the SDK's values
 (4096 / 60 s). Edit `src/index.ts` to override.

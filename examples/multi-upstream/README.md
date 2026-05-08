@@ -29,8 +29,8 @@ pnpm install
 pnpm --filter ai-relay build
 
 # enable the upstreams you have credentials for
-OPENAI_API_KEY=sk-... \
-AZURE_OPENAI_KEY=... AZURE_OPENAI_BASE_URL=https://<resource>.openai.azure.com/openai/deployments/<deployment> \
+AI_RELAY_API_KEY=sk-... \
+AZURE_OPENAI_KEY=... AZURE_AI_RELAY_BASE_URL=https://<resource>.openai.azure.com/openai/deployments/<deployment> \
 LOCAL_LLM_BASE_URL=http://localhost:11434/v1 \
   pnpm --filter @example/multi-upstream start
 ```
@@ -43,7 +43,7 @@ exits non-zero.
 ## Verify with MCP Inspector (C7)
 
 ```bash
-OPENAI_API_KEY=sk-... LOCAL_LLM_BASE_URL=http://localhost:11434/v1 \
+AI_RELAY_API_KEY=sk-... LOCAL_LLM_BASE_URL=http://localhost:11434/v1 \
   npx @modelcontextprotocol/inspector --cli \
     -- pnpm --filter @example/multi-upstream start
 ```
@@ -59,8 +59,8 @@ working independently.
 
 | Var | Effect |
 |---|---|
-| `OPENAI_API_KEY` | Registers `openai_chat` against OpenAI proper |
-| `AZURE_OPENAI_KEY` + `AZURE_OPENAI_BASE_URL` | Registers `azure_chat` |
+| `AI_RELAY_API_KEY` | Registers `openai_chat` against OpenAI proper |
+| `AZURE_OPENAI_KEY` + `AZURE_AI_RELAY_BASE_URL` | Registers `azure_chat` |
 | `LOCAL_LLM_BASE_URL` | Registers `local_llm` (default ceiling 8192) |
 | `LOCAL_LLM_KEY` | Optional auth for the local LLM endpoint |
 
@@ -75,5 +75,5 @@ npm pkg set type=module
 npm install ai-relay @modelcontextprotocol/sdk openai
 npm install --save-dev tsx
 # Copy server.ts from this directory.
-OPENAI_API_KEY=sk-... npx tsx server.ts
+AI_RELAY_API_KEY=sk-... npx tsx server.ts
 ```

@@ -17,7 +17,7 @@ class_name = "OpenAIRelay"
 tag = "v1"
 new_sqlite_classes = ["OpenAIRelay"]
 
-# Secrets (set via `wrangler secret put OPENAI_API_KEY`):
-#   OPENAI_API_KEY        — required
-#   OPENAI_BASE_URL       — optional override
+# Secrets (set via `wrangler secret put AI_RELAY_API_KEY`):
+#   AI_RELAY_API_KEY        — required
+#   AI_RELAY_BASE_URL       — optional override
 #   RELAY_AUTH_TOKEN      — bearer token for the gate (32+ bytes)
