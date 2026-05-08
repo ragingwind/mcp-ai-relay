@@ -1,11 +1,14 @@
-// Zod-validated environment parser.
+// HTTP-only environment parser for the relay app.
+//
+// This is the relay app's private env schema — it lives in `app/lib/`
+// because `RELAY_AUTH_TOKEN` (≥ 32 bytes) and the HTTP-server-specific
+// names (MAX_OUTPUT_TOKENS_CEILING, REQUEST_TIMEOUT_MS) are concerns of
+// the deployed relay, NOT of every consumer that embeds the `ai-relay`
+// SDK in a stdio launcher, Cloudflare Worker, or Hono server.
 //
 // Side-effect-free module: importing this file does NOT read process.env.
 // Consumers (the route file, scripts, tests) call `parseEnv(source)`
-// explicitly with whatever object they want validated. Keeping import
-// time clean is the prerequisite for embedding the SDK in environments
-// that don't expose `process.env` at module load (Cloudflare Workers,
-// Deno, stdio launchers).
+// explicitly with whatever object they want validated.
 //
 // Error messages MUST never echo any env var value. Failure messages
 // are built strictly from `issue.path` + `issue.message` text.
@@ -34,11 +37,10 @@ export type Env = z.infer<typeof envSchema>;
 // itself satisfies this signature, so callers passing it still type-check.
 export type EnvSource = Record<string, string | undefined>;
 
+// Mirrors redactZodError in packages/ai-relay/src/config.ts; keep the two in lock-step.
 export function parseEnv(source: EnvSource): Env {
   const result = envSchema.safeParse(source);
   if (result.success) return result.data;
-  // Redacted error: only path + message text from each zod issue. Never include
-  // `issue.input` / `issue.received` / any value-derived strings.
   const failures = result.error.issues
     .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
     .join("; ");

@@ -49,7 +49,7 @@ Provider flags (exactly one required):
 
 Options:
   --name <name>         Override the registered MCP tool name
-                        (default: completion_chat)
+                        (default: openai_chat)
   --description <desc>  Override the tool description
   --help, -h            Show this message
   --version, -V         Print SDK version

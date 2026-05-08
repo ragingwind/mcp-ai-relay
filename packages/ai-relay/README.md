@@ -1,6 +1,6 @@
 # ai-relay
 
-Provider-agnostic MCP relay SDK. Embed `completion_chat` (OpenAI Chat
+Provider-agnostic MCP relay SDK. Embed `openai_chat` (OpenAI Chat
 Completions, OpenAI-compatible APIs, and unified gateways) — and future
 provider tools — into any [Model Context Protocol](https://modelcontextprotocol.io)
 server.
@@ -72,7 +72,7 @@ Provider flags (exactly one required):
 
 Options:
   --name <name>         Override the registered MCP tool name
-                        (default: completion_chat)
+                        (default: openai_chat)
   --description <desc>  Override the tool description
   --help, -h            Show this message
   --version, -V         Print SDK version
@@ -91,20 +91,23 @@ local LLM as distinct named tools — see
 
 ```ts
 // app/api/[transport]/route.ts
-import { verifyBearer } from "ai-relay";
-import { parseEnv } from "ai-relay/env";
-import { registerOpenAIChat } from "ai-relay/openai";
+import { loadConfig, registerOpenAIChat, verifyBearer } from "ai-relay";
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 
-const env = parseEnv(process.env);
+// `loadConfig` is the SDK's single resolution function — pass `env`,
+// `file`, and/or `args`. The HTTP server's own auth-token / ceiling
+// schema lives in your app (e.g. `app/lib/env.ts`); the SDK does not
+// publish a `parseEnv` subpath.
+const config = loadConfig({ env: process.env });
+const provider = config.providers[0]!;
 
 const handler = createMcpHandler(
   (server) => {
     registerOpenAIChat(server, {
-      apiKey: env.OPENAI_API_KEY,
-      ...(env.OPENAI_BASE_URL ? { baseURL: env.OPENAI_BASE_URL } : {}),
-      maxOutputTokensCeiling: env.MAX_OUTPUT_TOKENS_CEILING,
-      requestTimeoutMs: env.REQUEST_TIMEOUT_MS,
+      apiKey: provider.apiKey,
+      ...(provider.baseURL ? { baseURL: provider.baseURL } : {}),
+      ...(provider.maxOutputTokens ? { maxOutputTokensCeiling: provider.maxOutputTokens } : {}),
+      ...(provider.requestTimeoutMs ? { requestTimeoutMs: provider.requestTimeoutMs } : {}),
     });
   },
   {},
@@ -114,7 +117,7 @@ const handler = createMcpHandler(
 const wrapped = withMcpAuth(
   handler,
   (_req, token) =>
-    verifyBearer(token, env.RELAY_AUTH_TOKEN)
+    verifyBearer(token, process.env.RELAY_AUTH_TOKEN)
       ? { token: token as string, clientId: "shared-secret", scopes: ["openai:chat"] }
       : undefined,
   { required: true, requiredScopes: ["openai:chat"] },
@@ -230,7 +233,7 @@ import type OpenAI from "openai";
 import type { RequestScope } from "ai-relay/openai";
 
 export interface OpenAIChatConfig {
-  /** Registered MCP tool name. Default `"completion_chat"`.
+  /** Registered MCP tool name. Default `"openai_chat"`.
    *  Must be unique within an MCP server when multiple instances are
    *  registered. snake_case is the MCP convention. */
   name?: string;
@@ -281,18 +284,29 @@ export function verifyBearer(
 ): boolean;
 ```
 
-### `parseEnv(source)` (opt-in subpath)
+### `loadConfig(source)`
 
 ```ts
-import { parseEnv } from "ai-relay/env";
+import { loadConfig } from "ai-relay";
 
-const env = parseEnv(process.env);  // explicit — no auto-load on import
+const cfg = loadConfig({ env: process.env });
+// cfg.providers: ProviderConfig[] — one entry per resolved provider
 ```
 
-Recognized keys: `OPENAI_API_KEY` (default `""`), `OPENAI_BASE_URL`
-(optional URL), `RELAY_AUTH_TOKEN` (required, ≥32 bytes),
-`MAX_OUTPUT_TOKENS_CEILING` (default 4096), `REQUEST_TIMEOUT_MS`
-(default 60000). Error messages never echo input values.
+`loadConfig` is the single resolution function for every embed shape
+(CLI, HTTP route, stdio launcher). Pass `env` (e.g. `process.env`),
+`file` (path to a JSON config), and/or `args` (programmatic
+overrides). It is synchronous and side-effect-free: importing the
+module does NOT touch `process.env`. Error messages never echo input
+values.
+
+The relay app's HTTP-only schema (`RELAY_AUTH_TOKEN` ≥ 32 bytes,
+`MAX_OUTPUT_TOKENS_CEILING`, `REQUEST_TIMEOUT_MS`) is intentionally
+NOT exposed by the SDK — it is private to the deployed Vercel/Next.js
+relay (`app/lib/env.ts` in the reference repo). SDK consumers
+embedding the registrar in stdio launchers, Cloudflare Workers, or
+custom hosts should validate their own runtime-specific env in their
+own code.
 
 ### `createOpenAIClient(config)`
 

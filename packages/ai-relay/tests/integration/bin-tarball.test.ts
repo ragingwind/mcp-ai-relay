@@ -98,7 +98,7 @@ describe("cli bin — installed tarball", () => {
     expect(responseLine).toBeDefined();
     const response = JSON.parse(responseLine as string);
     expect(response.result.tools).toHaveLength(1);
-    expect(response.result.tools[0].name).toBe("completion_chat");
+    expect(response.result.tools[0].name).toBe("openai_chat");
   });
 
   it("P4: --name and --description override the registered tool descriptor", () => {

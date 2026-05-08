@@ -1,5 +1,10 @@
+// Integration tests for the relay app's HTTP-only env parser
+// (`app/lib/env.ts`). These cases were ported 1:1 from the deleted
+// `packages/ai-relay/tests/unit/env.test.ts` when `parseEnv` moved out
+// of the SDK and into the relay app.
+
 import { describe, expect, it } from "vitest";
-import { type EnvSource, parseEnv } from "../../src/env.js";
+import { type EnvSource, parseEnv } from "../../app/lib/env.js";
 
 // A minimal-valid input — every behavior test starts from this and overrides
 // the one or two keys it cares about. Avoids re-declaring boilerplate per case.

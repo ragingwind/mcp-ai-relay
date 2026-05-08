@@ -1,6 +1,6 @@
 # Example — stdio (Claude Desktop direct)
 
-A 20-line stdio MCP server that registers `completion_chat` against
+A 20-line stdio MCP server that registers `openai_chat` against
 OpenAI and is consumed directly by Claude Desktop via
 `claude_desktop_config.json`. No HTTP, no auth gate — the stdio
 transport assumes the local process is trusted.
@@ -67,7 +67,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
 For a published-to-disk approach, `tsc` the server into JS first and
 point `command`/`args` at the compiled file.
 
-Restart Claude Desktop. The `completion_chat` tool will appear in the
+Restart Claude Desktop. The `openai_chat` tool will appear in the
 tools selector.
 
 ## Configuration

@@ -1,4 +1,4 @@
-// Minimal stdio MCP server: registers `completion_chat` against OpenAI
+// Minimal stdio MCP server: registers `openai_chat` against OpenAI
 // and serves it over stdin/stdout for direct registration in
 // Claude Desktop's `claude_desktop_config.json`.
 
