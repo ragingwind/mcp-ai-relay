@@ -207,7 +207,7 @@ export function makeOpenAIChatHandler(config: OpenAIChatConfig): OpenAIChatHandl
 }
 
 export function registerOpenAIChat(server: McpServer, config: OpenAIChatConfig): void {
-  const { schema, handler, name, description } = openAIChatTool.makeHandler(config);
+  const { schema, handler, name, description } = makeOpenAIChatHandler(config);
   server.tool(name, description, schema.shape, handler);
 }
 

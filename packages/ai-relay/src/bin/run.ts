@@ -39,6 +39,7 @@ Examples:
 
 export interface RunIO {
   stdin: Readable;
+  stdinIsTTY: boolean;
   stdout: { write(chunk: string): void };
   stderr: { write(chunk: string): void };
   env: Record<string, string | undefined>;
@@ -69,12 +70,20 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
     return 2;
   }
 
-  const stdinText = await readStdinIfPiped(io.stdin);
-  if (parsed.positional !== undefined && stdinText !== undefined) {
+  const stdinResult = await readStdinIfPiped(io.stdin, io.stdinIsTTY);
+  if (parsed.positional !== undefined && stdinResult.kind === "text") {
     io.stderr.write("received both stdin and positional input; pass exactly one\n");
     return 2;
   }
-  const rawInput = parsed.positional ?? stdinText;
+  let rawInput: string | undefined;
+  if (parsed.positional !== undefined) {
+    rawInput = parsed.positional;
+  } else if (stdinResult.kind === "text") {
+    rawInput = stdinResult.value;
+  } else if (stdinResult.kind === "empty-pipe") {
+    io.stderr.write("received empty stdin; pipe a JSON object or plain text\n");
+    return 2;
+  }
   if (rawInput === undefined) {
     io.stderr.write(`${parsed.provider} ${parsed.tool} requires input (positional or stdin)\n`);
     return 2;
@@ -166,16 +175,21 @@ function coerceInput(
   const trimmed = raw.trimStart();
   const first = trimmed[0];
   if (first === "{" || first === "[") {
+    let parsed: unknown;
     try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw new UsageError("input JSON must be an object");
-      }
-      return parsed as Record<string, unknown>;
-    } catch (e) {
-      if (e instanceof UsageError) throw e;
+      parsed = JSON.parse(raw) as unknown;
+    } catch {
       throw new UsageError("input is not valid JSON");
     }
+    if (Array.isArray(parsed)) {
+      throw new UsageError(
+        `input JSON for ${tool.provider}/${tool.name} must be an object, not an array`,
+      );
+    }
+    if (parsed === null || typeof parsed !== "object") {
+      throw new UsageError("input JSON must be an object");
+    }
+    return parsed as Record<string, unknown>;
   }
   if (!tool.desugar) {
     throw new UsageError(
@@ -185,14 +199,14 @@ function coerceInput(
   return tool.desugar(raw, opts);
 }
 
-async function readStdinIfPiped(stdin: Readable): Promise<string | undefined> {
-  const isTTY = (stdin as unknown as { isTTY?: boolean }).isTTY;
-  if (isTTY) return undefined;
+type StdinResult = { kind: "tty" } | { kind: "text"; value: string } | { kind: "empty-pipe" };
+
+async function readStdinIfPiped(stdin: Readable, stdinIsTTY: boolean): Promise<StdinResult> {
+  if (stdinIsTTY) return { kind: "tty" };
   const chunks: Buffer[] = [];
   for await (const chunk of stdin) {
     chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : (chunk as Buffer));
   }
-  if (chunks.length === 0) return undefined;
-  const text = Buffer.concat(chunks).toString("utf8");
-  return text.length === 0 ? undefined : text;
+  const text = chunks.length === 0 ? "" : Buffer.concat(chunks).toString("utf8");
+  return text.length === 0 ? { kind: "empty-pipe" } : { kind: "text", value: text };
 }

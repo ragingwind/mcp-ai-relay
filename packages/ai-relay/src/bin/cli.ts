@@ -3,6 +3,7 @@ import { run } from "./run.js";
 
 run(process.argv.slice(2), {
   stdin: process.stdin,
+  stdinIsTTY: Boolean(process.stdin.isTTY),
   stdout: process.stdout,
   stderr: process.stderr,
   env: process.env,

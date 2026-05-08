@@ -36,7 +36,7 @@ sources in the [Reference index](#reference-index).
 │                      │ ─────────────► │  /api/[transport]/route.ts  │ ─────────────► │  completions      │
 │                      │                │   ├─ withMcpAuth(bearer)    │                 │                   │
 │                      │ ◄───────────── │   ├─ mcp-handler            │ ◄───────────── │                   │
-│                      │  CallToolResult│   │   └─ completion_chat    │  delta chunks   │                   │
+│                      │  CallToolResult│   │   └─ openai_chat    │  delta chunks   │                   │
 └──────────────────────┘                │   └─ accumulate stream      │                 └───────────────────┘
                                         │       → single text content │
                                         └─────────────────────────────┘
@@ -52,7 +52,7 @@ sources in the [Reference index](#reference-index).
 
 1. The MCP host sends `Authorization: Bearer <RELAY_AUTH_TOKEN>` plus a `tools/call` JSON-RPC message via `POST /api/mcp`.
 2. `withMcpAuth` compares the header token to the `RELAY_AUTH_TOKEN` env var in constant time (timing-safe).
-3. `mcp-handler` parses the JSON-RPC and invokes the `completion_chat` tool handler.
+3. `mcp-handler` parses the JSON-RPC and invokes the `openai_chat` tool handler.
 4. The tool handler validates input with zod → applies the server policy `max_tokens` ceiling → calls the `openai` SDK's `chat.completions.create({ stream: true, ... })` (with an `AbortController` attached).
 5. The upstream stream is accumulated as an async iterator (`for await (const chunk of stream)`).
 6. The accumulated text and `usage` metadata are serialized as a `CallToolResult`:
@@ -85,7 +85,7 @@ The non-streaming path uses the SDK default retry (2 attempts). **The streaming 
 
 ## 4. MCP tool definition
 
-### `completion_chat`
+### `openai_chat`
 
 Invokes OpenAI Chat Completions once and returns the accumulated text.
 

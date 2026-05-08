@@ -39,19 +39,21 @@ function makeIO(
   const stdoutBuf = { value: "" };
   const stderrBuf = { value: "" };
   let stdin: Readable;
+  let stdinIsTTY: boolean;
   if (opts.stdin === undefined) {
     stdin = new Readable({
       read() {
         this.push(null);
       },
     });
-    (stdin as unknown as { isTTY: boolean }).isTTY = opts.stdinIsTTY ?? true;
+    stdinIsTTY = opts.stdinIsTTY ?? true;
   } else {
     stdin = Readable.from([opts.stdin]);
-    (stdin as unknown as { isTTY: boolean }).isTTY = false;
+    stdinIsTTY = opts.stdinIsTTY ?? false;
   }
   const io: RunIO = {
     stdin,
+    stdinIsTTY,
     stdout: {
       write: (s) => {
         stdoutBuf.value += s;
@@ -189,6 +191,23 @@ describe("run — input handling (B9, B10)", () => {
     );
     expect(code).toBe(0);
     expect(captured?.model).toBe("gpt-4o-mini");
+  });
+
+  it("D2: empty stdin pipe → exit 2 with empty-stdin message (not generic 'requires input')", async () => {
+    const cap = makeIO({ stdin: "", env: { AI_RELAY_API_KEY: "k" } });
+    const code = await run(["openai", "chat", "-m", "x"], cap.io);
+    expect(code).toBe(2);
+    expect(cap.stderr.value).toContain("empty stdin");
+    expect(cap.stderr.value).not.toContain("requires input");
+  });
+
+  it("D3: positional JSON array → exit 2 with array-rejection message naming provider/tool", async () => {
+    const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
+    const code = await run(["openai", "chat", "-m", "x", "[1,2,3]"], cap.io);
+    expect(code).toBe(2);
+    expect(cap.stderr.value).toContain(
+      "input JSON for openai/chat must be an object, not an array",
+    );
   });
 
   it("P4: --system + plain text → system prepended", async () => {

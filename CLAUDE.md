@@ -13,7 +13,7 @@ working in this repository. **It overrides the global rules at `~/.claude/CLAUDE
 ## 1. One-line summary
 
 A relay server that exposes OpenAI Chat Completions as an MCP (Model Context Protocol) tool —
-deployed on Vercel, Next.js App Router, Bearer authentication, single tool `completion_chat` in v1.
+deployed on Vercel, Next.js App Router, Bearer authentication, single tool `openai_chat` in v1.
 
 Full architecture: [`doc/ARCHITECTURE.md`](./doc/ARCHITECTURE.md)
 
@@ -113,7 +113,7 @@ These are NOT read by the server. They only set defaults for the verification sc
 | Key | Used by | Default | Override |
 |---|---|---|---|
 | `MCP_URL`      | `verify`, `inspect` | `http://localhost:3000/api/mcp` | `--url=` |
-| `MCP_TOOL`     | `inspect` | `completion_chat` | `--tool=` |
+| `MCP_TOOL`     | `inspect` | `openai_chat` | `--tool=` |
 | `MCP_MODEL`    | `inspect` | `gpt-4o-mini` | `--model=` |
 | `MCP_MESSAGE`  | `inspect` | `ping` | `--message=` |
 | `VERIFY_MODEL` | `verify`  | `gpt-4o-mini` | (env only) |

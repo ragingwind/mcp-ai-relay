@@ -97,25 +97,25 @@ creation (audit-friendly; rotation is by replacement).
 
 | Key | Required | Production | Preview | Sensitive |
 |---|---|---|---|---|
-| `OPENAI_API_KEY` | ✅ | upstream key #1 | upstream key #2 (different project) | ✅ |
+| `AI_RELAY_API_KEY` | ✅ | upstream key #1 | upstream key #2 (different project) | ✅ |
 | `RELAY_AUTH_TOKEN` | ✅ | 32+ random bytes | 32+ random bytes (different) | ✅ |
-| `OPENAI_BASE_URL` | ❌ | (omit for OpenAI default) | same or staging URL | — |
-| `MAX_OUTPUT_TOKENS_CEILING` | ❌ | `4096` | `4096` | — |
-| `REQUEST_TIMEOUT_MS` | ❌ | `60000` | `60000` | — |
+| `AI_RELAY_BASE_URL` | ❌ | (omit for OpenAI default) | same or staging URL | — |
+| `AI_RELAY_MAX_OUTPUT_TOKENS` | ❌ | `4096` | `4096` | — |
+| `AI_RELAY_REQUEST_TIMEOUT_MS` | ❌ | `60000` | `60000` | — |
 
 ```bash
 # Production secrets
-vercel env add OPENAI_API_KEY production --sensitive
+vercel env add AI_RELAY_API_KEY production --sensitive
 vercel env add RELAY_AUTH_TOKEN production --sensitive
 
 # Preview secrets (different OpenAI key + different relay token)
-vercel env add OPENAI_API_KEY preview --sensitive
+vercel env add AI_RELAY_API_KEY preview --sensitive
 vercel env add RELAY_AUTH_TOKEN preview --sensitive
 
 # Optional plain env vars
-vercel env add OPENAI_BASE_URL production    # only if pointing at non-OpenAI upstream
-vercel env add MAX_OUTPUT_TOKENS_CEILING production
-vercel env add REQUEST_TIMEOUT_MS production
+vercel env add AI_RELAY_BASE_URL production    # only if pointing at non-OpenAI upstream
+vercel env add AI_RELAY_MAX_OUTPUT_TOKENS production
+vercel env add AI_RELAY_REQUEST_TIMEOUT_MS production
 ```
 
 Verify with `vercel env ls`. The Sensitive flag shows as `Encrypted`.
@@ -173,7 +173,7 @@ supply-chain stability), running as a non-root user (UID 1001) with a Node
 ### 4.1 Compose (recommended)
 
 ```bash
-cp .env.example .env.local         # then fill OPENAI_API_KEY + RELAY_AUTH_TOKEN
+cp .env.example .env.local         # then fill AI_RELAY_API_KEY + RELAY_AUTH_TOKEN
 docker compose up -d               # builds on first run, then starts
 ```
 
@@ -224,11 +224,11 @@ Run with inline `-e` flags:
 
 ```bash
 docker run --rm -p 8787:3000 \
-  -e OPENAI_API_KEY=sk-... \
+  -e AI_RELAY_API_KEY=sk-... \
   -e RELAY_AUTH_TOKEN=$(openssl rand -hex 32) \
-  -e OPENAI_BASE_URL=https://your-gateway.example.com/v1 \
-  -e MAX_OUTPUT_TOKENS_CEILING=4096 \
-  -e REQUEST_TIMEOUT_MS=60000 \
+  -e AI_RELAY_BASE_URL=https://your-gateway.example.com/v1 \
+  -e AI_RELAY_MAX_OUTPUT_TOKENS=4096 \
+  -e AI_RELAY_REQUEST_TIMEOUT_MS=60000 \
   mcp-ai-relay
 ```
 
@@ -238,8 +238,8 @@ Or with `--env-file`:
 docker run --rm -p 8787:3000 --env-file .env.production mcp-ai-relay
 ```
 
-`OPENAI_API_KEY` and `RELAY_AUTH_TOKEN` are required. `OPENAI_BASE_URL`,
-`MAX_OUTPUT_TOKENS_CEILING`, and `REQUEST_TIMEOUT_MS` are optional (see
+`AI_RELAY_API_KEY` and `RELAY_AUTH_TOKEN` are required. `AI_RELAY_BASE_URL`,
+`AI_RELAY_MAX_OUTPUT_TOKENS`, and `AI_RELAY_REQUEST_TIMEOUT_MS` are optional (see
 [`ARCHITECTURE.md` §7](./ARCHITECTURE.md#7-environment-variables) for
 defaults).
 
@@ -267,7 +267,7 @@ Expect a single tool named `completion_chat`. For the full pre-PR procedure
 ### 4.4 Confirm no secrets baked in
 
 ```bash
-docker history mcp-ai-relay --no-trunc | grep -iE 'OPENAI_API_KEY|RELAY_AUTH_TOKEN'
+docker history mcp-ai-relay --no-trunc | grep -iE 'AI_RELAY_API_KEY|RELAY_AUTH_TOKEN'
 ```
 
 Only `pnpm build`'s dummy values (`build-dummy`, 32×`x`) should appear —
@@ -311,7 +311,7 @@ After either path:
 > **Vercel: repeat the procedure for Preview** if rotating the Preview
 > token. Production and Preview have independent tokens.
 
-### 5.2 Rotate `OPENAI_API_KEY`
+### 5.2 Rotate `AI_RELAY_API_KEY`
 
 Identical to §5.1 (replace + redeploy / restart). Additionally:
 
@@ -325,14 +325,14 @@ Identical to §5.1 (replace + redeploy / restart). Additionally:
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `pnpm build` fails locally with `Invalid environment: ...` | Module-level `parseEnv(process.env)` evaluation; missing env at build time | The `package.json` `build` script injects dummy values for `OPENAI_API_KEY` and `RELAY_AUTH_TOKEN`. Restore it or set real env in `.env.local`. |
+| `pnpm build` fails locally with `Invalid environment: ...` | Module-level `parseEnv(process.env)` evaluation; missing env at build time | The `package.json` `build` script injects dummy values for `AI_RELAY_API_KEY` and `RELAY_AUTH_TOKEN`. Restore it or set real env in `.env.local`. |
 | Vercel build fails with the same env error | Same as above, in CI/Vercel | Vercel injects real env vars at build time when registered — verify with `vercel env ls`. |
 | `curl` returns 401 + `WWW-Authenticate: Bearer` | Bearer token absent or wrong | Compare your client header to the value of `RELAY_AUTH_TOKEN`. |
-| `tools/call` returns `isError: true, code: "auth"` | Wrong `OPENAI_API_KEY` | Verify the key in the OpenAI dashboard. |
+| `tools/call` returns `isError: true, code: "auth"` | Wrong `AI_RELAY_API_KEY` | Verify the key in the OpenAI dashboard. |
 | `tools/call` returns `code: "rate_limited"` with `retryAfter` | OpenAI rate limit | Wait `retryAfter` seconds. v2 will add per-relay rate limiting. |
 | Function exceeds `maxDuration` (504 / function timeout) | Long generation, or stuck on a tool call | Verify `vercel.json` and route-level `maxDuration: 300` are both set. The Pro plan ceiling is 300 s. |
 | Docker container reports `unhealthy` | HEALTHCHECK can't reach `/api/mcp` | Inspect logs: `docker compose logs relay`. The most common cause is a missing required env var — startup fails fast. |
-| OpenAI dashboard shows usage on the wrong project | `OPENAI_API_KEY` from Preview leaked into Production (or vice versa) | Re-run §3.3 carefully — keys MUST come from different OpenAI projects. |
+| OpenAI dashboard shows usage on the wrong project | `AI_RELAY_API_KEY` from Preview leaked into Production (or vice versa) | Re-run §3.3 carefully — keys MUST come from different OpenAI projects. |
 
 ---
 

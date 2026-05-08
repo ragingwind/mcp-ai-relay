@@ -78,7 +78,7 @@ existing `"mcpServers"` object if any):
 ```
 
 Quit Claude Desktop completely (⌘Q on macOS) and reopen it. The
-`completion_chat` tool appears under `openai-relay`.
+`openai_chat` tool appears under `openai-relay`.
 
 For Vercel serverless, raw `docker run`, full operations (token rotation,
 troubleshooting, OpenAI usage cap), see [`doc/DEPLOY.md`](./doc/DEPLOY.md).
@@ -147,7 +147,7 @@ Runnable examples in [`examples/`](./examples/):
 
 ## Status
 
-**v0.1.0** (npm SDK) / **v1 relay app** — single tool `completion_chat`,
+**v0.1.0** (npm SDK) / **v1 relay app** — single tool `openai_chat`,
 bearer token authentication, Streamable HTTP transport. The v2 backlog
 (Responses API, OAuth 2.1, rate limiting, budget caps, observability) is
 tracked in

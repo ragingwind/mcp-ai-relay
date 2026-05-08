@@ -21,9 +21,9 @@ const expectThrow = (input: EnvSource): Error => {
 };
 
 describe("parseEnv — required keys", () => {
-  it("defaults AI_RELAY_API_KEY to empty string when missing", () => {
-    const env = parseEnv({ RELAY_AUTH_TOKEN: "x".repeat(32) });
-    expect(env.AI_RELAY_API_KEY).toBe("");
+  it("throws when AI_RELAY_API_KEY is missing", () => {
+    const err = expectThrow({ RELAY_AUTH_TOKEN: "x".repeat(32) });
+    expect(err.message).toContain("AI_RELAY_API_KEY");
   });
 
   it("throws when RELAY_AUTH_TOKEN is missing", () => {
@@ -31,9 +31,18 @@ describe("parseEnv — required keys", () => {
     expect(err.message).toContain("RELAY_AUTH_TOKEN");
   });
 
-  it("accepts empty AI_RELAY_API_KEY", () => {
-    const env = parseEnv({ AI_RELAY_API_KEY: "", RELAY_AUTH_TOKEN: "x".repeat(32) });
-    expect(env.AI_RELAY_API_KEY).toBe("");
+  it("rejects empty AI_RELAY_API_KEY with the required-key message", () => {
+    const err = expectThrow({ AI_RELAY_API_KEY: "", RELAY_AUTH_TOKEN: "x".repeat(32) });
+    expect(err.message).toContain("AI_RELAY_API_KEY");
+    expect(err.message).toContain("required");
+  });
+
+  it("rejects legacy OPENAI_API_KEY (no fallback) — migration error is loud", () => {
+    const err = expectThrow({
+      OPENAI_API_KEY: "legacy",
+      RELAY_AUTH_TOKEN: "x".repeat(32),
+    });
+    expect(err.message).toContain("AI_RELAY_API_KEY");
   });
 
   it("throws when RELAY_AUTH_TOKEN is 31 bytes (one byte under the floor)", () => {

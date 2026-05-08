@@ -16,8 +16,12 @@
 
 import { z } from "zod";
 
+// Schema is intentionally non-strict: process.env carries unrelated keys
+// (PATH, HOME, etc.). AI_RELAY_API_KEY.min(1) enforces the migration error
+// loudly instead of silently defaulting to an empty key that would fail
+// with an obscure upstream 401.
 const envSchema = z.object({
-  AI_RELAY_API_KEY: z.string().default(""),
+  AI_RELAY_API_KEY: z.string().min(1, "AI_RELAY_API_KEY is required"),
   AI_RELAY_BASE_URL: z.preprocess(
     (v) => (typeof v === "string" && v.trim().length === 0 ? undefined : v),
     z.string().url().optional(),
