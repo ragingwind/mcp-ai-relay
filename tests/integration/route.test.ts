@@ -313,7 +313,7 @@ describe("route /api/mcp — tools/call (happy + clamp)", () => {
     const envelope = await readJsonRpcResponse(res);
     const result = asCallToolResult(envelope);
     expect(result.isError).toBe(false);
-    expect(observedMaxTokens).toBe(env.MAX_OUTPUT_TOKENS_CEILING);
+    expect(observedMaxTokens).toBe(env.AI_RELAY_MAX_OUTPUT_TOKENS);
   });
 });
 

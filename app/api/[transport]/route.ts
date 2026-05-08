@@ -26,10 +26,10 @@ const env = parseEnv(process.env);
 const handler = createMcpHandler(
   (server) => {
     registerOpenAIChat(server, {
-      apiKey: env.OPENAI_API_KEY,
-      ...(env.OPENAI_BASE_URL ? { baseURL: env.OPENAI_BASE_URL } : {}),
-      maxOutputTokensCeiling: env.MAX_OUTPUT_TOKENS_CEILING,
-      requestTimeoutMs: env.REQUEST_TIMEOUT_MS,
+      apiKey: env.AI_RELAY_API_KEY,
+      ...(env.AI_RELAY_BASE_URL ? { baseURL: env.AI_RELAY_BASE_URL } : {}),
+      maxOutputTokensCeiling: env.AI_RELAY_MAX_OUTPUT_TOKENS,
+      requestTimeoutMs: env.AI_RELAY_REQUEST_TIMEOUT_MS,
     });
   },
   {},

@@ -21,7 +21,7 @@ if (!existsSync(ENV_PATH)) {
     "[mcp-ai-relay] .env.local is missing.",
     "",
     "  cp .env.example .env.local",
-    "  # then set RELAY_AUTH_TOKEN (required) and OPENAI_API_KEY (optional)",
+    "  # then set RELAY_AUTH_TOKEN (required) and AI_RELAY_API_KEY (optional)",
     "  # token: openssl rand -hex 32",
     "",
   ]);

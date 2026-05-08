@@ -77,9 +77,9 @@ function parsePositiveInt(value: string | undefined): number | undefined {
 
 function envOpenAIPartial(env: EnvSource): Partial<ProviderConfig> {
   const out: Partial<ProviderConfig> = {};
-  if (env.OPENAI_API_KEY) out.apiKey = env.OPENAI_API_KEY;
-  if (env.OPENAI_BASE_URL && env.OPENAI_BASE_URL.trim().length > 0) {
-    out.baseURL = env.OPENAI_BASE_URL;
+  if (env.AI_RELAY_API_KEY) out.apiKey = env.AI_RELAY_API_KEY;
+  if (env.AI_RELAY_BASE_URL && env.AI_RELAY_BASE_URL.trim().length > 0) {
+    out.baseURL = env.AI_RELAY_BASE_URL;
   }
   const maxTok = parsePositiveInt(env.AI_RELAY_MAX_OUTPUT_TOKENS);
   if (maxTok !== undefined) out.maxOutputTokens = maxTok;
@@ -203,11 +203,11 @@ export function loadConfig(source: LoadConfigSource): RelayConfig {
     return buildFromArgsAndEnv(args, env ?? {});
   }
 
-  if (env?.OPENAI_API_KEY) {
+  if (env?.AI_RELAY_API_KEY) {
     return buildFromEnvOnly(env);
   }
 
   throw new Error(
-    "loadConfig: no providers resolved — provide args.provider, file, or set OPENAI_API_KEY in env",
+    "loadConfig: no providers resolved — provide args.provider, file, or set AI_RELAY_API_KEY in env",
   );
 }

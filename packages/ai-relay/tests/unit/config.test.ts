@@ -30,9 +30,8 @@ const writeFile = (name: string, contents: string): string => {
 };
 
 describe("loadConfig — env-only single provider", () => {
-  // B1: minimum env → single openai/chat provider with defaults + materialised id
-  it("P1: env with OPENAI_API_KEY → single provider, defaults applied, id=openai_chat", () => {
-    const cfg = loadConfig({ env: { OPENAI_API_KEY: "k" } });
+  it("P1: env with AI_RELAY_API_KEY → single provider, defaults applied, id=openai_chat", () => {
+    const cfg = loadConfig({ env: { AI_RELAY_API_KEY: "k" } });
     expect(cfg.providers).toHaveLength(1);
     const p = cfg.providers[0];
     if (!p) throw new Error("provider missing");
@@ -44,12 +43,11 @@ describe("loadConfig — env-only single provider", () => {
     expect(p.requestTimeoutMs).toBe(60_000);
   });
 
-  // B2: optional env vars are read
-  it("P2: reads OPENAI_BASE_URL, AI_RELAY_MAX_OUTPUT_TOKENS, AI_RELAY_REQUEST_TIMEOUT_MS from env", () => {
+  it("P2: reads AI_RELAY_BASE_URL, AI_RELAY_MAX_OUTPUT_TOKENS, AI_RELAY_REQUEST_TIMEOUT_MS from env", () => {
     const cfg = loadConfig({
       env: {
-        OPENAI_API_KEY: "k",
-        OPENAI_BASE_URL: "https://my.example.com/v1",
+        AI_RELAY_API_KEY: "k",
+        AI_RELAY_BASE_URL: "https://my.example.com/v1",
         AI_RELAY_MAX_OUTPUT_TOKENS: "8192",
         AI_RELAY_REQUEST_TIMEOUT_MS: "30000",
       },
@@ -60,10 +58,24 @@ describe("loadConfig — env-only single provider", () => {
     expect(p.maxOutputTokens).toBe(8192);
     expect(p.requestTimeoutMs).toBe(30_000);
   });
+
+  it("D1: legacy OPENAI_API_KEY is ignored (no fallback) — env without AI_RELAY_API_KEY throws", () => {
+    const err = expectThrow(() => loadConfig({ env: { OPENAI_API_KEY: "legacy" } }));
+    expect(err.message).toContain("no providers resolved");
+  });
+
+  it("D2: legacy OPENAI_BASE_URL is not read when AI_RELAY_API_KEY is present", () => {
+    const cfg = loadConfig({
+      env: {
+        AI_RELAY_API_KEY: "k",
+        OPENAI_BASE_URL: "https://legacy.example.com/v1",
+      },
+    });
+    expect(cfg.providers[0]?.baseURL).toBeUndefined();
+  });
 });
 
 describe("loadConfig — file-based multi-provider", () => {
-  // B3: file with valid providers array → returns multi-provider config
   it("P1: file with valid providers JSON → multi-provider RelayConfig", () => {
     const file = writeFile(
       "valid.json",
@@ -82,20 +94,18 @@ describe("loadConfig — file-based multi-provider", () => {
     );
     const cfg = loadConfig({ file });
     expect(cfg.providers).toHaveLength(2);
-    expect(cfg.providers[0]?.id).toBe("openai_chat"); // materialised default
+    expect(cfg.providers[0]?.id).toBe("openai_chat");
     expect(cfg.providers[0]?.apiKey).toBe("k1");
-    expect(cfg.providers[1]?.id).toBe("azure_chat"); // explicit
+    expect(cfg.providers[1]?.id).toBe("azure_chat");
     expect(cfg.providers[1]?.baseURL).toBe("https://azure.example.com/v1");
   });
 
-  // B4: missing file → error mentions the path
   it("D1: non-existent file path → error contains the path", () => {
     const missing = join(scratchDir, "does-not-exist.json");
     const err = expectThrow(() => loadConfig({ file: missing }));
     expect(err.message).toContain(missing);
   });
 
-  // B5: invalid JSON → "Invalid config file" + no value echo
   it("D2: malformed JSON file → 'Invalid config file' error, no value echo", () => {
     const sentinel = "secret-leak-sentinel-xyz";
     const file = writeFile("bad.json", `{ "providers": [ ${sentinel} `);
@@ -104,7 +114,6 @@ describe("loadConfig — file-based multi-provider", () => {
     expect(err.message).not.toContain(sentinel);
   });
 
-  // B6: file missing `providers` → Zod path mentions "providers"
   it("D3: file missing 'providers' array → Zod error mentions failing path", () => {
     const file = writeFile("empty.json", "{}");
     const err = expectThrow(() => loadConfig({ file }));
@@ -113,7 +122,6 @@ describe("loadConfig — file-based multi-provider", () => {
 });
 
 describe("loadConfig — args overrides", () => {
-  // B7: args sets provider+capability+apiKey
   it("P1: args with provider+apiKey → single provider with overrides", () => {
     const cfg = loadConfig({
       args: { provider: "openai", capability: "chat", apiKey: "args-key", maxOutputTokens: 8192 },
@@ -126,19 +134,17 @@ describe("loadConfig — args overrides", () => {
     expect(p.id).toBe("openai_chat");
   });
 
-  // B8: precedence args > env
   it("P2: args > env — when both define maxOutputTokens, args wins", () => {
     const cfg = loadConfig({
-      env: { OPENAI_API_KEY: "env-key", AI_RELAY_MAX_OUTPUT_TOKENS: "1000" },
+      env: { AI_RELAY_API_KEY: "env-key", AI_RELAY_MAX_OUTPUT_TOKENS: "1000" },
       args: { provider: "openai", capability: "chat", maxOutputTokens: 8192 },
     });
     const p = cfg.providers[0];
     if (!p) throw new Error("provider missing");
     expect(p.maxOutputTokens).toBe(8192);
-    expect(p.apiKey).toBe("env-key"); // apiKey from env
+    expect(p.apiKey).toBe("env-key");
   });
 
-  // B9: id materialisation; explicit id wins
   it("P3: explicit args.id overrides default <provider>_<capability>", () => {
     const cfg = loadConfig({
       args: { provider: "openai", capability: "chat", apiKey: "k", id: "my_custom_id" },
@@ -148,7 +154,6 @@ describe("loadConfig — args overrides", () => {
 });
 
 describe("loadConfig — file + args merge", () => {
-  // file+args: args overrides matching provider fields; mismatched provider leaves file untouched
   it("P1: file with one openai provider + args.maxOutputTokens → args wins for matched provider", () => {
     const file = writeFile(
       "file-args-merge.json",
@@ -170,8 +175,8 @@ describe("loadConfig — file + args merge", () => {
     expect(cfg.providers).toHaveLength(1);
     const p = cfg.providers[0];
     if (!p) throw new Error("provider missing");
-    expect(p.maxOutputTokens).toBe(8192); // args wins
-    expect(p.apiKey).toBe("file-key"); // file kept where args silent
+    expect(p.maxOutputTokens).toBe(8192);
+    expect(p.apiKey).toBe("file-key");
   });
 
   it("P2: args.id overrides file provider id when provider+capability match", () => {
@@ -209,15 +214,8 @@ describe("loadConfig — file + args merge", () => {
         ],
       }),
     );
-    // args targets a (future) different provider; current schema only supports openai
-    // so we use a capability mismatch to exercise the "no match" path.
     const cfg = loadConfig({
       file,
-      // Force no match by using a capability that no file provider declares.
-      // Schema currently only accepts "chat", so we set args to provider+capability
-      // that DOES match — but maxOutputTokens differs. To prove non-match leaves
-      // file untouched, we instead flip the test: args without maxOutputTokens
-      // shouldn't change file's maxOutputTokens.
       args: { provider: "openai", capability: "chat" },
     });
     expect(cfg.providers[0]?.maxOutputTokens).toBe(1234);
@@ -226,7 +224,6 @@ describe("loadConfig — file + args merge", () => {
 });
 
 describe("loadConfig — error paths", () => {
-  // B10: empty source
   it("D1: empty source → 'no providers resolved' error", () => {
     const err = expectThrow(() => loadConfig({}));
     expect(err.message).toContain("no providers resolved");
@@ -234,14 +231,8 @@ describe("loadConfig — error paths", () => {
 });
 
 describe("loadConfig — secret redaction", () => {
-  // B13/B14 (typecheck-only) — subpath removal is enforced by tsc, not by a runtime test.
-  // See plan §6 / B11/B12 in the matrix.
-  // B11: apiKey value never echoed
   it("D1: apiKey value never appears in error message", () => {
     const sentinel = "leak-marker-apikey-1234567890";
-    // Force a Zod failure by passing an args object missing apiKey AND with no env apiKey
-    // — args has provider but no apiKey; loadConfig should throw and never echo sentinel
-    // We embed sentinel in env under a wrong key to verify it never appears.
     const err = expectThrow(() =>
       loadConfig({
         env: { WRONG_KEY: sentinel },
@@ -251,21 +242,14 @@ describe("loadConfig — secret redaction", () => {
     expect(err.message).not.toContain(sentinel);
   });
 
-  // B12: failing apiKey input is not echoed even when its own validation fails
   it("D2: empty-string apiKey rejected; the failing input is not echoed", () => {
-    // apiKey min(1) — empty string fails. Ensure the message is path-only.
     const sentinel = "another-leak-marker-9999";
-    // Build a file whose apiKey value is the sentinel but with a length-violating
-    // schema prerequisite we won't trigger — instead, supply via args with a violating value.
     const err = expectThrow(() =>
       loadConfig({
         args: { provider: "openai", capability: "chat", apiKey: "" },
-        // sentinel placed in a benign env key — should not appear in error
-        env: { OPENAI_BASE_URL: sentinel },
+        env: { AI_RELAY_BASE_URL: sentinel },
       }),
     );
-    // sentinel was in OPENAI_BASE_URL — base URL is optional and would be ignored
-    // when args path triggers the apiKey failure. Ensure no echo of any input.
     expect(err.message).not.toContain(sentinel);
   });
 });

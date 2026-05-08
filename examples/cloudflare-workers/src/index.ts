@@ -29,8 +29,8 @@ import { verifyBearer } from "ai-relay";
 import { registerOpenAIChat } from "ai-relay/openai";
 
 interface Env {
-  OPENAI_API_KEY: string;
-  OPENAI_BASE_URL?: string;
+  AI_RELAY_API_KEY: string;
+  AI_RELAY_BASE_URL?: string;
   RELAY_AUTH_TOKEN: string;
   MCP_OBJECT: DurableObjectNamespace;
 }
@@ -43,8 +43,8 @@ export class OpenAIRelay extends McpAgent<Env> {
 
   async init() {
     registerOpenAIChat(this.server, {
-      apiKey: this.env.OPENAI_API_KEY,
-      ...(this.env.OPENAI_BASE_URL ? { baseURL: this.env.OPENAI_BASE_URL } : {}),
+      apiKey: this.env.AI_RELAY_API_KEY,
+      ...(this.env.AI_RELAY_BASE_URL ? { baseURL: this.env.AI_RELAY_BASE_URL } : {}),
     });
   }
 }

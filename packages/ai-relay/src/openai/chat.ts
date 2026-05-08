@@ -207,9 +207,32 @@ export function makeOpenAIChatHandler(config: OpenAIChatConfig): OpenAIChatHandl
 }
 
 export function registerOpenAIChat(server: McpServer, config: OpenAIChatConfig): void {
-  const { schema, handler, name, description } = makeOpenAIChatHandler(config);
+  const { schema, handler, name, description } = openAIChatTool.makeHandler(config);
   server.tool(name, description, schema.shape, handler);
 }
+
+// --- transport-agnostic tool descriptor ----------------------------------
+
+export interface ToolDescriptor<C = unknown, B = unknown> {
+  provider: string;
+  name: string;
+  /** Make a handler bundle (schema + handler + names) for one config. */
+  makeHandler: (config: C) => B;
+  /** Optional CLI sugar: turn plain text into a JSON object the schema accepts. */
+  desugar?: (plain: string, opts: { system?: string; model?: string }) => Record<string, unknown>;
+}
+
+export const openAIChatTool: ToolDescriptor<OpenAIChatConfig, OpenAIChatHandlerBundle> = {
+  provider: "openai",
+  name: "chat",
+  makeHandler: makeOpenAIChatHandler,
+  desugar: (plain, opts) => {
+    const messages: Array<{ role: "system" | "user"; content: string }> = [];
+    if (opts.system) messages.push({ role: "system", content: opts.system });
+    messages.push({ role: "user", content: plain });
+    return opts.model ? { model: opts.model, messages } : { messages };
+  },
+};
 
 // --- internals ------------------------------------------------------------
 

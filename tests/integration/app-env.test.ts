@@ -1,15 +1,11 @@
 // Integration tests for the relay app's HTTP-only env parser
-// (`app/lib/env.ts`). These cases were ported 1:1 from the deleted
-// `packages/ai-relay/tests/unit/env.test.ts` when `parseEnv` moved out
-// of the SDK and into the relay app.
+// (`app/lib/env.ts`).
 
 import { describe, expect, it } from "vitest";
 import { type EnvSource, parseEnv } from "../../app/lib/env.js";
 
-// A minimal-valid input — every behavior test starts from this and overrides
-// the one or two keys it cares about. Avoids re-declaring boilerplate per case.
 const minimalValid = {
-  OPENAI_API_KEY: "test-openai-api-key",
+  AI_RELAY_API_KEY: "test-ai-relay-api-key",
   RELAY_AUTH_TOKEN: "x".repeat(32),
 } satisfies EnvSource;
 
@@ -25,170 +21,142 @@ const expectThrow = (input: EnvSource): Error => {
 };
 
 describe("parseEnv — required keys", () => {
-  // B1: OPENAI_API_KEY missing → defaults to empty string
-  it("defaults OPENAI_API_KEY to empty string when missing", () => {
+  it("defaults AI_RELAY_API_KEY to empty string when missing", () => {
     const env = parseEnv({ RELAY_AUTH_TOKEN: "x".repeat(32) });
-    expect(env.OPENAI_API_KEY).toBe("");
+    expect(env.AI_RELAY_API_KEY).toBe("");
   });
 
-  // B2: RELAY_AUTH_TOKEN missing
   it("throws when RELAY_AUTH_TOKEN is missing", () => {
-    const err = expectThrow({ OPENAI_API_KEY: "k" });
+    const err = expectThrow({ AI_RELAY_API_KEY: "k" });
     expect(err.message).toContain("RELAY_AUTH_TOKEN");
   });
 
-  // B3: empty OPENAI_API_KEY is accepted
-  it("accepts empty OPENAI_API_KEY", () => {
-    const env = parseEnv({ OPENAI_API_KEY: "", RELAY_AUTH_TOKEN: "x".repeat(32) });
-    expect(env.OPENAI_API_KEY).toBe("");
+  it("accepts empty AI_RELAY_API_KEY", () => {
+    const env = parseEnv({ AI_RELAY_API_KEY: "", RELAY_AUTH_TOKEN: "x".repeat(32) });
+    expect(env.AI_RELAY_API_KEY).toBe("");
   });
 
-  // B4: RELAY_AUTH_TOKEN under 32 bytes
   it("throws when RELAY_AUTH_TOKEN is 31 bytes (one byte under the floor)", () => {
-    const err = expectThrow({ OPENAI_API_KEY: "k", RELAY_AUTH_TOKEN: "x".repeat(31) });
+    const err = expectThrow({ AI_RELAY_API_KEY: "k", RELAY_AUTH_TOKEN: "x".repeat(31) });
     expect(err.message).toContain("RELAY_AUTH_TOKEN");
     expect(err.message).toContain("at least 32 bytes");
   });
 
-  // B5: RELAY_AUTH_TOKEN exactly 32 bytes
   it("accepts RELAY_AUTH_TOKEN at exactly 32 bytes", () => {
-    const env = parseEnv({ OPENAI_API_KEY: "k", RELAY_AUTH_TOKEN: "x".repeat(32) });
+    const env = parseEnv({ AI_RELAY_API_KEY: "k", RELAY_AUTH_TOKEN: "x".repeat(32) });
     expect(env.RELAY_AUTH_TOKEN).toBe("x".repeat(32));
   });
 
-  // B6: RELAY_AUTH_TOKEN multibyte — 8 chars × 4 bytes/char = 32 UTF-8 bytes
   it("measures RELAY_AUTH_TOKEN length in bytes, not characters", () => {
-    const multibyte = "🦊".repeat(8); // 8 chars, 32 UTF-8 bytes
-    expect(multibyte.length).toBe(16); // JS char-length is surrogate-pair-counted (16)
+    const multibyte = "🦊".repeat(8);
+    expect(multibyte.length).toBe(16);
     expect(Buffer.byteLength(multibyte, "utf8")).toBe(32);
-    const env = parseEnv({ OPENAI_API_KEY: "k", RELAY_AUTH_TOKEN: multibyte });
+    const env = parseEnv({ AI_RELAY_API_KEY: "k", RELAY_AUTH_TOKEN: multibyte });
     expect(env.RELAY_AUTH_TOKEN).toBe(multibyte);
   });
 });
 
-describe("parseEnv — OPENAI_BASE_URL", () => {
-  it("defaults OPENAI_BASE_URL to undefined when missing", () => {
+describe("parseEnv — AI_RELAY_BASE_URL", () => {
+  it("defaults AI_RELAY_BASE_URL to undefined when missing", () => {
     const env = parseEnv(minimalValid);
-    expect(env.OPENAI_BASE_URL).toBeUndefined();
+    expect(env.AI_RELAY_BASE_URL).toBeUndefined();
   });
 
-  it("normalises empty OPENAI_BASE_URL to undefined", () => {
-    const env = parseEnv({ ...minimalValid, OPENAI_BASE_URL: "" });
-    expect(env.OPENAI_BASE_URL).toBeUndefined();
+  it("normalises empty AI_RELAY_BASE_URL to undefined", () => {
+    const env = parseEnv({ ...minimalValid, AI_RELAY_BASE_URL: "" });
+    expect(env.AI_RELAY_BASE_URL).toBeUndefined();
   });
 
-  it("accepts a valid OPENAI_BASE_URL", () => {
+  it("accepts a valid AI_RELAY_BASE_URL", () => {
     const env = parseEnv({
       ...minimalValid,
-      OPENAI_BASE_URL: "https://api.example.com/v1",
+      AI_RELAY_BASE_URL: "https://api.example.com/v1",
     });
-    expect(env.OPENAI_BASE_URL).toBe("https://api.example.com/v1");
+    expect(env.AI_RELAY_BASE_URL).toBe("https://api.example.com/v1");
   });
 
-  it("rejects a non-URL OPENAI_BASE_URL", () => {
-    const err = expectThrow({ ...minimalValid, OPENAI_BASE_URL: "not-a-url" });
-    expect(err.message).toContain("OPENAI_BASE_URL");
+  it("rejects a non-URL AI_RELAY_BASE_URL", () => {
+    const err = expectThrow({ ...minimalValid, AI_RELAY_BASE_URL: "not-a-url" });
+    expect(err.message).toContain("AI_RELAY_BASE_URL");
   });
 
-  it("does not echo OPENAI_BASE_URL value in error messages", () => {
+  it("does not echo AI_RELAY_BASE_URL value in error messages", () => {
     const sentinel = "garbage-url-leak-marker";
-    const err = expectThrow({ ...minimalValid, OPENAI_BASE_URL: sentinel });
+    const err = expectThrow({ ...minimalValid, AI_RELAY_BASE_URL: sentinel });
     expect(err.message).not.toContain(sentinel);
-    expect(err.message).toContain("OPENAI_BASE_URL");
+    expect(err.message).toContain("AI_RELAY_BASE_URL");
   });
 });
 
 describe("parseEnv — defaults", () => {
-  // B10: MAX_OUTPUT_TOKENS_CEILING default
-  it("defaults MAX_OUTPUT_TOKENS_CEILING to 4096 when undefined", () => {
+  it("defaults AI_RELAY_MAX_OUTPUT_TOKENS to 4096 when undefined", () => {
     const env = parseEnv(minimalValid);
-    expect(env.MAX_OUTPUT_TOKENS_CEILING).toBe(4096);
+    expect(env.AI_RELAY_MAX_OUTPUT_TOKENS).toBe(4096);
   });
 
-  // B16: REQUEST_TIMEOUT_MS default
-  it("defaults REQUEST_TIMEOUT_MS to 60000 when undefined", () => {
+  it("defaults AI_RELAY_REQUEST_TIMEOUT_MS to 60000 when undefined", () => {
     const env = parseEnv(minimalValid);
-    expect(env.REQUEST_TIMEOUT_MS).toBe(60_000);
+    expect(env.AI_RELAY_REQUEST_TIMEOUT_MS).toBe(60_000);
   });
 });
 
 describe("parseEnv — numeric coercion", () => {
-  // B11: numeric string coerced to number
-  it("coerces a numeric string MAX_OUTPUT_TOKENS_CEILING to a number", () => {
-    const env = parseEnv({ ...minimalValid, MAX_OUTPUT_TOKENS_CEILING: "8192" });
-    expect(env.MAX_OUTPUT_TOKENS_CEILING).toBe(8192);
-    expect(typeof env.MAX_OUTPUT_TOKENS_CEILING).toBe("number");
+  it("coerces a numeric string AI_RELAY_MAX_OUTPUT_TOKENS to a number", () => {
+    const env = parseEnv({ ...minimalValid, AI_RELAY_MAX_OUTPUT_TOKENS: "8192" });
+    expect(env.AI_RELAY_MAX_OUTPUT_TOKENS).toBe(8192);
+    expect(typeof env.AI_RELAY_MAX_OUTPUT_TOKENS).toBe("number");
   });
 
-  // B12: zero rejected (positive int requirement)
-  it("rejects MAX_OUTPUT_TOKENS_CEILING = 0", () => {
-    const err = expectThrow({ ...minimalValid, MAX_OUTPUT_TOKENS_CEILING: "0" });
-    expect(err.message).toContain("MAX_OUTPUT_TOKENS_CEILING");
+  it("rejects AI_RELAY_MAX_OUTPUT_TOKENS = 0", () => {
+    const err = expectThrow({ ...minimalValid, AI_RELAY_MAX_OUTPUT_TOKENS: "0" });
+    expect(err.message).toContain("AI_RELAY_MAX_OUTPUT_TOKENS");
   });
 
-  // B13: negative rejected
-  it("rejects negative MAX_OUTPUT_TOKENS_CEILING", () => {
-    const err = expectThrow({ ...minimalValid, MAX_OUTPUT_TOKENS_CEILING: "-1" });
-    expect(err.message).toContain("MAX_OUTPUT_TOKENS_CEILING");
+  it("rejects negative AI_RELAY_MAX_OUTPUT_TOKENS", () => {
+    const err = expectThrow({ ...minimalValid, AI_RELAY_MAX_OUTPUT_TOKENS: "-1" });
+    expect(err.message).toContain("AI_RELAY_MAX_OUTPUT_TOKENS");
   });
 
-  // B14: non-integer rejected (.int() refinement)
-  it("rejects non-integer MAX_OUTPUT_TOKENS_CEILING", () => {
-    const err = expectThrow({ ...minimalValid, MAX_OUTPUT_TOKENS_CEILING: "1.5" });
-    expect(err.message).toContain("MAX_OUTPUT_TOKENS_CEILING");
+  it("rejects non-integer AI_RELAY_MAX_OUTPUT_TOKENS", () => {
+    const err = expectThrow({ ...minimalValid, AI_RELAY_MAX_OUTPUT_TOKENS: "1.5" });
+    expect(err.message).toContain("AI_RELAY_MAX_OUTPUT_TOKENS");
   });
 
-  // B15: non-numeric rejected (z.coerce.number returns NaN, then .int() fails)
-  it("rejects non-numeric MAX_OUTPUT_TOKENS_CEILING", () => {
-    const err = expectThrow({ ...minimalValid, MAX_OUTPUT_TOKENS_CEILING: "abc" });
-    expect(err.message).toContain("MAX_OUTPUT_TOKENS_CEILING");
+  it("rejects non-numeric AI_RELAY_MAX_OUTPUT_TOKENS", () => {
+    const err = expectThrow({ ...minimalValid, AI_RELAY_MAX_OUTPUT_TOKENS: "abc" });
+    expect(err.message).toContain("AI_RELAY_MAX_OUTPUT_TOKENS");
   });
 
-  // Same coverage spot-check for REQUEST_TIMEOUT_MS — same schema branch
-  it("coerces and accepts a numeric string REQUEST_TIMEOUT_MS", () => {
-    const env = parseEnv({ ...minimalValid, REQUEST_TIMEOUT_MS: "30000" });
-    expect(env.REQUEST_TIMEOUT_MS).toBe(30_000);
+  it("coerces and accepts a numeric string AI_RELAY_REQUEST_TIMEOUT_MS", () => {
+    const env = parseEnv({ ...minimalValid, AI_RELAY_REQUEST_TIMEOUT_MS: "30000" });
+    expect(env.AI_RELAY_REQUEST_TIMEOUT_MS).toBe(30_000);
   });
 });
 
 describe("parseEnv — secret redaction", () => {
-  // B17: input value sentinel never appears in error message
   it("does not echo input values in error messages (sentinel not leaked)", () => {
     const sentinel = "secret-leak-marker-xyz-1234567890";
     const err = expectThrow({
-      OPENAI_API_KEY: sentinel,
-      // RELAY_AUTH_TOKEN missing on purpose → triggers an error path that
-      // could leak OPENAI_API_KEY's value if zod's `received`/`input` were
-      // included in the formatted message.
+      AI_RELAY_API_KEY: sentinel,
     });
     expect(err.message).not.toContain(sentinel);
-    // Defense in depth: also check for substrings of the sentinel.
     expect(err.message).not.toContain("secret-leak-marker");
     expect(err.message).not.toContain("1234567890");
   });
 
-  // B18: failing key path IS included in error message
   it("includes the failing key path in the error message", () => {
     const sentinel = "another-secret-zzz";
     const err = expectThrow({
-      OPENAI_API_KEY: sentinel,
-      // RELAY_AUTH_TOKEN missing.
+      AI_RELAY_API_KEY: sentinel,
     });
     expect(err.message).toContain("RELAY_AUTH_TOKEN");
-    // Sanity: the prefix is present so consumers can grep for it.
     expect(err.message).toContain("Invalid environment");
   });
 
-  // Belt-and-suspenders: the same sentinel-leak guarantee for the other
-  // secret-class env var (RELAY_AUTH_TOKEN) — failing input value must not
-  // appear in the message even when its own validation triggers the error.
   it("does not echo RELAY_AUTH_TOKEN value when it fails its own length check", () => {
-    // 31 ASCII bytes — one byte under the floor, triggers the byte-length
-    // refinement. The sentinel substring is something we can grep for in the
-    // error message to prove the value is not leaked.
     const sentinel = "short-secret-leak-marker-abcdef"; // 31 bytes
     expect(Buffer.byteLength(sentinel, "utf8")).toBe(31);
-    const err = expectThrow({ OPENAI_API_KEY: "k", RELAY_AUTH_TOKEN: sentinel });
+    const err = expectThrow({ AI_RELAY_API_KEY: "k", RELAY_AUTH_TOKEN: sentinel });
     expect(err.message).not.toContain(sentinel);
     expect(err.message).not.toContain("short-secret-leak-marker");
     expect(err.message).toContain("RELAY_AUTH_TOKEN");

@@ -6,3 +6,4 @@
 export { verifyBearer } from "./auth.js";
 export type { ArgsSource, LoadConfigSource, ProviderConfig, RelayConfig } from "./config.js";
 export { loadConfig } from "./config.js";
+export type { ToolDescriptor } from "./openai/chat.js";
