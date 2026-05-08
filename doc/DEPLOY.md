@@ -261,7 +261,7 @@ Smoke test (with the container running on default port 8787):
 pnpm inspect --url=http://localhost:8787/api/mcp --method=tools/list
 ```
 
-Expect a single tool named `completion_chat`. For the full pre-PR procedure
+Expect a single tool named `openai_chat`. For the full pre-PR procedure
 (C1–C6) see [`QA-MCP-INSPECTOR.md`](./QA-MCP-INSPECTOR.md).
 
 ### 4.4 Confirm no secrets baked in
