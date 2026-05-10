@@ -13,7 +13,7 @@ working in this repository. **It overrides the global rules at `~/.claude/CLAUDE
 ## 1. One-line summary
 
 A relay server that exposes OpenAI Chat Completions as an MCP (Model Context Protocol) tool —
-deployed on Vercel, Next.js App Router, Bearer authentication, single tool `completion_chat` in v1.
+deployed on Vercel, Next.js App Router, Bearer authentication, single tool `openai_chat` in v1.
 
 Full architecture: [`doc/ARCHITECTURE.md`](./doc/ARCHITECTURE.md)
 
@@ -63,7 +63,7 @@ The following items extend or override the global `core.md`.
 
 ### Absolutely forbidden
 - **Never log OpenAI/MCP response bodies via `console`/logs/error messages** — only metadata (model, token counts, latency, status) is allowed.
-- Never expose `OPENAI_API_KEY` or `RELAY_AUTH_TOKEN` in plain text in code/tests/docs/commits.
+- Never expose `AI_RELAY_API_KEY` or `RELAY_AUTH_TOKEN` in plain text in code/tests/docs/commits.
 - Never use `===` to compare bearer tokens — always use `timingSafeEqual` from `node:crypto`.
 - Never add features outside v1 scope (Responses API, OAuth, rate limiting, external KV, observability — see [`doc/ARCHITECTURE.md` §11](./doc/ARCHITECTURE.md#11-future-work-v2-backlog)).
 - Never bump only one of `mcp-handler`/`@modelcontextprotocol/sdk` — the two packages are ABI-coupled (`^1.1`, `^1.26`); upgrade them as a pair.
@@ -100,11 +100,11 @@ Full tree: [`doc/ARCHITECTURE.md` §5](./doc/ARCHITECTURE.md#5-directory-structu
 
 | Key | Required | Source / default |
 |---|---|---|
-| `OPENAI_API_KEY` | ✅ | Vercel Sensitive env var (separate Production/Preview) |
+| `AI_RELAY_API_KEY` | ✅ | Vercel Sensitive env var (separate Production/Preview) |
 | `RELAY_AUTH_TOKEN` | ✅ | Vercel Sensitive env var (32+ random bytes) |
-| `OPENAI_BASE_URL` | ❌ | Plain env var. Default: SDK built-in. Override to point at Azure OpenAI, vLLM/Ollama, or a mock. |
-| `MAX_OUTPUT_TOKENS_CEILING` | ❌ | Plain, default `4096` |
-| `REQUEST_TIMEOUT_MS` | ❌ | Plain, default `60000` |
+| `AI_RELAY_BASE_URL` | ❌ | Plain env var. Default: SDK built-in. Override to point at Azure OpenAI, vLLM/Ollama, or a mock. |
+| `AI_RELAY_MAX_OUTPUT_TOKENS` | ❌ | Plain, default `4096` |
+| `AI_RELAY_REQUEST_TIMEOUT_MS` | ❌ | Plain, default `60000` |
 
 ### Script-only (consumed by `scripts/mcp-inspect.mjs` and `scripts/verify.mjs`)
 
@@ -113,7 +113,7 @@ These are NOT read by the server. They only set defaults for the verification sc
 | Key | Used by | Default | Override |
 |---|---|---|---|
 | `MCP_URL`      | `verify`, `inspect` | `http://localhost:3000/api/mcp` | `--url=` |
-| `MCP_TOOL`     | `inspect` | `completion_chat` | `--tool=` |
+| `MCP_TOOL`     | `inspect` | `openai_chat` | `--tool=` |
 | `MCP_MODEL`    | `inspect` | `gpt-4o-mini` | `--model=` |
 | `MCP_MESSAGE`  | `inspect` | `ping` | `--message=` |
 | `VERIFY_MODEL` | `verify`  | `gpt-4o-mini` | (env only) |
@@ -163,7 +163,7 @@ Principle: **mock only the OpenAI HTTP boundary** (MSW). Never mock the `openai`
 - Set `runtime: nodejs20.x` explicitly in `vercel.json` — falling back to Edge hits the 25s TTFB cap.
 - Export `export const maxDuration = 300` from the route file (do not depend on the dashboard default).
 - If you do not wrap the route handler with `withMcpAuth`, authentication is not applied — verify this on every new route.
-- Register `OPENAI_API_KEY` with **distinct OpenAI project keys** for Production and Preview, and set a **hard usage cap** in the OpenAI dashboard for each project (v1's cost defense).
+- Register `AI_RELAY_API_KEY` with **distinct OpenAI project keys** for Production and Preview, and set a **hard usage cap** in the OpenAI dashboard for each project (v1's cost defense).
 - After `pnpm dev`, when connecting MCP Inspector you must enter the **Proxy Session Token** from the mcp-handler startup log.
 
 ---

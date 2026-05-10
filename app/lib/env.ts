@@ -1,10 +1,11 @@
 // HTTP-only environment parser for the relay app.
 //
 // This is the relay app's private env schema — it lives in `app/lib/`
-// because `RELAY_AUTH_TOKEN` (≥ 32 bytes) and the HTTP-server-specific
-// names (MAX_OUTPUT_TOKENS_CEILING, REQUEST_TIMEOUT_MS) are concerns of
-// the deployed relay, NOT of every consumer that embeds the `ai-relay`
-// SDK in a stdio launcher, Cloudflare Worker, or Hono server.
+// because `RELAY_AUTH_TOKEN` (≥ 32 bytes) is an HTTP-server-specific
+// concern, NOT of every consumer that embeds the `ai-relay` SDK in a
+// stdio launcher, Cloudflare Worker, or Hono server. The other keys
+// share the `AI_RELAY_*` namespace with the SDK so a single env
+// vocabulary serves both the CLI and the HTTP transport.
 //
 // Side-effect-free module: importing this file does NOT read process.env.
 // Consumers (the route file, scripts, tests) call `parseEnv(source)`
@@ -15,17 +16,21 @@
 
 import { z } from "zod";
 
+// Schema is intentionally non-strict: process.env carries unrelated keys
+// (PATH, HOME, etc.). AI_RELAY_API_KEY.min(1) enforces the migration error
+// loudly instead of silently defaulting to an empty key that would fail
+// with an obscure upstream 401.
 const envSchema = z.object({
-  OPENAI_API_KEY: z.string().default(""),
-  OPENAI_BASE_URL: z.preprocess(
+  AI_RELAY_API_KEY: z.string().min(1, "AI_RELAY_API_KEY is required"),
+  AI_RELAY_BASE_URL: z.preprocess(
     (v) => (typeof v === "string" && v.trim().length === 0 ? undefined : v),
     z.string().url().optional(),
   ),
   RELAY_AUTH_TOKEN: z
     .string()
     .refine((s) => Buffer.byteLength(s, "utf8") >= 32, "must be at least 32 bytes"),
-  MAX_OUTPUT_TOKENS_CEILING: z.coerce.number().int().positive().default(4096),
-  REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+  AI_RELAY_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(4096),
+  AI_RELAY_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
 });
 
 export type Env = z.infer<typeof envSchema>;

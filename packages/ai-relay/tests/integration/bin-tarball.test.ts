@@ -1,26 +1,12 @@
-// Integration test for the CLI bin's published-tarball install path.
-//
-// Catches the regression class: "the package builds and unit-tests
-// pass, but the actual `npm install <tgz>` (or `npx`) flow breaks
-// because a runtime dep isn't pulled in." That's exactly what
-// happened on first attempt: `peerDependenciesMeta.openai.optional`
-// was true, so `npx` skipped openai and the bin crashed at
-// import-resolution time.
-//
-// Test flow:
-//   1. `npm pack` from packages/ai-relay/ → ragingwind-mcp-ai-relay-<v>.tgz
-//   2. Install the tarball + declared peer deps in a temp dir.
-//   3. Run the installed bin's `node_modules/.bin/mcp-ai-relay`:
-//        --version, --help, tools/list, missing-flag, missing-env
-//      and assert exit codes + outputs.
-//
-// Why integration, not unit:
-//   - Needs network for peer-dep resolution from the npm registry.
-//   - Spawns a real child process; takes ~10-30 s end to end.
-//   - Catches packaging regressions that unit tests can't see.
+// Integration test for the published-tarball install path of the
+// `ai-relay` bin. Packs the SDK, installs it into a temp dir, and
+// runs the bin against a local HTTP server that mimics the OpenAI
+// Chat Completions endpoint (MSW cannot intercept requests issued
+// from a spawned child process).
 
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, type SpawnOptions, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,13 +15,125 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SDK_DIR = resolve(__dirname, "..", "..");
 
+interface RecordedRequest {
+  authorization: string | undefined;
+  body: Record<string, unknown>;
+}
+
+interface MockServer {
+  url: string;
+  baseURL: string;
+  requests: RecordedRequest[];
+  setResponse(handler: (req: RecordedRequest) => { status: number; body: string }): void;
+  close(): Promise<void>;
+}
+
+async function startMockServer(): Promise<MockServer> {
+  const recorded: RecordedRequest[] = [];
+  let responder: (req: RecordedRequest) => { status: number; body: string } = () => ({
+    status: 200,
+    body: defaultSseBody("ok"),
+  });
+
+  const httpServer: Server = createServer((req: IncomingMessage, res: ServerResponse) => {
+    if (req.method !== "POST") {
+      res.statusCode = 405;
+      res.end();
+      return;
+    }
+    const chunks: Buffer[] = [];
+    req.on("data", (c: Buffer) => chunks.push(c));
+    req.on("end", () => {
+      const text = Buffer.concat(chunks).toString("utf8");
+      let body: Record<string, unknown> = {};
+      try {
+        body = JSON.parse(text) as Record<string, unknown>;
+      } catch {
+        body = {};
+      }
+      const recordedReq: RecordedRequest = {
+        authorization: req.headers.authorization,
+        body,
+      };
+      recorded.push(recordedReq);
+      const out = responder(recordedReq);
+      res.statusCode = out.status;
+      if (out.status === 200) {
+        res.setHeader("content-type", "text/event-stream");
+        res.end(out.body);
+      } else {
+        res.setHeader("content-type", "application/json");
+        res.end(out.body);
+      }
+    });
+  });
+
+  await new Promise<void>((resolveListen) => {
+    httpServer.listen(0, "127.0.0.1", resolveListen);
+  });
+  const address = httpServer.address();
+  if (!address || typeof address === "string") throw new Error("listen failed");
+  const url = `http://127.0.0.1:${address.port}`;
+
+  return {
+    url,
+    baseURL: `${url}/v1`,
+    requests: recorded,
+    setResponse(h) {
+      responder = h;
+    },
+    async close() {
+      await new Promise<void>((r, j) => httpServer.close((e) => (e ? j(e) : r())));
+    },
+  };
+}
+
+function defaultSseBody(text: string): string {
+  return [
+    `data: ${JSON.stringify({ choices: [{ delta: { content: text }, finish_reason: "stop" }] })}\n\n`,
+    "data: [DONE]\n\n",
+  ].join("");
+}
+
+interface SpawnResult {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+async function runBin(
+  args: readonly string[],
+  opts: { env?: Record<string, string | undefined>; input?: string } = {},
+): Promise<SpawnResult> {
+  return new Promise((resolveProm, reject) => {
+    const spawnOpts: SpawnOptions = {
+      env: { ...process.env, ...opts.env } as NodeJS.ProcessEnv,
+      stdio: ["pipe", "pipe", "pipe"],
+    };
+    const child = spawn(binPath, [...args], spawnOpts);
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.on("data", (c: Buffer) => {
+      stdout += c.toString("utf8");
+    });
+    child.stderr?.on("data", (c: Buffer) => {
+      stderr += c.toString("utf8");
+    });
+    child.on("error", reject);
+    child.on("close", (code) => resolveProm({ status: code, stdout, stderr }));
+    if (opts.input !== undefined) {
+      child.stdin?.end(opts.input);
+    } else {
+      child.stdin?.end();
+    }
+  });
+}
+
 let scratchDir: string | null = null;
 let binPath: string;
+let mock: MockServer;
 
 beforeAll(async () => {
-  // Pack the SDK into a tarball. `npm pack` uses the SDK's package.json
-  // `files` field, so the tarball matches what npm publish would ship.
-  // Clean stale tarballs first so the glob below resolves to one file.
   for (const name of readdirSync(SDK_DIR)) {
     if (name.endsWith(".tgz")) rmSync(join(SDK_DIR, name));
   }
@@ -49,94 +147,88 @@ beforeAll(async () => {
   }
   const tarball = join(SDK_DIR, firstTarball);
 
-  scratchDir = mkdtempSync(join(tmpdir(), "mcp-ai-relay-bin-"));
-  // A bare ESM package so `npm install` resolves transitive ESM deps cleanly.
+  scratchDir = mkdtempSync(join(tmpdir(), "ai-relay-bin-"));
   writeFileSync(
     join(scratchDir, "package.json"),
     JSON.stringify({ name: "bin-tarball-test", private: true, type: "module" }),
   );
-  // `npm install <tgz>` pulls the tarball; non-optional peer deps
-  // (`@modelcontextprotocol/sdk`, `openai`) are auto-installed by npm 7+.
   execFileSync("npm", ["install", "--no-audit", "--no-fund", tarball], {
     cwd: scratchDir,
     stdio: "pipe",
   });
-  binPath = join(scratchDir, "node_modules", ".bin", "mcp-ai-relay");
+  binPath = join(scratchDir, "node_modules", ".bin", "ai-relay");
   if (!existsSync(binPath)) {
     throw new Error(`bin not present at ${binPath} after install`);
   }
-  // Clean the tarball so it doesn't end up in `git status`.
   rmSync(tarball);
+
+  mock = await startMockServer();
 }, 180_000);
 
-afterAll(() => {
+afterAll(async () => {
+  if (mock) await mock.close();
   if (scratchDir) rmSync(scratchDir, { recursive: true, force: true });
 });
 
-describe("cli bin — installed tarball", () => {
-  it("P1: --version prints the SDK version", () => {
-    const r = spawnSync(binPath, ["--version"], { encoding: "utf8" });
-    expect(r.status).toBe(0);
-    expect(r.stdout.trim()).toBe("0.1.0");
-  });
+describe("ai-relay bin — installed tarball", () => {
+  it("S1: positional plain text → exit 0 + JSON on stdout", async () => {
+    mock.requests.length = 0;
+    mock.setResponse(() => ({ status: 200, body: defaultSseBody("hello world") }));
 
-  it("P2: --help prints usage text", () => {
-    const r = spawnSync(binPath, ["--help"], { encoding: "utf8" });
-    expect(r.status).toBe(0);
-    expect(r.stdout).toContain("Usage: mcp-ai-relay");
-    expect(r.stdout).toContain("--openai-completion");
-  });
-
-  it("P3: --openai-completion answers a tools/list JSON-RPC request", () => {
-    const r = spawnSync(binPath, ["--openai-completion"], {
-      input: `${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" })}\n`,
-      env: { ...process.env, OPENAI_API_KEY: "test-key" },
-      encoding: "utf8",
+    const r = await runBin(["openai", "chat", "-m", "gpt-4o-mini", "ping"], {
+      env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
     });
     expect(r.status).toBe(0);
-    const responseLine = r.stdout.split("\n").find((l) => l.trim().startsWith("{"));
-    expect(responseLine).toBeDefined();
-    const response = JSON.parse(responseLine as string);
-    expect(response.result.tools).toHaveLength(1);
-    expect(response.result.tools[0].name).toBe("openai_chat");
+    const out = JSON.parse(r.stdout.trim());
+    expect(out.isError).toBe(false);
+    expect(out.content[0].text).toBe("hello world");
+    expect(out.structuredContent.model).toBe("gpt-4o-mini");
   });
 
-  it("P4: --name and --description override the registered tool descriptor", () => {
-    const r = spawnSync(
-      binPath,
-      ["--openai-completion", "--name", "azure_chat", "--description", "Azure deployment"],
-      {
-        input: `${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" })}\n`,
-        env: { ...process.env, OPENAI_API_KEY: "test-key" },
-        encoding: "utf8",
-      },
-    );
-    expect(r.status).toBe(0);
-    const responseLine = r.stdout.split("\n").find((l) => l.trim().startsWith("{"));
-    const response = JSON.parse(responseLine as string);
-    expect(response.result.tools[0].name).toBe("azure_chat");
-    expect(response.result.tools[0].description).toBe("Azure deployment");
-  });
+  it("S2: missing -m → exit 2; no upstream call", async () => {
+    mock.requests.length = 0;
+    mock.setResponse(() => ({ status: 200, body: defaultSseBody("ok") }));
 
-  it("D1: missing provider flag exits with code 2 and prints usage to stderr", () => {
-    const r = spawnSync(binPath, [], { encoding: "utf8" });
-    expect(r.status).toBe(2);
-    expect(r.stderr).toContain("provider flag");
-    expect(r.stderr).toContain("Usage: mcp-ai-relay");
-  });
-
-  it("D2: unknown argument exits with code 2", () => {
-    const r = spawnSync(binPath, ["--bogus-flag"], { encoding: "utf8" });
-    expect(r.status).toBe(2);
-    expect(r.stderr).toContain("Unknown argument");
-  });
-
-  it("D3: missing OPENAI_API_KEY exits with code 1", () => {
-    const r = spawnSync(binPath, ["--openai-completion"], {
-      env: { ...process.env, OPENAI_API_KEY: "" },
-      encoding: "utf8",
+    const r = await runBin(["openai", "chat", "ping"], {
+      env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
     });
-    expect(r.status).toBe(1);
-    expect(r.stderr).toContain("OPENAI_API_KEY");
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("--model is required");
+    expect(mock.requests).toHaveLength(0);
+  });
+
+  it("S3: stdin JSON path → upstream sees the parsed messages", async () => {
+    mock.requests.length = 0;
+    mock.setResponse(() => ({ status: 200, body: defaultSseBody("ok") }));
+
+    const r = await runBin(["openai", "chat", "-m", "gpt-4o-mini"], {
+      env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
+      input: '{"messages":[{"role":"user","content":"ping"}]}',
+    });
+    expect(r.status).toBe(0);
+    expect(mock.requests).toHaveLength(1);
+    expect(mock.requests[0]?.body).toMatchObject({
+      messages: [{ role: "user", content: "ping" }],
+    });
+  });
+
+  it("S4: --env file value wins over process env", async () => {
+    mock.requests.length = 0;
+    mock.setResponse(() => ({ status: 200, body: defaultSseBody("ok") }));
+    if (!scratchDir) throw new Error("scratchDir missing");
+    const envFile = join(scratchDir, "local.env");
+    writeFileSync(envFile, `AI_RELAY_API_KEY=filekey\nAI_RELAY_BASE_URL=${mock.baseURL}\n`);
+
+    const r = await runBin(["openai", "chat", "-m", "gpt-4o-mini", "--env", envFile, "hi"], {
+      env: { AI_RELAY_API_KEY: "systemkey" },
+    });
+    expect(r.status).toBe(0);
+    expect(mock.requests[0]?.authorization).toBe("Bearer filekey");
+  });
+
+  it("S5: --version prints SDK version", async () => {
+    const r = await runBin(["--version"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
   });
 });

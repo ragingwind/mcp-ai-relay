@@ -21,10 +21,10 @@ const server = new McpServer({
 
 let registeredCount = 0;
 
-if (process.env.OPENAI_API_KEY) {
+if (process.env.AI_RELAY_API_KEY) {
   registerOpenAIChat(server, {
     name: "openai_chat",
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: process.env.AI_RELAY_API_KEY,
     description: "OpenAI Chat Completions — proper",
   });
   registeredCount++;
@@ -54,7 +54,7 @@ if (process.env.LOCAL_LLM_BASE_URL) {
 if (registeredCount === 0) {
   console.error(
     "No upstream credentials found. Set at least one of:\n" +
-      "  OPENAI_API_KEY\n" +
+      "  AI_RELAY_API_KEY\n" +
       "  AZURE_OPENAI_KEY + AZURE_OPENAI_BASE_URL\n" +
       "  LOCAL_LLM_BASE_URL (+ optional LOCAL_LLM_KEY)",
   );

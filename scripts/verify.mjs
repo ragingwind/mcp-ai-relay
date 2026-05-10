@@ -111,18 +111,18 @@ try {
   if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
   const env = await readJsonRpc(res);
   const tools = env.result?.tools ?? [];
-  const ok = tools.length === 1 && tools[0]?.name === "completion_chat";
+  const ok = tools.length === 1 && tools[0]?.name === "openai_chat";
   record(
     "C1",
-    "tools/list — single completion_chat",
+    "tools/list — single openai_chat",
     ok,
     ok ? "1 tool" : `got ${JSON.stringify(tools.map((t) => t.name))}`,
   );
 } catch (err) {
-  record("C1", "tools/list — single completion_chat", false, err.message);
+  record("C1", "tools/list — single openai_chat", false, err.message);
 }
 
-// ---- C2: completion_chat happy path ---------------------------------------
+// ---- C2: openai_chat happy path ---------------------------------------
 
 try {
   const res = await rpc({
@@ -130,7 +130,7 @@ try {
     id: 2,
     method: "tools/call",
     params: {
-      name: "completion_chat",
+      name: "openai_chat",
       arguments: {
         model: MODEL,
         messages: [{ role: "user", content: "ping" }],
@@ -151,9 +151,9 @@ try {
   const note = usage
     ? `prompt=${usage.prompt_tokens} completion=${usage.completion_tokens} total=${usage.total_tokens}`
     : "no usage";
-  record("C2", "completion_chat happy path", ok, note);
+  record("C2", "openai_chat happy path", ok, note);
 } catch (err) {
-  record("C2", "completion_chat happy path", false, err.message);
+  record("C2", "openai_chat happy path", false, err.message);
 }
 
 // ---- C5: wrong bearer 401 ---------------------------------------------

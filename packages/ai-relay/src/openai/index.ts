@@ -12,11 +12,13 @@ export type {
   OpenAIChatSchema,
   OpenAIChatStructured,
   OpenaiUsage,
+  ToolDescriptor,
 } from "./chat.js";
 export {
   makeOpenAIChatHandler,
   makeOpenAIChatSchema,
   mapOpenAIError,
+  openAIChatTool,
   registerOpenAIChat,
 } from "./chat.js";
 export type {

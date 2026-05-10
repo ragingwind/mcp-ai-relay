@@ -62,7 +62,7 @@ made without the Inspector UI. Useful for iterating on prompts or pointing at a
 non-default endpoint / model / tool.
 
 ```bash
-pnpm inspect                                  # tools/call → completion_chat with "ping"
+pnpm inspect                                  # tools/call → openai_chat with "ping"
 pnpm inspect --method=tools/list              # registered tools only
 pnpm inspect --message="안녕"                 # custom user message
 pnpm inspect --url=http://localhost:3001/api/mcp --model=gpt-4o
@@ -75,7 +75,7 @@ Flags (priority: `--flag=` > `process.env` > `.env.local` > default):
 |---|---|---|
 | `--url=`     | `MCP_URL`     | `http://localhost:3000/api/mcp` |
 | `--token=`   | `RELAY_AUTH_TOKEN` (also read from `.env.local`) | — |
-| `--tool=`    | `MCP_TOOL`    | `completion_chat` |
+| `--tool=`    | `MCP_TOOL`    | `openai_chat` |
 | `--model=`   | `MCP_MODEL`   | `gpt-4o-mini` |
 | `--message=` | `MCP_MESSAGE` | `ping` |
 | `--method=`  | —             | `tools/call` (also `tools/list`) |
@@ -93,7 +93,7 @@ to the manual procedure below (sections A–E).
 1. Populate `.env.local` with **a personal dev OpenAI key** (not the production key)
    and a `RELAY_AUTH_TOKEN` of your choice (32+ bytes):
    ```bash
-   OPENAI_API_KEY=sk-...
+   AI_RELAY_API_KEY=sk-...
    RELAY_AUTH_TOKEN=$(openssl rand -hex 32)
    ```
    `.env.local` is gitignored — never commit values.
@@ -135,7 +135,7 @@ to the manual procedure below (sections A–E).
      (`CLAUDE.md` §9 — frequently forgotten)
 
 3. Click **Connect**. Expect the connection to succeed and the **Tools** tab
-   to show one tool: `completion_chat`.
+   to show one tool: `openai_chat`.
 
 ---
 
@@ -143,15 +143,15 @@ to the manual procedure below (sections A–E).
 
 All scenarios MUST pass before PR merge. C7 only applies when the relay
 registers more than one upstream (the default v1 relay registers a single
-`completion_chat` tool, so C7 is exercised in the SDK's
+`openai_chat` tool, so C7 is exercised in the SDK's
 `multi-registration` example or in any consumer that registers multiple
 upstreams on one server).
 
 | # | Scenario | Steps | Expected result |
 |---|---|---|---|
-| **C1** | Tool list | In Inspector, switch to **Tools** tab | Single tool `completion_chat` is listed with input schema (model, messages, temperature, max_tokens, top_p, stop) |
-| **C2** | Happy path | Click **Run Tool** on `completion_chat`. Inputs: `model: gpt-4o-mini`, `messages: [{role: "user", content: "ping"}]` | Response contains accumulated text in `result.content[0].text`. `result.structuredContent.usage.total_tokens > 0`. `result.isError` is `false`. |
-| **C4** | max_tokens clamp | Same as C2 but `max_tokens: 999999` (well above `MAX_OUTPUT_TOKENS_CEILING`) | Response succeeds; the value was silently clamped to `MAX_OUTPUT_TOKENS_CEILING` (default 4096) before the upstream call. No error. |
+| **C1** | Tool list | In Inspector, switch to **Tools** tab | Single tool `openai_chat` is listed with input schema (model, messages, temperature, max_tokens, top_p, stop) |
+| **C2** | Happy path | Click **Run Tool** on `openai_chat`. Inputs: `model: gpt-4o-mini`, `messages: [{role: "user", content: "ping"}]` | Response contains accumulated text in `result.content[0].text`. `result.structuredContent.usage.total_tokens > 0`. `result.isError` is `false`. |
+| **C4** | max_tokens clamp | Same as C2 but `max_tokens: 999999` (well above `AI_RELAY_MAX_OUTPUT_TOKENS`) | Response succeeds; the value was silently clamped to `AI_RELAY_MAX_OUTPUT_TOKENS` (default 4096) before the upstream call. No error. |
 | **C5** | Bearer rejection | In Inspector, **Disconnect**, change the Header to `Authorization: Bearer wrong-token`, **Connect** | Connection fails with HTTP 401 + `WWW-Authenticate: Bearer` header. Reconnect with the correct token to continue. |
 | **C6** | Cancellation (manual) | Run C2 with a long prompt (e.g., "Write a 500-word essay about sourdough"). Mid-stream, **Disconnect** in the Inspector | Server logs show the SDK call aborted; OpenAI usage page (refreshed in ~1 minute) does NOT show full output cost. (Imprecise visual confirmation — manual observation only.) |
 | **C7** | Multi-registration *(SDK consumers only)* | On a server that registered `registerOpenAIChat` against two distinct names (e.g. `openai_chat` + `azure_chat` with different `apiKey` + `baseURL`), open **Tools** then run each one. | `tools/list` returns both entries. Each `tools/call` answers from its own upstream (verify by switching upstreams between calls and confirming responses do not cross). |
@@ -174,7 +174,7 @@ Commit:    <git rev-parse --short HEAD>
 Endpoint:  http://localhost:3000/api/mcp  (or production URL — see doc/DEPLOY.md §3)
 
 C1 tools/list                — PASS / FAIL  <one-line note>
-C2 completion_chat happy path    — PASS / FAIL  usage: {prompt_tokens: N, completion_tokens: N, total_tokens: N}
+C2 openai_chat happy path    — PASS / FAIL  usage: {prompt_tokens: N, completion_tokens: N, total_tokens: N}
 C4 max_tokens clamp          — PASS / FAIL  <one-line note>
 C5 wrong bearer 401          — PASS / FAIL  <one-line note>
 C6 cancellation              — PASS / FAIL  <one-line note>
@@ -184,7 +184,7 @@ Notes:
 ```
 
 If a scenario fails, redact secrets from any included response excerpt before
-attaching to the PR (`OPENAI_API_KEY`, `RELAY_AUTH_TOKEN`, full prompt text —
+attaching to the PR (`AI_RELAY_API_KEY`, `RELAY_AUTH_TOKEN`, full prompt text —
 metadata only per `CLAUDE.md` §4).
 
 ---
@@ -194,7 +194,7 @@ metadata only per `CLAUDE.md` §4).
 After running [`doc/DEPLOY.md` §3.5 verification checklist](./DEPLOY.md#35-verification-checklist),
 re-run **C1, C2, C5** against the production URL
 (`https://<project>.vercel.app/api/mcp`) using the **production**
-`RELAY_AUTH_TOKEN` and the prod-issued `OPENAI_API_KEY`.
+`RELAY_AUTH_TOKEN` and the prod-issued `AI_RELAY_API_KEY`.
 
 C4 and C6 are local-only (the clamp behavior is the same on both environments;
 cancellation observation is harder to confirm in production).

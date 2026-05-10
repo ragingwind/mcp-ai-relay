@@ -1,165 +1,120 @@
-// Unit tests for the CLI's pure helpers — `parseArgs` and
-// `buildOpenAIChatConfig`. The `main()` invocation itself is left
-// untested at the unit layer (it touches stdin/stdout + process.exit
-// which is awkward to harness); end-to-end smoke is the README's
-// `--help` and `tools/list` invocations.
-//
-// Helpers live in `src/bin/helpers.ts` (split from `cli.ts`) so
-// importing them does NOT trigger the CLI's top-level `main()`.
+// Argv parser tests (B6 + B7).
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { buildOpenAIChatConfig, parseArgs } from "../../src/bin/helpers.js";
+import { describe, expect, it } from "vitest";
+import { parseArgv, UsageError } from "../../src/bin/parse.js";
 
-describe("parseArgs", () => {
-  it("P1: parses --openai-completion as provider", () => {
-    const out = parseArgs(["--openai-completion"]);
-    expect(out.provider).toBe("openai-completion");
+describe("parseArgv — basic shape", () => {
+  it("P1: <provider> <tool> -m <model> <input> → ParsedInvocation", () => {
+    const out = parseArgv(["openai", "chat", "-m", "gpt-4o-mini", "hi"]);
+    expect(out.provider).toBe("openai");
+    expect(out.tool).toBe("chat");
+    expect(out.flags.model).toBe("gpt-4o-mini");
+    expect(out.positional).toBe("hi");
     expect(out.help).toBe(false);
     expect(out.version).toBe(false);
   });
 
-  it("P2: --help short and long forms set help: true", () => {
-    expect(parseArgs(["--help"]).help).toBe(true);
-    expect(parseArgs(["-h"]).help).toBe(true);
+  it("P2: --key=value and --key value are equivalent", () => {
+    const a = parseArgv(["openai", "chat", "--model=gpt-4o", "hi"]);
+    const b = parseArgv(["openai", "chat", "--model", "gpt-4o", "hi"]);
+    expect(a.flags.model).toBe("gpt-4o");
+    expect(b.flags.model).toBe("gpt-4o");
   });
 
-  it("P3: --version short and long forms set version: true", () => {
-    expect(parseArgs(["--version"]).version).toBe(true);
-    expect(parseArgs(["-V"]).version).toBe(true);
+  it("P3: -m short form is equivalent to --model", () => {
+    const out = parseArgv(["openai", "chat", "-m", "gpt-4o-mini", "hi"]);
+    expect(out.flags.model).toBe("gpt-4o-mini");
   });
 
-  it("P4: --name <value> captures the next token", () => {
-    const out = parseArgs(["--openai-completion", "--name", "my_chat"]);
-    expect(out.name).toBe("my_chat");
+  it("P4: --system value preserved verbatim and supports multi-word", () => {
+    const out = parseArgv([
+      "openai",
+      "chat",
+      "-m",
+      "gpt-4o-mini",
+      "-s",
+      "be terse and concise",
+      "hi",
+    ]);
+    expect(out.flags.system).toBe("be terse and concise");
   });
 
-  it("P5: --description <value> captures the next token", () => {
-    const out = parseArgs(["--openai-completion", "--description", "my desc"]);
-    expect(out.description).toBe("my desc");
+  it("P5: long --system also accepted", () => {
+    const out = parseArgv(["openai", "chat", "-m", "gpt-4o-mini", "--system", "be terse", "hi"]);
+    expect(out.flags.system).toBe("be terse");
   });
 
-  it("D1: rejects unknown arguments", () => {
-    expect(() => parseArgs(["--unknown"])).toThrow(/Unknown argument: --unknown/);
+  it("P6: numeric flags (--max-tokens, --timeout) parse to integers", () => {
+    const out = parseArgv([
+      "openai",
+      "chat",
+      "-m",
+      "gpt-4o-mini",
+      "--max-tokens",
+      "1024",
+      "--timeout",
+      "30000",
+      "hi",
+    ]);
+    expect(out.flags["max-tokens"]).toBe(1024);
+    expect(out.flags.timeout).toBe(30000);
   });
 
-  it("D2: rejects multiple provider flags (when more land in v0.x)", () => {
-    // Synthetic test: simulate by running --openai-completion twice. Since
-    // we ship one provider today, the same flag twice exercises the same
-    // guard the future multi-flag rejection will use.
-    expect(() => parseArgs(["--openai-completion", "--openai-completion"])).toThrow(
-      /Multiple provider flags/,
-    );
-  });
-
-  it("D3: rejects --name without a value", () => {
-    expect(() => parseArgs(["--openai-completion", "--name"])).toThrow(/--name requires a value/);
-  });
-
-  it("D4: rejects --name when the next token starts with --", () => {
-    expect(() => parseArgs(["--openai-completion", "--name", "--description", "x"])).toThrow(
-      /--name requires a value/,
-    );
-  });
-
-  it("N1: empty argv yields provider: null + help/version: false", () => {
-    const out = parseArgs([]);
-    expect(out.provider).toBeNull();
-    expect(out.help).toBe(false);
-    expect(out.version).toBe(false);
-    expect(out.name).toBeUndefined();
-    expect(out.description).toBeUndefined();
+  it("P7: --env path captured", () => {
+    const out = parseArgv(["openai", "chat", "-m", "x", "--env", "./prod.env", "hi"]);
+    expect(out.flags.env).toBe("./prod.env");
   });
 });
 
-describe("buildOpenAIChatConfig", () => {
-  // Snapshot env keys the helper reads so we can restore exact state.
-  const KEYS = [
-    "OPENAI_API_KEY",
-    "OPENAI_BASE_URL",
-    "OPENAI_MAX_OUTPUT_TOKENS_CEILING",
-    "OPENAI_REQUEST_TIMEOUT_MS",
-  ] as const;
-  let saved: Partial<Record<(typeof KEYS)[number], string | undefined>> = {};
-
-  beforeEach(() => {
-    saved = {};
-    for (const k of KEYS) {
-      saved[k] = process.env[k];
-      delete process.env[k];
-    }
+describe("parseArgv — help/version short-circuit", () => {
+  it("P1: -h short-circuits without requiring -m", () => {
+    expect(parseArgv(["-h"]).help).toBe(true);
+    expect(parseArgv(["--help"]).help).toBe(true);
   });
 
-  afterEach(() => {
-    for (const k of KEYS) {
-      const v = saved[k];
-      if (v === undefined) {
-        delete process.env[k];
-      } else {
-        process.env[k] = v;
-      }
-    }
+  it("P2: -V short-circuits without requiring -m", () => {
+    expect(parseArgv(["-V"]).version).toBe(true);
+    expect(parseArgv(["--version"]).version).toBe(true);
+  });
+});
+
+describe("parseArgv — error paths", () => {
+  it("D1: missing -m → UsageError(--model is required)", () => {
+    expect(() => parseArgv(["openai", "chat", "hi"])).toThrow(UsageError);
+    expect(() => parseArgv(["openai", "chat", "hi"])).toThrow(/--model is required/);
   });
 
-  it("P1: builds minimum config from OPENAI_API_KEY only", () => {
-    process.env.OPENAI_API_KEY = "sk-test";
-    const config = buildOpenAIChatConfig({
-      provider: "openai-completion",
-      help: false,
-      version: false,
-    });
-    expect(config.apiKey).toBe("sk-test");
-    expect(config.baseURL).toBeUndefined();
-    expect(config.maxOutputTokensCeiling).toBeUndefined();
-    expect(config.requestTimeoutMs).toBeUndefined();
-    expect(config.name).toBeUndefined();
-    expect(config.description).toBeUndefined();
+  it("D2: missing positional pair → usage error", () => {
+    expect(() => parseArgv(["openai"])).toThrow(/usage: ai-relay/);
   });
 
-  it("P2: forwards OPENAI_BASE_URL", () => {
-    process.env.OPENAI_API_KEY = "sk-test";
-    process.env.OPENAI_BASE_URL = "https://azure.example.com/v1";
-    const config = buildOpenAIChatConfig({
-      provider: "openai-completion",
-      help: false,
-      version: false,
-    });
-    expect(config.baseURL).toBe("https://azure.example.com/v1");
+  it("D3: unknown long flag → UsageError", () => {
+    expect(() => parseArgv(["openai", "chat", "--bogus", "x"])).toThrow(/unknown flag: --bogus/);
   });
 
-  it("P3: parses OPENAI_MAX_OUTPUT_TOKENS_CEILING + OPENAI_REQUEST_TIMEOUT_MS as numbers", () => {
-    process.env.OPENAI_API_KEY = "sk-test";
-    process.env.OPENAI_MAX_OUTPUT_TOKENS_CEILING = "8192";
-    process.env.OPENAI_REQUEST_TIMEOUT_MS = "30000";
-    const config = buildOpenAIChatConfig({
-      provider: "openai-completion",
-      help: false,
-      version: false,
-    });
-    expect(config.maxOutputTokensCeiling).toBe(8192);
-    expect(config.requestTimeoutMs).toBe(30000);
+  it("D4: unknown short flag → UsageError", () => {
+    expect(() => parseArgv(["openai", "chat", "-x"])).toThrow(/unknown flag: -x/);
   });
 
-  it("P4: --name and --description override flow into config", () => {
-    process.env.OPENAI_API_KEY = "sk-test";
-    const config = buildOpenAIChatConfig({
-      provider: "openai-completion",
-      name: "my_chat",
-      description: "Custom",
-      help: false,
-      version: false,
-    });
-    expect(config.name).toBe("my_chat");
-    expect(config.description).toBe("Custom");
+  it("D5: --max-tokens with non-integer value rejected", () => {
+    expect(() => parseArgv(["openai", "chat", "-m", "x", "--max-tokens", "abc", "hi"])).toThrow(
+      /--max-tokens must be a positive integer/,
+    );
   });
 
-  it("N1: omits OPENAI_BASE_URL when env is empty string", () => {
-    process.env.OPENAI_API_KEY = "sk-test";
-    process.env.OPENAI_BASE_URL = "";
-    const config = buildOpenAIChatConfig({
-      provider: "openai-completion",
-      help: false,
-      version: false,
-    });
-    expect(config.baseURL).toBeUndefined();
+  it("D6: --max-tokens with zero rejected", () => {
+    expect(() => parseArgv(["openai", "chat", "-m", "x", "--max-tokens", "0", "hi"])).toThrow(
+      /must be a positive integer/,
+    );
+  });
+
+  it("D7: more than one positional input rejected", () => {
+    expect(() => parseArgv(["openai", "chat", "-m", "x", "a", "b"])).toThrow(
+      /at most one positional input/,
+    );
+  });
+
+  it("D8: flag without value at end of argv rejected", () => {
+    expect(() => parseArgv(["openai", "chat", "-m"])).toThrow(/-m requires a value/);
   });
 });

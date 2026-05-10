@@ -6,9 +6,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerOpenAIChat } from "ai-relay/openai";
 
-const apiKey = process.env.OPENAI_API_KEY;
+const apiKey = process.env.AI_RELAY_API_KEY;
 if (!apiKey) {
-  console.error("OPENAI_API_KEY environment variable is required.");
+  console.error("AI_RELAY_API_KEY environment variable is required.");
   process.exit(1);
 }
 
@@ -19,7 +19,7 @@ const server = new McpServer({
 
 registerOpenAIChat(server, {
   apiKey,
-  ...(process.env.OPENAI_BASE_URL ? { baseURL: process.env.OPENAI_BASE_URL } : {}),
+  ...(process.env.AI_RELAY_BASE_URL ? { baseURL: process.env.AI_RELAY_BASE_URL } : {}),
 });
 
 await server.connect(new StdioServerTransport());
