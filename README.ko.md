@@ -128,7 +128,7 @@ OAuth 2.1, rate limiting, budget caps, observability)는
 | 배포 런북 (Vercel + Docker, 운영) | [`doc/DEPLOY.ko.md`](./doc/DEPLOY.ko.md) |
 | AI 에이전트 협업 가이드 | [`CLAUDE.md`](./CLAUDE.md) |
 
-사용자 대상 문서의 한국어 번역 (영문이 정전):
+다른 언어 / 관련 문서 (영문이 정본):
 [`README.md`](./README.md) ·
 [`doc/ARCHITECTURE.ko.md`](./doc/ARCHITECTURE.ko.md) ·
 [`doc/DEPLOY.ko.md`](./doc/DEPLOY.ko.md) ·
