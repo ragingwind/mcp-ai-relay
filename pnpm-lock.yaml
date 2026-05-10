@@ -10,22 +10,22 @@ importers:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: 1.29.0
-        version: 1.29.0(zod@4.3.6)
+        version: 1.29.0(zod@4.4.3)
       ai-relay:
         specifier: workspace:*
         version: link:packages/ai-relay
       mcp-handler:
         specifier: ^1.1.0
-        version: 1.1.0(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(next@16.2.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5))
+        version: 1.1.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(next@16.2.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5))
       next:
         specifier: ^16.2.4
         version: 16.2.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       openai:
         specifier: ^6.37.0
-        version: 6.37.0(ws@8.18.0)(zod@4.3.6)
+        version: 6.37.0(ws@8.18.0)(zod@4.4.3)
       zod:
-        specifier: ^4.3.6
-        version: 4.3.6
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.4.14
@@ -50,7 +50,7 @@ importers:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.26
-        version: 1.29.0(zod@4.3.6)
+        version: 1.29.0(zod@4.4.3)
       agents:
         specifier: ^0.0.40
         version: 0.0.40(@cloudflare/workers-types@4.20260507.1)
@@ -59,7 +59,7 @@ importers:
         version: link:../../packages/ai-relay
       openai:
         specifier: ^6
-        version: 6.37.0(ws@8.18.0)(zod@4.3.6)
+        version: 6.37.0(ws@8.18.0)(zod@4.4.3)
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20240924.0
@@ -72,13 +72,13 @@ importers:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.26
-        version: 1.29.0(zod@4.3.6)
+        version: 1.29.0(zod@4.4.3)
       ai-relay:
         specifier: workspace:*
         version: link:../../packages/ai-relay
       openai:
         specifier: ^6
-        version: 6.37.0(ws@8.18.0)(zod@4.3.6)
+        version: 6.37.0(ws@8.18.0)(zod@4.4.3)
     devDependencies:
       tsx:
         specifier: ^4.19.0
@@ -88,13 +88,13 @@ importers:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.26
-        version: 1.29.0(zod@4.3.6)
+        version: 1.29.0(zod@4.4.3)
       ai-relay:
         specifier: workspace:*
         version: link:../../packages/ai-relay
       openai:
         specifier: ^6
-        version: 6.37.0(ws@8.18.0)(zod@4.3.6)
+        version: 6.37.0(ws@8.18.0)(zod@4.4.3)
     devDependencies:
       tsx:
         specifier: ^4.19.0
@@ -104,13 +104,13 @@ importers:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.26
-        version: 1.29.0(zod@4.3.6)
+        version: 1.29.0(zod@4.4.3)
       openai:
         specifier: ^6
-        version: 6.34.0(ws@8.18.0)(zod@4.3.6)
+        version: 6.34.0(ws@8.18.0)(zod@4.4.3)
       zod:
-        specifier: ^4.3.6
-        version: 4.3.6
+        specifier: ^4.4.3
+        version: 4.4.3
 
 packages:
 
@@ -2061,8 +2061,8 @@ packages:
     peerDependencies:
       zod: ^3.25.28 || ^4
 
-  zod@4.3.6:
-    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
 snapshots:
 
@@ -2496,7 +2496,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@modelcontextprotocol/sdk@1.29.0(zod@4.3.6)':
+  '@modelcontextprotocol/sdk@1.29.0(zod@4.4.3)':
     dependencies:
       '@hono/node-server': 1.19.14(hono@4.12.15)
       ajv: 8.20.0
@@ -2513,8 +2513,8 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 4.3.6
-      zod-to-json-schema: 3.25.2(zod@4.3.6)
+      zod: 4.4.3
+      zod-to-json-schema: 3.25.2(zod@4.4.3)
     transitivePeerDependencies:
       - supports-color
 
@@ -3161,9 +3161,9 @@ snapshots:
 
   math-intrinsics@1.1.0: {}
 
-  mcp-handler@1.1.0(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(next@16.2.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)):
+  mcp-handler@1.1.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(next@16.2.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)):
     dependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.3.6)
+      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
       chalk: 5.6.2
       commander: 11.1.0
       redis: 4.7.1
@@ -3263,15 +3263,15 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
-  openai@6.34.0(ws@8.18.0)(zod@4.3.6):
+  openai@6.34.0(ws@8.18.0)(zod@4.4.3):
     optionalDependencies:
       ws: 8.18.0
-      zod: 4.3.6
+      zod: 4.4.3
 
-  openai@6.37.0(ws@8.18.0)(zod@4.3.6):
+  openai@6.37.0(ws@8.18.0)(zod@4.4.3):
     optionalDependencies:
       ws: 8.18.0
-      zod: 4.3.6
+      zod: 4.4.3
 
   outvariant@1.4.3: {}
 
@@ -3722,8 +3722,8 @@ snapshots:
       cookie: 1.1.1
       youch-core: 0.3.3
 
-  zod-to-json-schema@3.25.2(zod@4.3.6):
+  zod-to-json-schema@3.25.2(zod@4.4.3):
     dependencies:
-      zod: 4.3.6
+      zod: 4.4.3
 
-  zod@4.3.6: {}
+  zod@4.4.3: {}
