@@ -11,7 +11,7 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 1.29.0
         version: 1.29.0(zod@4.3.6)
-      'ai-relay':
+      ai-relay:
         specifier: workspace:*
         version: link:packages/ai-relay
       mcp-handler:
@@ -21,8 +21,8 @@ importers:
         specifier: ^16.2.4
         version: 16.2.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       openai:
-        specifier: ^6.0.0
-        version: 6.34.0(ws@8.18.0)(zod@4.3.6)
+        specifier: ^6.37.0
+        version: 6.37.0(ws@8.18.0)(zod@4.3.6)
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -51,15 +51,15 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.26
         version: 1.29.0(zod@4.3.6)
-      'ai-relay':
-        specifier: workspace:*
-        version: link:../../packages/ai-relay
       agents:
         specifier: ^0.0.40
         version: 0.0.40(@cloudflare/workers-types@4.20260507.1)
+      ai-relay:
+        specifier: workspace:*
+        version: link:../../packages/ai-relay
       openai:
         specifier: ^6
-        version: 6.34.0(ws@8.18.0)(zod@4.3.6)
+        version: 6.37.0(ws@8.18.0)(zod@4.3.6)
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20240924.0
@@ -73,12 +73,12 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.26
         version: 1.29.0(zod@4.3.6)
-      'ai-relay':
+      ai-relay:
         specifier: workspace:*
         version: link:../../packages/ai-relay
       openai:
         specifier: ^6
-        version: 6.34.0(ws@8.18.0)(zod@4.3.6)
+        version: 6.37.0(ws@8.18.0)(zod@4.3.6)
     devDependencies:
       tsx:
         specifier: ^4.19.0
@@ -89,12 +89,12 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.26
         version: 1.29.0(zod@4.3.6)
-      'ai-relay':
+      ai-relay:
         specifier: workspace:*
         version: link:../../packages/ai-relay
       openai:
         specifier: ^6
-        version: 6.34.0(ws@8.18.0)(zod@4.3.6)
+        version: 6.37.0(ws@8.18.0)(zod@4.3.6)
     devDependencies:
       tsx:
         specifier: ^4.19.0
@@ -1626,6 +1626,18 @@ packages:
 
   openai@6.34.0:
     resolution: {integrity: sha512-yEr2jdGf4tVFYG6ohmr3pF6VJuveP0EA/sS8TBx+4Eq5NT10alu5zg2dmxMXMgqpihRDQlFGpRt2XwsGj+Fyxw==}
+    hasBin: true
+    peerDependencies:
+      ws: ^8.18.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      ws:
+        optional: true
+      zod:
+        optional: true
+
+  openai@6.37.0:
+    resolution: {integrity: sha512-0H5dEGFmmLv6KSd0W1w2nyL8WsLkX6yoLeQpU+dZAOuGcany5qkYQMmj35ZrKgb6yiyYqpUzFOpR8mZQkgqeEQ==}
     hasBin: true
     peerDependencies:
       ws: ^8.18.0
@@ -3252,6 +3264,11 @@ snapshots:
       wrappy: 1.0.2
 
   openai@6.34.0(ws@8.18.0)(zod@4.3.6):
+    optionalDependencies:
+      ws: 8.18.0
+      zod: 4.3.6
+
+  openai@6.37.0(ws@8.18.0)(zod@4.3.6):
     optionalDependencies:
       ws: 8.18.0
       zod: 4.3.6
