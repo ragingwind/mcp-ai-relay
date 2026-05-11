@@ -263,6 +263,10 @@ init_resp=$(curl -s -D "$init_headers" \
   -H "authorization: Bearer ${SMOKE_BEARER}" \
   -d "$init_body")
 SESSION_ID=$(grep -i '^Mcp-Session-Id:' "$init_headers" | awk '{print $2}' | tr -d '\r\n')
+echo "        DEBUG: init response headers ↓"
+sed 's/^/          /' "$init_headers"
+echo "        DEBUG: init body (first 400 chars): ${init_resp:0:400}"
+echo "        DEBUG: SESSION_ID='${SESSION_ID}' (empty = stateless mcp-handler, fallback below)"
 rm -f "$init_headers"
 if echo "$init_resp" | grep -q '"protocolVersion"'; then
   pass "R-6 authenticated initialize returned protocolVersion"
@@ -285,6 +289,10 @@ call_resp=$(curl -s \
   -H "authorization: Bearer ${SMOKE_BEARER}" \
   -H "Mcp-Session-Id: ${SESSION_ID}" \
   -d "$call_body")
+echo "        DEBUG: tools/call body (first 800 chars): ${call_resp:0:800}"
+echo "        DEBUG: container logs tail (last 30 lines):"
+docker logs --tail 30 "$CONTAINER_NAME" 2>&1 | sed 's/^/          /'
+echo "        DEBUG: mock fixture pid=$mock_pid alive? $(kill -0 "$mock_pid" 2>/dev/null && echo yes || echo no)"
 if echo "$call_resp" | grep -q "smoke-canned-reply"; then
   pass "R-7 tools/call returned mock canned reply"
 else
