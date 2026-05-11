@@ -178,6 +178,38 @@ describe("openai chat — max_tokens clamp", () => {
     await handler({ model: VALID_MODEL, messages: VALID_MESSAGES, max_tokens: 999 });
     expect(observedMaxTokens).toBe(100);
   });
+
+  it("P2: injects ceiling as default when caller omits max_tokens", async () => {
+    let observedMaxTokens: number | undefined;
+    server.use(
+      http.post(ENDPOINT, async ({ request }) => {
+        const body = (await request.json()) as { max_tokens?: number };
+        observedMaxTokens = body.max_tokens;
+        return sseResponse([
+          JSON.stringify({ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }),
+        ]);
+      }),
+    );
+    const { handler } = makeHandler();
+    await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    expect(observedMaxTokens).toBe(4096);
+  });
+
+  it("P3: omitted max_tokens uses injected ceiling, not the 4096 default", async () => {
+    let observedMaxTokens: number | undefined;
+    server.use(
+      http.post(ENDPOINT, async ({ request }) => {
+        const body = (await request.json()) as { max_tokens?: number };
+        observedMaxTokens = body.max_tokens;
+        return sseResponse([
+          JSON.stringify({ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }),
+        ]);
+      }),
+    );
+    const { handler } = makeHandler({ maxOutputTokensCeiling: 256 });
+    await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    expect(observedMaxTokens).toBe(256);
+  });
 });
 
 // =========================================================================

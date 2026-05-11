@@ -41,7 +41,9 @@ export interface OpenAIChatConfig {
   apiKey: string;
   /** OpenAI base URL override (Azure / vLLM / Ollama / AI Gateway / mock). */
   baseURL?: string;
-  /** Server-side ceiling for `max_tokens`. Default 4096. */
+  /** Ceiling for `max_tokens`. Default 4096. Doubles as the default
+   *  injected when the caller omits `max_tokens` — every upstream call
+   *  carries an explicit cap. */
   maxOutputTokensCeiling?: number;
   /** Per-request OpenAI timeout in ms. Default 60_000. */
   requestTimeoutMs?: number;
@@ -70,13 +72,14 @@ export function makeOpenAIChatSchema(ceiling: number) {
         )
         .min(1),
       temperature: z.number().min(0).max(2).optional(),
-      // Silently clamp to the configured ceiling.
+      // Default to ceiling when omitted; clamp to ceiling when provided.
+      // Result is always a positive integer ≤ ceiling.
       max_tokens: z
         .number()
         .int()
         .positive()
         .optional()
-        .transform((n) => (n === undefined ? undefined : Math.min(n, ceiling))),
+        .transform((n) => (n === undefined ? ceiling : Math.min(n, ceiling))),
       top_p: z.number().min(0).max(1).optional(),
       stop: z.union([z.string(), z.array(z.string())]).optional(),
     })
@@ -265,7 +268,7 @@ async function runOnce(
         model: input.model,
         messages: input.messages,
         ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
-        ...(input.max_tokens !== undefined ? { max_tokens: input.max_tokens } : {}),
+        max_tokens: input.max_tokens,
         ...(input.top_p !== undefined ? { top_p: input.top_p } : {}),
         ...(input.stop !== undefined ? { stop: input.stop } : {}),
         stream: true,

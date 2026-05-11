@@ -6,17 +6,35 @@ the project adheres to [Semantic Versioning](https://semver.org/) once
 v1.0 ships. Pre-v1.0 minor bumps may include breaking changes — read
 this file before upgrading.
 
-## [0.3.1] — 2026-05-11
+## [0.4.0] — 2026-05-12
+
+### Changed (BREAKING — caller-visible)
+
+- **`max_tokens` defaults to the configured ceiling** when the caller
+  omits it. Previously, an omitted `max_tokens` was passed through
+  unset, leaving the upstream's own default in effect (often unbounded
+  or model-specific). Every upstream call now carries an explicit cap
+  — `maxOutputTokensCeiling` (default 4096; override with
+  `AI_RELAY_MAX_OUTPUT_TOKENS` / `--max-tokens` / SDK
+  `OpenAIChatConfig.maxOutputTokensCeiling`). Callers who relied on the
+  upstream's larger default should set `max_tokens` explicitly. The
+  clamp behaviour for caller-supplied values is unchanged.
+- **`temperature` / `top_p` remain pass-through** — when the caller
+  omits them they are not sent to the upstream, so the upstream's own
+  defaults apply unchanged. Documented as a deliberate non-symmetry
+  with `max_tokens`: the latter is a cost-defense boundary, the former
+  two are sampling knobs whose OpenAI defaults (1.0 / 1.0) are stable.
 
 ### Fixed
 
-- **`npx` invocation in docs** — 0.3.0 advertised `npx ai-relay-mcp`, which
-  fails with `E404 'ai-relay-mcp@*' is not in this registry` because npx
-  resolves the first argument as a package name. The bin lives inside the
-  `ai-relay` package, so the correct form is
-  `npx --package=ai-relay ai-relay-mcp`. Root `README.md`, `README.ko.md`,
-  the SDK `README.md`, and the bin's `--help` USAGE block now show the
-  correct command and `claude_desktop_config.json` arg array.
+- **`npx` invocation in docs** — 0.3.0 advertised `npx ai-relay-mcp`,
+  which fails with `E404 'ai-relay-mcp@*' is not in this registry`
+  because npx resolves the first argument as a package name. The bin
+  lives inside `ai-relay`, so the correct form is
+  `npx --package=ai-relay ai-relay-mcp`. Root `README.md`,
+  `README.ko.md`, the SDK `README.md`, and the bin's `--help` USAGE
+  block now show the correct command and `claude_desktop_config.json`
+  arg array. (Originally staged as 0.3.1; rolled into 0.4.0.)
 
 ## [0.3.0] — 2026-05-11
 

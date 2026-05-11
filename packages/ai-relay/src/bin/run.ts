@@ -9,7 +9,7 @@ import { parseEnvFile } from "./env-file.js";
 import { type ParsedInvocation, parseArgv, UsageError } from "./parse.js";
 import { type AnyTool, resolveTool } from "./registry.js";
 
-export const VERSION = "0.3.1";
+export const VERSION = "0.4.0";
 
 const USAGE = `Usage: ai-relay <provider> <tool> -m <model> [flags] [input]
 
