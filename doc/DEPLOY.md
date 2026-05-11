@@ -2,10 +2,13 @@
 
 > 한국어: [DEPLOY.ko.md](./DEPLOY.ko.md)
 
-This runbook covers v1 deployment via two paths: **Vercel** (managed
-serverless) and **Docker** (self-hosted container). Architecture decisions
-live in [`ARCHITECTURE.md`](./ARCHITECTURE.md) (§6 `vercel.json`, §7 env
-vars, §9 security). Coding rules live in [`../CLAUDE.md`](../CLAUDE.md).
+This runbook covers v1 deployment. The canonical surface is **Docker**
+(`ghcr.io/ragingwind/ai-relay`, multi-arch amd64/arm64). A
+**Vercel** recipe lives in [`examples/vercel/`](../examples/vercel/) and is
+community-supported (no first-party CI for that path). Architecture
+decisions live in [`ARCHITECTURE.md`](./ARCHITECTURE.md) (§5 directory,
+§6 container release, §7 env vars, §9 security). Coding rules live in
+[`../CLAUDE.md`](../CLAUDE.md).
 
 ---
 
@@ -16,16 +19,19 @@ Universal:
 - A 32+ byte bearer token: `openssl rand -hex 32`.
 - The repository cloned: `git clone https://github.com/ragingwind/mcp-ai-relay.git`.
 
-For **Vercel**:
-- A Vercel account (Pro plan recommended — needed for `maxDuration: 300`).
-- Two OpenAI projects (Production + Preview), each with its own key. The
-  two-project split isolates a leaked Preview key from production billing.
-- Vercel CLI: `npm i -g vercel` (or `pnpm dlx vercel ...`).
-
-For **Docker**:
+For **Docker** (canonical):
 - Docker `^24` (Compose v2 plugin included by default).
 - A reverse proxy / load balancer if exposing publicly (handles TLS and
   long-running request timeouts).
+- For multi-key isolation: distinct OpenAI projects per environment
+  (Production + Staging) with hard usage caps configured per §2.
+
+For **Vercel** (community-supported, see [`examples/vercel/README.md`](../examples/vercel/README.md)):
+- A Vercel account (Pro plan recommended — needed for `maxDuration: 300`).
+- A separate Next.js project that consumes `ai-relay` from npm — this
+  repository is no longer a Next.js app.
+- Two OpenAI projects (Production + Preview), each with its own key.
+- Vercel CLI: `npm i -g vercel` (or `pnpm dlx vercel ...`).
 
 For **Embed via SDK** (host the capability inside your own MCP server —
 Cloudflare Workers, raw stdio for Claude Desktop, Hono, Express, etc.):
@@ -40,8 +46,8 @@ Cloudflare Workers, raw stdio for Claude Desktop, Hono, Express, etc.):
 ## 2. OpenAI hard usage cap (MANDATORY)
 
 **v1 has no rate limiting or budget counters.** The OpenAI hard usage cap is
-the only line of defense if `RELAY_AUTH_TOKEN` leaks. Set it before exposing
-the relay anywhere — Vercel or Docker.
+the only line of defense if `AI_RELAY_AUTH_TOKEN` leaks. Set it before exposing
+the relay anywhere — Docker or Vercel.
 
 For each OpenAI project key:
 
@@ -55,249 +61,180 @@ The v2 plan to add per-relay rate limiting is in
 
 ---
 
-## 3. Vercel deployment
+## 3. Docker (canonical)
 
-### 3.1 Link the project
+The canonical artifact is the multi-arch Docker image
+`ghcr.io/ragingwind/ai-relay` (amd64 + arm64), built and pushed by
+[`.github/workflows/release-app.yml`](../.github/workflows/release-app.yml)
+on every `v*` tag.
 
-```bash
-vercel link
-```
+The image is a `node:20-alpine` runtime (digest-pinned for supply-chain
+stability) running the Hono server as a non-root user (UID 1001) with a
+Node `fetch` HEALTHCHECK against `/healthz`.
 
-Pick **Create new project** the first time, or select the existing project
-on subsequent runs. `vercel link` writes `.vercel/project.json` — verify
-`.vercel/` is gitignored.
+> **Timeouts are the operator's responsibility.** Configure your reverse
+> proxy / load balancer to allow long-running requests; 300 s is a
+> reasonable starting value (matching the Vercel function ceiling for
+> parity).
 
-### 3.2 Confirm runtime configuration
+### 3.1 First-time ghcr setup (maintainer, one-time)
 
-`vercel.json` already pins:
+After cloning a fork or forking the workflow into a new repo:
 
-```json
-{
-  "regions": ["iad1"],
-  "functions": { "app/api/**/route.ts": { "maxDuration": 300 } }
-}
-```
+1. **Settings → Actions → General → Workflow permissions**: select
+   "Read and write permissions" + "Allow GitHub Actions to create and
+   approve pull requests".
+2. Cut the first tag — e.g.: `git tag v0.2.0-rc.0 && git push --tags`.
+3. The `release-app` workflow runs; verify in **Actions → release-app**.
+4. **Settings → Packages → ai-relay** appears once the first push lands;
+   change visibility to **Public** if you want anonymous `docker pull`.
+   Default is Private (org members only).
 
-Node version is selected via `engines.node` in `package.json`
-(`>=20.0.0 <21.0.0`). The route also exports `runtime = "nodejs"` and
-`maxDuration = 300` for defense in depth.
-
-After deploying, verify in the Vercel dashboard:
-- **Settings → General → Node.js Version**: 20.x
-- **Functions** tab: `app/api/[transport]/route.ts` listed as `nodejs20.x`
-  with `Max Duration: 300s`
-- **Settings → Functions → Region**: iad1
-- **Settings → Fluid Compute**: enabled (Pro plan default)
-
-### 3.3 Register Sensitive env vars
-
-Register every key for **both** Production and Preview environments. Use
-the **Sensitive** flag — Vercel will not let you re-read the value after
-creation (audit-friendly; rotation is by replacement).
-
-| Key | Required | Production | Preview | Sensitive |
-|---|---|---|---|---|
-| `AI_RELAY_API_KEY` | ✅ | upstream key #1 | upstream key #2 (different project) | ✅ |
-| `RELAY_AUTH_TOKEN` | ✅ | 32+ random bytes | 32+ random bytes (different) | ✅ |
-| `AI_RELAY_BASE_URL` | ❌ | (omit for OpenAI default) | same or staging URL | — |
-| `AI_RELAY_MAX_OUTPUT_TOKENS` | ❌ | `4096` | `4096` | — |
-| `AI_RELAY_REQUEST_TIMEOUT_MS` | ❌ | `60000` | `60000` | — |
+### 3.2 Compose (recommended)
 
 ```bash
-# Production secrets
-vercel env add AI_RELAY_API_KEY production --sensitive
-vercel env add RELAY_AUTH_TOKEN production --sensitive
-
-# Preview secrets (different OpenAI key + different relay token)
-vercel env add AI_RELAY_API_KEY preview --sensitive
-vercel env add RELAY_AUTH_TOKEN preview --sensitive
-
-# Optional plain env vars
-vercel env add AI_RELAY_BASE_URL production    # only if pointing at non-OpenAI upstream
-vercel env add AI_RELAY_MAX_OUTPUT_TOKENS production
-vercel env add AI_RELAY_REQUEST_TIMEOUT_MS production
+cp .env.example .env.local         # then fill AI_RELAY_API_KEY + AI_RELAY_AUTH_TOKEN
+docker compose up -d               # pulls ghcr image and starts
 ```
 
-Verify with `vercel env ls`. The Sensitive flag shows as `Encrypted`.
+The relay is reachable at `http://localhost:8787/api/mcp` and a liveness
+endpoint at `http://localhost:8787/healthz`. `restart: unless-stopped`
+keeps it running across reboots.
 
-> **Preview deployments are auto-locked.** Vercel applies Vercel
-> Authentication to Preview by default — only your team members can reach
-> the preview URL. Verify in **Settings → Deployment Protection**.
-
-### 3.4 First deployment
-
-```bash
-vercel deploy --prod
-```
-
-Vercel returns the production URL: `https://<your-project>.vercel.app`.
-The MCP endpoint is at `/api/mcp`.
-
-### 3.5 Verification checklist
-
-- [ ] `vercel deploy --prod` completes without error.
-- [ ] Vercel dashboard → **Functions** shows `app/api/[transport]/route.ts`
-      listed as `nodejs20.x`, region `iad1`, `Max Duration: 300s`.
-- [ ] Smoke test:
-      ```bash
-      curl -i https://<your-project>.vercel.app/api/mcp \
-        -H "Authorization: Bearer $RELAY_AUTH_TOKEN" -X GET
-      ```
-      Expect HTTP 4xx (mcp-handler responds to bare GET) — anything other
-      than 5xx proves the function reached. A 401 means the bearer is wrong.
-- [ ] Run the manual verification from
-      [`QA-MCP-INSPECTOR.md`](./QA-MCP-INSPECTOR.md). For prod, §E covers
-      the re-verification subset (C1, C2, C5).
-- [ ] OpenAI dashboard → **Usage** shows the call recorded against the
-      prod project (proves the right key is wired).
-
----
-
-## 4. Docker (self-hosted)
-
-The relay ships a multi-stage `Dockerfile` at the repo root that produces a
-~70 MB runtime image based on `node:20-alpine` (digest-pinned for
-supply-chain stability), running as a non-root user (UID 1001) with a Node
-`fetch` HEALTHCHECK against `/api/mcp`.
-
-> **Pinned base image.** `Dockerfile` references `node:20-alpine@sha256:...`
-> rather than the floating `node:20-alpine` tag. Bump the digest deliberately
-> (`docker pull node:20-alpine && docker inspect node:20-alpine --format
-> '{{.RepoDigests}}'`) — do not unpin.
-
-> **Timeouts are the operator's responsibility.** There is no analogue of
-> Vercel's 300 s function timeout. Configure your reverse proxy / load
-> balancer to allow long-running requests; 300 s is a reasonable starting
-> value for parity with Vercel.
-
-### 4.1 Compose (recommended)
-
-```bash
-cp .env.example .env.local         # then fill AI_RELAY_API_KEY + RELAY_AUTH_TOKEN
-docker compose up -d               # builds on first run, then starts
-```
-
-The relay is reachable at `http://localhost:8787/api/mcp`. `restart:
-unless-stopped` keeps it running across reboots.
-
-**Host port override.** The default `8787` matches Cloudflare Wrangler's
-remote-MCP examples and avoids the typical Next.js / Node `:3000` collision.
-To use a different port:
+**Host port override:**
 
 ```bash
 HOST_PORT=9876 docker compose up -d   # → http://localhost:9876/api/mcp
 ```
 
-The container always listens on `3000` internally — only the host-side
-mapping changes.
+The container always listens on `8787` internally (matches `AI_RELAY_PORT`
+default) — only the host-side mapping changes.
+
+**Local-build path (development):**
+
+```bash
+docker compose -f compose.dev.yml up --build
+```
+
+Uses `app/Dockerfile` from the repo. Useful when iterating on the server
+locally; production users should pull the published image instead.
 
 **Lifecycle:**
 
 ```bash
-docker compose up -d                  # build + start (detached)
+docker compose up -d                  # pull + start (detached)
 docker compose ps                     # status + health
 docker compose logs -f relay          # follow logs
 docker compose down                   # stop and remove
-docker compose up -d --build          # rebuild after Dockerfile / source changes
+docker compose pull && docker compose up -d   # update to latest tag
 ```
 
 `compose.yml` reads `.env.local` via `env_file:` and forwards every key
 into the container's process env. Same env contract as raw `docker run`
-(§4.2).
+(§3.3).
 
 > Compose does NOT replace the production runbook. For multi-host or
 > managed orchestration use Kubernetes / a PaaS — `compose.yml` is for
 > single-host self-hosting and local development.
 
-### 4.2 Raw `docker run`
-
-Build:
+### 3.3 Raw `docker run`
 
 ```bash
-docker build -t mcp-ai-relay .
-```
-
-Final image size should be under 200 MB. The build does not need real
-secrets — `pnpm build` injects build-time dummy values.
-
-Run with inline `-e` flags:
-
-```bash
-docker run --rm -p 8787:3000 \
+docker run --rm -p 8787:8787 \
   -e AI_RELAY_API_KEY=sk-... \
-  -e RELAY_AUTH_TOKEN=$(openssl rand -hex 32) \
+  -e AI_RELAY_AUTH_TOKEN=$(openssl rand -hex 32) \
   -e AI_RELAY_BASE_URL=https://your-gateway.example.com/v1 \
   -e AI_RELAY_MAX_OUTPUT_TOKENS=4096 \
   -e AI_RELAY_REQUEST_TIMEOUT_MS=60000 \
-  mcp-ai-relay
+  ghcr.io/ragingwind/ai-relay:latest
 ```
 
 Or with `--env-file`:
 
 ```bash
-docker run --rm -p 8787:3000 --env-file .env.production mcp-ai-relay
+docker run --rm -p 8787:8787 --env-file .env.production ghcr.io/ragingwind/ai-relay:latest
 ```
 
-`AI_RELAY_API_KEY` and `RELAY_AUTH_TOKEN` are required. `AI_RELAY_BASE_URL`,
-`AI_RELAY_MAX_OUTPUT_TOKENS`, and `AI_RELAY_REQUEST_TIMEOUT_MS` are optional (see
+`AI_RELAY_API_KEY` and `AI_RELAY_AUTH_TOKEN` are required. The remaining
+keys (including `AI_RELAY_PORT`) are optional — see
 [`ARCHITECTURE.md` §7](./ARCHITECTURE.md#7-environment-variables) for
-defaults).
+defaults.
 
-### 4.3 Verification checklist
+### 3.4 Verification checklist
 
-HEALTHCHECK:
+- [ ] `docker compose up -d` (or `docker run`) starts without error.
+- [ ] HEALTHCHECK reports healthy within ~30 s of start:
+      ```bash
+      docker inspect --format '{{.State.Health.Status}}' <container>
+      ```
+      The check hits `GET /healthz` and exits 0 on `200 ok`.
+- [ ] Liveness:
+      ```bash
+      curl -i http://localhost:8787/healthz
+      ```
+      Expect `HTTP/1.1 200 OK` + body `ok`.
+- [ ] Bearer required:
+      ```bash
+      curl -i http://localhost:8787/api/mcp
+      ```
+      Expect `HTTP/1.1 401` + `WWW-Authenticate: Bearer ...` header.
+- [ ] Tool list:
+      ```bash
+      pnpm inspect --url=http://localhost:8787/api/mcp --method=tools/list
+      ```
+      Expect a single tool named `openai_chat`. For the full pre-PR
+      procedure (C1–C6) see [`QA-MCP-INSPECTOR.md`](./QA-MCP-INSPECTOR.md).
+- [ ] OpenAI dashboard → **Usage** shows the call recorded against the
+      prod project (proves the right key is wired).
+
+### 3.5 Confirm no secrets baked in
 
 ```bash
-docker inspect --format '{{.State.Health.Status}}' <container>
+docker history ghcr.io/ragingwind/ai-relay:latest --no-trunc \
+  | grep -iE 'AI_RELAY_API_KEY|AI_RELAY_AUTH_TOKEN'
 ```
 
-Expect `healthy` within ~30 s of start. The check sends `GET /api/mcp` and
-treats any non-5xx response as healthy (mcp-handler returns 405 to a bare
-GET, which proves the function reached).
+Should return nothing — the image build never reads real credentials, and
+runtime values are injected via `env_file` / `-e` only.
 
-Smoke test (with the container running on default port 8787):
+---
 
-```bash
-pnpm inspect --url=http://localhost:8787/api/mcp --method=tools/list
-```
+## 4. Vercel (community-supported)
 
-Expect a single tool named `openai_chat`. For the full pre-PR procedure
-(C1–C6) see [`QA-MCP-INSPECTOR.md`](./QA-MCP-INSPECTOR.md).
+This repository is no longer a Next.js app. To deploy on Vercel, build a
+thin Next.js project that consumes `ai-relay` from npm. The recipe lives
+at [`examples/vercel/README.md`](../examples/vercel/README.md) — copy the
+`vercel.json` from that directory into your own project and follow the
+template route handler shown in the README.
 
-### 4.4 Confirm no secrets baked in
-
-```bash
-docker history mcp-ai-relay --no-trunc | grep -iE 'AI_RELAY_API_KEY|RELAY_AUTH_TOKEN'
-```
-
-Only `pnpm build`'s dummy values (`build-dummy`, 32×`x`) should appear —
-never real credentials.
+The Vercel target is no longer covered by this repository's CI or release
+pipeline. Treat it as a reference deployment.
 
 ---
 
 ## 5. Operations
 
-### 5.1 Rotate `RELAY_AUTH_TOKEN`
+### 5.1 Rotate `AI_RELAY_AUTH_TOKEN`
 
 Run when:
 - A token is suspected leaked.
 - A team member with token access leaves.
 - Routine rotation (recommended every 90 days).
 
-**Vercel:**
-
-```bash
-openssl rand -hex 32                          # generate
-vercel env rm RELAY_AUTH_TOKEN production     # replace
-vercel env add RELAY_AUTH_TOKEN production --sensitive
-vercel deploy --prod                          # apply
-```
-
 **Docker:**
 
 1. Generate a new token: `openssl rand -hex 32`.
 2. Update `.env.local` (or your secrets manager).
 3. `docker compose up -d --force-recreate` (or restart the container).
+
+**Vercel (community recipe):**
+
+```bash
+openssl rand -hex 32                              # generate
+vercel env rm AI_RELAY_AUTH_TOKEN production      # replace
+vercel env add AI_RELAY_AUTH_TOKEN production --sensitive
+vercel deploy --prod                              # apply
+```
 
 After either path:
 
@@ -319,20 +256,22 @@ Identical to §5.1 (replace + redeploy / restart). Additionally:
    valid).
 2. **Confirm the hard usage cap** is still set on the new key (caps are
    per-key).
-3. Re-run the verification checklist (§3.5 for Vercel, §4.3 for Docker).
+3. Re-run the verification checklist (§3.4 for Docker; the Vercel recipe
+   has its own checklist in `examples/vercel/README.md`).
 
 ### 5.3 Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `pnpm build` fails locally with `Invalid environment: ...` | Module-level `parseEnv(process.env)` evaluation; missing env at build time | The `package.json` `build` script injects dummy values for `AI_RELAY_API_KEY` and `RELAY_AUTH_TOKEN`. Restore it or set real env in `.env.local`. |
-| Vercel build fails with the same env error | Same as above, in CI/Vercel | Vercel injects real env vars at build time when registered — verify with `vercel env ls`. |
-| `curl` returns 401 + `WWW-Authenticate: Bearer` | Bearer token absent or wrong | Compare your client header to the value of `RELAY_AUTH_TOKEN`. |
+| `pnpm dev` fails with `Invalid environment: ...` | `parseEnv(process.env)` rejected the env; missing or short auth token | Confirm `.env.local` has both `AI_RELAY_API_KEY` and a 32-byte `AI_RELAY_AUTH_TOKEN`. |
+| Container exits immediately on start | Same as above, inside the image | `docker compose logs relay` — the env error names the failing key (no value echo). |
+| `curl` returns 401 + `WWW-Authenticate: Bearer` | Bearer token absent or wrong | Compare your client header to the value of `AI_RELAY_AUTH_TOKEN`. |
 | `tools/call` returns `isError: true, code: "auth"` | Wrong `AI_RELAY_API_KEY` | Verify the key in the OpenAI dashboard. |
 | `tools/call` returns `code: "rate_limited"` with `retryAfter` | OpenAI rate limit | Wait `retryAfter` seconds. v2 will add per-relay rate limiting. |
-| Function exceeds `maxDuration` (504 / function timeout) | Long generation, or stuck on a tool call | Verify `vercel.json` and route-level `maxDuration: 300` are both set. The Pro plan ceiling is 300 s. |
-| Docker container reports `unhealthy` | HEALTHCHECK can't reach `/api/mcp` | Inspect logs: `docker compose logs relay`. The most common cause is a missing required env var — startup fails fast. |
-| OpenAI dashboard shows usage on the wrong project | `AI_RELAY_API_KEY` from Preview leaked into Production (or vice versa) | Re-run §3.3 carefully — keys MUST come from different OpenAI projects. |
+| Long requests cut off by upstream proxy (504) | Reverse proxy timeout below the model's response time | Raise the proxy's read/idle timeout — 300 s matches the parity target with Vercel's max function duration. |
+| Docker container reports `unhealthy` | HEALTHCHECK can't reach `/healthz` | Inspect logs: `docker compose logs relay`. The most common cause is a missing required env var — startup fails fast. |
+| `docker pull` returns `denied` | ghcr package is private and you are unauthenticated | Either run `docker login ghcr.io -u <user>` with a PAT (`read:packages` scope), or have the maintainer flip Settings → Packages → ai-relay → Public. |
+| OpenAI dashboard shows usage on the wrong project | `AI_RELAY_API_KEY` from one environment leaked into another | Use distinct OpenAI project keys per environment (Production / Staging / Preview). |
 
 ---
 

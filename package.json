@@ -9,37 +9,40 @@
     "node": ">=20.0.0 <21.0.0"
   },
   "scripts": {
-    "predev": "node scripts/check-dev-env.mjs && pnpm --filter ai-relay build",
-    "dev": "next dev",
-    "predev:vercel": "node scripts/check-dev-env.mjs && pnpm --filter ai-relay build",
-    "dev:vercel": "vercel dev",
-    "prebuild": "pnpm --filter ai-relay build",
-    "build": "AI_RELAY_API_KEY=\"${AI_RELAY_API_KEY:-build-dummy}\" RELAY_AUTH_TOKEN=\"${RELAY_AUTH_TOKEN:-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}\" next build",
+    "dev": "node scripts/check-dev-env.mjs && pnpm -r --filter ai-relay build && pnpm -F app dev",
+    "build": "pnpm -r build",
     "build:sdk": "pnpm --filter ai-relay build",
-    "pretypecheck": "pnpm --filter ai-relay build",
-    "typecheck": "tsc --noEmit && pnpm --filter ai-relay exec tsc --noEmit",
-    "pretest": "pnpm --filter ai-relay build",
+    "start": "pnpm -F app start",
+    "typecheck": "pnpm --filter ai-relay build && tsc --noEmit && pnpm --filter ai-relay exec tsc --noEmit && pnpm -F app exec tsc --noEmit",
     "lint": "biome check .",
-    "test": "vitest run --passWithNoTests",
+    "test": "pnpm --filter ai-relay build && vitest run --passWithNoTests",
     "test:unit": "pnpm --filter ai-relay test",
-    "test:integration": "vitest run --project integration --passWithNoTests",
+    "test:integration": "pnpm --filter ai-relay build && vitest run --project integration --passWithNoTests",
     "verify": "node scripts/verify.mjs",
     "inspect": "node scripts/mcp-inspect.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.29.0",
-    "ai-relay": "workspace:*",
-    "mcp-handler": "^1.1.0",
-    "next": "^16.2.4",
-    "openai": "^6.37.0",
-    "zod": "^4.4.3"
+    "ai-relay": "workspace:*"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.14",
     "@types/node": "^25.6.0",
-    "@types/react": "19.2.14",
     "msw": "^2.14.3",
     "typescript": "^6.0.3",
     "vitest": "^2.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "next": "npm:empty-npm-package@1.0.0",
+      "react": "npm:empty-npm-package@1.0.0",
+      "react-dom": "npm:empty-npm-package@1.0.0",
+      "@modelcontextprotocol/sdk": "1.26.0"
+    },
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "react": "*",
+        "react-dom": "*"
+      }
+    }
   }
 }

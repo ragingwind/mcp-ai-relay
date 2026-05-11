@@ -1,14 +1,14 @@
 #!/usr/bin/env node
-// Pre-flight for `pnpm dev`. lib/env.ts re-validates at module load, but that
-// only fires on the first request — by then `next dev` has already booted and
-// the failure surfaces as a buried request-stack trace. Catching it here keeps
-// the failure mode visible before the server starts.
+// Pre-flight for `pnpm dev`. app/src/env.ts re-validates at module load, but
+// that only fires when the server boots — by then `pnpm -F app dev` may have
+// printed an unrelated stack trace. Catching it here keeps the failure mode
+// visible before the server starts.
 
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const ENV_PATH = resolve(process.cwd(), ".env.local");
-const REQUIRED = ["RELAY_AUTH_TOKEN"];
+const REQUIRED = ["AI_RELAY_AUTH_TOKEN"];
 
 function fail(lines) {
   for (const line of lines) console.error(line);
@@ -21,7 +21,7 @@ if (!existsSync(ENV_PATH)) {
     "[mcp-ai-relay] .env.local is missing.",
     "",
     "  cp .env.example .env.local",
-    "  # then set RELAY_AUTH_TOKEN (required) and AI_RELAY_API_KEY (optional)",
+    "  # then set AI_RELAY_AUTH_TOKEN (required) and AI_RELAY_API_KEY (optional)",
     "  # token: openssl rand -hex 32",
     "",
   ]);
@@ -56,15 +56,15 @@ if (missing.length > 0) {
     "  Edit .env.local and set:",
     ...missing.map((k) => `    ${k}=...`),
     "",
-    "  Generate RELAY_AUTH_TOKEN if needed:  openssl rand -hex 32",
+    "  Generate AI_RELAY_AUTH_TOKEN if needed:  openssl rand -hex 32",
     "",
   ]);
 }
 
-if (Buffer.byteLength(dotenv.RELAY_AUTH_TOKEN, "utf8") < 32) {
+if (Buffer.byteLength(dotenv.AI_RELAY_AUTH_TOKEN, "utf8") < 32) {
   fail([
     "",
-    "[mcp-ai-relay] RELAY_AUTH_TOKEN must be at least 32 bytes.",
+    "[mcp-ai-relay] AI_RELAY_AUTH_TOKEN must be at least 32 bytes.",
     "  Regenerate:  openssl rand -hex 32",
     "",
   ]);

@@ -13,7 +13,8 @@ working in this repository. **It overrides the global rules at `~/.claude/CLAUDE
 ## 1. One-line summary
 
 A relay server that exposes OpenAI Chat Completions as an MCP (Model Context Protocol) tool —
-deployed on Vercel, Next.js App Router, Bearer authentication, single tool `openai_chat` in v1.
+shipped as a Hono HTTP server packaged as a multi-arch Docker image
+(`ghcr.io/ragingwind/ai-relay`), Bearer authentication, single tool `openai_chat` in v1.
 
 Full architecture: [`doc/ARCHITECTURE.md`](./doc/ARCHITECTURE.md)
 
@@ -21,8 +22,8 @@ Full architecture: [`doc/ARCHITECTURE.md`](./doc/ARCHITECTURE.md)
 
 ## 2. Tech stack (summary)
 
-- Next.js 15+ App Router, Node.js 20.x, Vercel Pro / region `iad1` / Fluid Compute
-- `mcp-handler@^1.1` + `@modelcontextprotocol/sdk@^1.26` + `zod@^3` + `openai@^6`
+- Hono `^4` HTTP server + `@hono/node-server` adapter, Node.js 20.x, packaged as multi-arch container (amd64/arm64)
+- `mcp-handler@^1.1` + `@modelcontextprotocol/sdk@^1.26` + `zod@^4` + `openai@^6`
 - TypeScript strict (NodeNext ESM, `verbatimModuleSyntax: true`)
 - pnpm `^9` (pinned via the `packageManager` field)
 - Biome `^2` (lint + format)
@@ -37,15 +38,14 @@ Details: [`doc/ARCHITECTURE.md` §6](./doc/ARCHITECTURE.md#6-tech-stack-confirme
 > The `/dev` and `/qa` pipelines read this section to determine verification commands. Do not hardcode.
 
 ```yaml
-build:    pnpm build         # next build (includes typecheck)
-typecheck: pnpm typecheck    # tsc --noEmit
+build:    pnpm build         # pnpm -r build (SDK + app)
+typecheck: pnpm typecheck    # tsc --noEmit across SDK + app
 lint:     pnpm lint          # biome check .
 test:     pnpm test          # vitest run
-test:unit: pnpm test:unit    # vitest run tests/unit
-test:integration: pnpm test:integration  # vitest run tests/integration
-dev:      pnpm dev           # next dev (port 3000)
-dev:vercel: pnpm dev:vercel  # vercel dev (for verifying Vercel runtime parity)
-verify:   pnpm verify        # smoke C1/C2/C5 against a running dev server
+test:unit: pnpm test:unit    # vitest run packages/ai-relay/tests/unit
+test:integration: pnpm test:integration  # vitest run --project integration
+dev:      pnpm dev           # Hono dev server (port 8787)
+verify:   pnpm verify        # smoke against a running dev server
 inspect:  pnpm inspect       # ad-hoc tools/call via MCP Inspector CLI (see doc/QA-MCP-INSPECTOR.md)
 ```
 
@@ -63,7 +63,7 @@ The following items extend or override the global `core.md`.
 
 ### Absolutely forbidden
 - **Never log OpenAI/MCP response bodies via `console`/logs/error messages** — only metadata (model, token counts, latency, status) is allowed.
-- Never expose `AI_RELAY_API_KEY` or `RELAY_AUTH_TOKEN` in plain text in code/tests/docs/commits.
+- Never expose `AI_RELAY_API_KEY` or `AI_RELAY_AUTH_TOKEN` in plain text in code/tests/docs/commits.
 - Never use `===` to compare bearer tokens — always use `timingSafeEqual` from `node:crypto`.
 - Never add features outside v1 scope (Responses API, OAuth, rate limiting, external KV, observability — see [`doc/ARCHITECTURE.md` §11](./doc/ARCHITECTURE.md#11-future-work-v2-backlog)).
 - Never bump only one of `mcp-handler`/`@modelcontextprotocol/sdk` — the two packages are ABI-coupled (`^1.1`, `^1.26`); upgrade them as a pair.
@@ -80,11 +80,16 @@ The following items extend or override the global `core.md`.
 ## 5. Directory rules
 
 ```
-app/api/[transport]/route.ts        ← MCP entry point, single route. No other routes are allowed (v1)
-packages/ai-relay/src/                   ← framework-agnostic SDK (ai-relay)
-packages/ai-relay/src/<provider>/        ← provider-specific tools (today: openai/; future: anthropic/, gemini/, ai-gateway/)
-packages/ai-relay/tests/unit/            ← SDK unit tests; MSW mocks only the OpenAI HTTP boundary; the SDK module itself is real
-tests/integration/                  ← invokes the route handler directly with Web Request/Response
+app/                                ← private pnpm workspace package (Hono server)
+app/src/index.ts                    ← MCP entry point: GET /healthz + ALL /api/mcp (single route, v1)
+app/src/env.ts                      ← AI_RELAY_* env validation (zod, redacted errors)
+app/Dockerfile                      ← multi-stage container build (Node 20 alpine)
+packages/ai-relay/src/              ← framework-agnostic SDK (ai-relay)
+packages/ai-relay/src/<provider>/   ← provider-specific tools (today: openai/; future: anthropic/, gemini/, ai-gateway/)
+packages/ai-relay/tests/unit/       ← SDK unit tests; MSW mocks only the OpenAI HTTP boundary; the SDK module itself is real
+tests/integration/                  ← invokes the Hono `app.fetch(request)` adapter with Web Request/Response
+examples/vercel/                    ← community-supported Vercel deploy recipe (vercel.json + README)
+.github/workflows/release-app.yml   ← multi-arch buildx → ghcr push on `v*` tags
 doc/                                ← ARCHITECTURE.md (SSOT) plus future diagrams/ADRs
 ```
 
@@ -96,15 +101,16 @@ Full tree: [`doc/ARCHITECTURE.md` §5](./doc/ARCHITECTURE.md#5-directory-structu
 
 ## 6. Environment / secrets
 
-### Server (consumed by `lib/env.ts`)
+### Server (consumed by `app/src/env.ts`)
 
 | Key | Required | Source / default |
 |---|---|---|
-| `AI_RELAY_API_KEY` | ✅ | Vercel Sensitive env var (separate Production/Preview) |
-| `RELAY_AUTH_TOKEN` | ✅ | Vercel Sensitive env var (32+ random bytes) |
+| `AI_RELAY_API_KEY` | ✅ | Container env / orchestrator secret (separate Production/Preview keys) |
+| `AI_RELAY_AUTH_TOKEN` | ✅ | Container env / orchestrator secret (32+ random bytes) |
 | `AI_RELAY_BASE_URL` | ❌ | Plain env var. Default: SDK built-in. Override to point at Azure OpenAI, vLLM/Ollama, or a mock. |
 | `AI_RELAY_MAX_OUTPUT_TOKENS` | ❌ | Plain, default `4096` |
 | `AI_RELAY_REQUEST_TIMEOUT_MS` | ❌ | Plain, default `60000` |
+| `AI_RELAY_PORT` | ❌ | Plain, default `8787`; valid range 1..65535 |
 
 ### Script-only (consumed by `scripts/mcp-inspect.mjs` and `scripts/verify.mjs`)
 
@@ -112,7 +118,7 @@ These are NOT read by the server. They only set defaults for the verification sc
 
 | Key | Used by | Default | Override |
 |---|---|---|---|
-| `MCP_URL`      | `verify`, `inspect` | `http://localhost:3000/api/mcp` | `--url=` |
+| `MCP_URL`      | `verify`, `inspect` | `http://localhost:8787/api/mcp` | `--url=` |
 | `MCP_TOOL`     | `inspect` | `openai_chat` | `--tool=` |
 | `MCP_MODEL`    | `inspect` | `gpt-4o-mini` | `--model=` |
 | `MCP_MESSAGE`  | `inspect` | `ping` | `--message=` |
@@ -160,9 +166,10 @@ Principle: **mock only the OpenAI HTTP boundary** (MSW). Never mock the `openai`
 
 ## 9. Frequently forgotten items
 
-- Set `runtime: nodejs20.x` explicitly in `vercel.json` — falling back to Edge hits the 25s TTFB cap.
-- Export `export const maxDuration = 300` from the route file (do not depend on the dashboard default).
-- If you do not wrap the route handler with `withMcpAuth`, authentication is not applied — verify this on every new route.
+- Ensure `AI_RELAY_PORT` is set in production if the orchestrator binds to a non-default port — the Dockerfile defaults to 8787, but compose / k8s manifests should pass it explicitly to avoid surprises.
+- Run `pnpm -F app build` before `docker build` if you have local changes — the Dockerfile compiles inside its builder stage but failing to mirror that locally first means CI cache misses.
+- ghcr first-push setup: after the initial `release-app` run, the maintainer must (a) confirm Settings → Actions → Workflow permissions = "Read and write", and (b) Settings → Packages → ai-relay → Change visibility to public (default is private).
+- If you do not wrap the `/api/mcp` handler with `withMcpAuth`, authentication is not applied — verify this when modifying `app/src/index.ts`.
 - Register `AI_RELAY_API_KEY` with **distinct OpenAI project keys** for Production and Preview, and set a **hard usage cap** in the OpenAI dashboard for each project (v1's cost defense).
 - After `pnpm dev`, when connecting MCP Inspector you must enter the **Proxy Session Token** from the mcp-handler startup log.
 

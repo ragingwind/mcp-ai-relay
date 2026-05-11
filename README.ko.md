@@ -21,8 +21,8 @@ MCP host  ──►  ai-relay  ──►  OpenAI-compatible API
 |---|---|---|---|
 | `npx ai-relay` | 없음 (단발) | 없음 | 빠른 테스트, 스크립팅, CI 스모크 |
 | SDK (`ai-relay`) | 호출자 선택 (stdio / HTTP / Workers) | npm | 커스텀 MCP 서버에 임베드 |
-| App (`./app`, Next.js) | HTTP | `git clone` (Vercel/Node에 셀프 호스트) | 개인 또는 팀 HTTP 엔드포인트 |
-| Docker (로컬 빌드) | HTTP | 이 저장소에서 `docker build` | 지금 컨테이너 배포; 퍼블리시 이미지는 [#57](https://github.com/ragingwind/mcp-ai-relay/issues/57)에서 추가 예정 |
+| App (`./app`, Hono) | HTTP | `git clone` (Node에 셀프 호스트) | 개인 또는 팀 HTTP 엔드포인트 |
+| Docker (`ghcr.io/ragingwind/ai-relay`) | HTTP | `docker run` (빌드 없음) | 컨테이너 배포, 멀티 아키텍처 (amd64/arm64) |
 
 ---
 
@@ -44,23 +44,27 @@ echo "explain TLS in 2 sentences" \
 
 ---
 
-## 빠른 시작 — Docker (로컬 빌드)
+## 빠른 시작 — Docker
 
 ```bash
-docker build -t mcp-ai-relay .
-
 docker run -p 8787:8787 \
   -e AI_RELAY_API_KEY=sk-... \
-  -e RELAY_AUTH_TOKEN=$(openssl rand -hex 32) \
-  mcp-ai-relay
+  -e AI_RELAY_AUTH_TOKEN=$(openssl rand -hex 32) \
+  ghcr.io/ragingwind/ai-relay:latest
 ```
 
-이제 MCP 엔드포인트는 `http://localhost:8787/api/mcp`에서 제공됩니다.
-`docker compose up`을 선호한다면 저장소 루트의 `compose.yml`도 사용 가능합니다.
+MCP 엔드포인트는 `http://localhost:8787/api/mcp`에서, 라이브니스 체크는
+`http://localhost:8787/healthz`에서 제공됩니다. 이미지는 멀티 아키텍처
+(amd64 + arm64)이며, 모든 `v*` 태그에서
+[`release-app` 워크플로우](./.github/workflows/release-app.yml)가 자동
+빌드해 푸시합니다.
 
-> [#57](https://github.com/ragingwind/mcp-ai-relay/issues/57)이 머지되면
-> `docker build` 단계는 `ghcr.io/ragingwind/ai-relay`에서 pull로 대체됩니다.
-> 그때까지는 로컬 빌드로 진행하세요.
+`docker compose up`은 `compose.yml`(퍼블리시된 이미지를 pull)로 동작합니다.
+로컬 빌드 개발은 `compose.dev.yml`을 사용하세요:
+
+```bash
+docker compose -f compose.dev.yml up --build
+```
 
 ---
 
@@ -90,7 +94,8 @@ await server.connect(new StdioServerTransport());
 | `AI_RELAY_BASE_URL` | 업스트림 엔드포인트 오버라이드 | 아니오 | SDK 기본값 |
 | `AI_RELAY_MAX_OUTPUT_TOKENS` | 요청당 `max_tokens` ceiling | 아니오 | 4096 |
 | `AI_RELAY_REQUEST_TIMEOUT_MS` | 업스트림 HTTP 타임아웃 | 아니오 | 60000 |
-| `RELAY_AUTH_TOKEN` | `./app` 라우트용 HTTP bearer (서버 전용) | 예 (앱) | — |
+| `AI_RELAY_AUTH_TOKEN` | `./app` 라우트용 HTTP bearer (서버 전용) | 예 (앱) | — |
+| `AI_RELAY_PORT` | Hono 서버 바인드 포트 | 아니오 (앱) | 8787 |
 
 ---
 
@@ -106,6 +111,8 @@ await server.connect(new StdioServerTransport());
 | `OPENAI_BASE_URL` | `AI_RELAY_BASE_URL` | [#56](https://github.com/ragingwind/mcp-ai-relay/issues/56) |
 | `MAX_OUTPUT_TOKENS_CEILING` | `AI_RELAY_MAX_OUTPUT_TOKENS` | [#56](https://github.com/ragingwind/mcp-ai-relay/issues/56) |
 | `REQUEST_TIMEOUT_MS` | `AI_RELAY_REQUEST_TIMEOUT_MS` | [#56](https://github.com/ragingwind/mcp-ai-relay/issues/56) |
+| `RELAY_AUTH_TOKEN` | `AI_RELAY_AUTH_TOKEN` | [#57](https://github.com/ragingwind/mcp-ai-relay/issues/57) |
+| `docker build .` (Next.js, 포트 3000) | `docker run ghcr.io/ragingwind/ai-relay` (Hono, 포트 8787) | [#57](https://github.com/ragingwind/mcp-ai-relay/issues/57) |
 
 ---
 
@@ -142,12 +149,12 @@ OAuth 2.1, rate limiting, budget caps, observability)는
 
 ```bash
 pnpm install
-cp .env.example .env.local        # fill AI_RELAY_API_KEY + RELAY_AUTH_TOKEN
-pnpm dev                          # http://localhost:3000/api/mcp
+cp .env.example .env.local        # fill AI_RELAY_API_KEY + AI_RELAY_AUTH_TOKEN
+pnpm dev                          # http://localhost:8787/api/mcp
 pnpm test                         # vitest
 ```
 
-`.env.local`이 없거나 `RELAY_AUTH_TOKEN`이 비어 있으면 `pnpm dev`는 실행을
+`.env.local`이 없거나 `AI_RELAY_AUTH_TOKEN`이 비어 있으면 `pnpm dev`는 실행을
 거부하고 조치 안내를 출력합니다. 모든 빌드/테스트/검증 명령은
 [`CLAUDE.md` §3 — Verify Commands](./CLAUDE.md#3-verify-commands)에서
 확인할 수 있습니다.

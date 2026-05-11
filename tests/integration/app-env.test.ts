@@ -1,12 +1,12 @@
 // Integration tests for the relay app's HTTP-only env parser
-// (`app/lib/env.ts`).
+// (`app/src/env.ts`).
 
 import { describe, expect, it } from "vitest";
-import { type EnvSource, parseEnv } from "../../app/lib/env.js";
+import { type EnvSource, parseEnv } from "../../app/src/env.js";
 
 const minimalValid = {
   AI_RELAY_API_KEY: "test-ai-relay-api-key",
-  RELAY_AUTH_TOKEN: "x".repeat(32),
+  AI_RELAY_AUTH_TOKEN: "x".repeat(32),
 } satisfies EnvSource;
 
 const expectThrow = (input: EnvSource): Error => {
@@ -22,17 +22,17 @@ const expectThrow = (input: EnvSource): Error => {
 
 describe("parseEnv — required keys", () => {
   it("throws when AI_RELAY_API_KEY is missing", () => {
-    const err = expectThrow({ RELAY_AUTH_TOKEN: "x".repeat(32) });
+    const err = expectThrow({ AI_RELAY_AUTH_TOKEN: "x".repeat(32) });
     expect(err.message).toContain("AI_RELAY_API_KEY");
   });
 
-  it("throws when RELAY_AUTH_TOKEN is missing", () => {
+  it("throws when AI_RELAY_AUTH_TOKEN is missing", () => {
     const err = expectThrow({ AI_RELAY_API_KEY: "k" });
-    expect(err.message).toContain("RELAY_AUTH_TOKEN");
+    expect(err.message).toContain("AI_RELAY_AUTH_TOKEN");
   });
 
   it("rejects empty AI_RELAY_API_KEY with the required-key message", () => {
-    const err = expectThrow({ AI_RELAY_API_KEY: "", RELAY_AUTH_TOKEN: "x".repeat(32) });
+    const err = expectThrow({ AI_RELAY_API_KEY: "", AI_RELAY_AUTH_TOKEN: "x".repeat(32) });
     expect(err.message).toContain("AI_RELAY_API_KEY");
     expect(err.message).toContain("required");
   });
@@ -40,28 +40,28 @@ describe("parseEnv — required keys", () => {
   it("rejects legacy OPENAI_API_KEY (no fallback) — migration error is loud", () => {
     const err = expectThrow({
       OPENAI_API_KEY: "legacy",
-      RELAY_AUTH_TOKEN: "x".repeat(32),
+      AI_RELAY_AUTH_TOKEN: "x".repeat(32),
     });
     expect(err.message).toContain("AI_RELAY_API_KEY");
   });
 
-  it("throws when RELAY_AUTH_TOKEN is 31 bytes (one byte under the floor)", () => {
-    const err = expectThrow({ AI_RELAY_API_KEY: "k", RELAY_AUTH_TOKEN: "x".repeat(31) });
-    expect(err.message).toContain("RELAY_AUTH_TOKEN");
+  it("throws when AI_RELAY_AUTH_TOKEN is 31 bytes (one byte under the floor)", () => {
+    const err = expectThrow({ AI_RELAY_API_KEY: "k", AI_RELAY_AUTH_TOKEN: "x".repeat(31) });
+    expect(err.message).toContain("AI_RELAY_AUTH_TOKEN");
     expect(err.message).toContain("at least 32 bytes");
   });
 
-  it("accepts RELAY_AUTH_TOKEN at exactly 32 bytes", () => {
-    const env = parseEnv({ AI_RELAY_API_KEY: "k", RELAY_AUTH_TOKEN: "x".repeat(32) });
-    expect(env.RELAY_AUTH_TOKEN).toBe("x".repeat(32));
+  it("accepts AI_RELAY_AUTH_TOKEN at exactly 32 bytes", () => {
+    const env = parseEnv({ AI_RELAY_API_KEY: "k", AI_RELAY_AUTH_TOKEN: "x".repeat(32) });
+    expect(env.AI_RELAY_AUTH_TOKEN).toBe("x".repeat(32));
   });
 
-  it("measures RELAY_AUTH_TOKEN length in bytes, not characters", () => {
+  it("measures AI_RELAY_AUTH_TOKEN length in bytes, not characters", () => {
     const multibyte = "🦊".repeat(8);
     expect(multibyte.length).toBe(16);
     expect(Buffer.byteLength(multibyte, "utf8")).toBe(32);
-    const env = parseEnv({ AI_RELAY_API_KEY: "k", RELAY_AUTH_TOKEN: multibyte });
-    expect(env.RELAY_AUTH_TOKEN).toBe(multibyte);
+    const env = parseEnv({ AI_RELAY_API_KEY: "k", AI_RELAY_AUTH_TOKEN: multibyte });
+    expect(env.AI_RELAY_AUTH_TOKEN).toBe(multibyte);
   });
 });
 
@@ -106,6 +106,29 @@ describe("parseEnv — defaults", () => {
   it("defaults AI_RELAY_REQUEST_TIMEOUT_MS to 60000 when undefined", () => {
     const env = parseEnv(minimalValid);
     expect(env.AI_RELAY_REQUEST_TIMEOUT_MS).toBe(60_000);
+  });
+});
+
+describe("parseEnv — AI_RELAY_PORT", () => {
+  it("defaults AI_RELAY_PORT to 8787 when undefined", () => {
+    const env = parseEnv(minimalValid);
+    expect(env.AI_RELAY_PORT).toBe(8787);
+  });
+
+  it("coerces and accepts a numeric string AI_RELAY_PORT override", () => {
+    const env = parseEnv({ ...minimalValid, AI_RELAY_PORT: "9000" });
+    expect(env.AI_RELAY_PORT).toBe(9000);
+    expect(typeof env.AI_RELAY_PORT).toBe("number");
+  });
+
+  it("rejects AI_RELAY_PORT = 0 (out of range)", () => {
+    const err = expectThrow({ ...minimalValid, AI_RELAY_PORT: "0" });
+    expect(err.message).toContain("AI_RELAY_PORT");
+  });
+
+  it("rejects AI_RELAY_PORT = 70000 (out of range)", () => {
+    const err = expectThrow({ ...minimalValid, AI_RELAY_PORT: "70000" });
+    expect(err.message).toContain("AI_RELAY_PORT");
   });
 });
 
@@ -158,17 +181,17 @@ describe("parseEnv — secret redaction", () => {
     const err = expectThrow({
       AI_RELAY_API_KEY: sentinel,
     });
-    expect(err.message).toContain("RELAY_AUTH_TOKEN");
+    expect(err.message).toContain("AI_RELAY_AUTH_TOKEN");
     expect(err.message).toContain("Invalid environment");
   });
 
-  it("does not echo RELAY_AUTH_TOKEN value when it fails its own length check", () => {
+  it("does not echo AI_RELAY_AUTH_TOKEN value when it fails its own length check", () => {
     const sentinel = "short-secret-leak-marker-abcdef"; // 31 bytes
     expect(Buffer.byteLength(sentinel, "utf8")).toBe(31);
-    const err = expectThrow({ AI_RELAY_API_KEY: "k", RELAY_AUTH_TOKEN: sentinel });
+    const err = expectThrow({ AI_RELAY_API_KEY: "k", AI_RELAY_AUTH_TOKEN: sentinel });
     expect(err.message).not.toContain(sentinel);
     expect(err.message).not.toContain("short-secret-leak-marker");
-    expect(err.message).toContain("RELAY_AUTH_TOKEN");
+    expect(err.message).toContain("AI_RELAY_AUTH_TOKEN");
     expect(err.message).toContain("at least 32 bytes");
   });
 });

@@ -42,9 +42,9 @@ const dotenv = Object.fromEntries(
     }),
 );
 
-const TOKEN = dotenv.RELAY_AUTH_TOKEN;
+const TOKEN = dotenv.AI_RELAY_AUTH_TOKEN;
 if (!TOKEN) {
-  console.error("[verify] RELAY_AUTH_TOKEN missing in .env.local");
+  console.error("[verify] AI_RELAY_AUTH_TOKEN missing in .env.local");
   process.exit(1);
 }
 
@@ -52,7 +52,7 @@ const argUrl = process.argv.slice(2).find((a) => a.startsWith("--url="));
 const URL_BASE =
   (argUrl && argUrl.slice("--url=".length)) ||
   process.env.MCP_URL ||
-  "http://localhost:3000/api/mcp";
+  "http://localhost:8787/api/mcp";
 
 const MODEL = process.env.VERIFY_MODEL || "gpt-4o-mini";
 const ACCEPT_BOTH = "application/json, text/event-stream";
