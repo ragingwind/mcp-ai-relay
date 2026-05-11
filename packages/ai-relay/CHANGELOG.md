@@ -6,6 +6,27 @@ the project adheres to [Semantic Versioning](https://semver.org/) once
 v1.0 ships. Pre-v1.0 minor bumps may include breaking changes — read
 this file before upgrading.
 
+## [0.3.0] — 2026-05-11
+
+### Added
+
+- **`ai-relay-mcp` bin** — second binary that runs a long-lived stdio MCP
+  server exposing the `openai_chat` tool. Intended for direct registration
+  in MCP hosts (Claude Desktop, Claude Code, Cursor) via
+  `claude_desktop_config.json`. Accepts the same flags as `ai-relay`
+  (`--api-key`, `--base-url`, `--max-tokens`, `--timeout`, `--env`,
+  `--help`, `--version`) and reads the same `AI_RELAY_*` env vars.
+- **Integration tests for `ai-relay-mcp`** — six stdio JSON-RPC scenarios
+  sharing the existing `npm pack` + tarball-install fixture.
+- **`prepublishOnly` script** — runs `clean && build && test` so
+  `pnpm publish` cannot proceed unless the SDK + bins build cleanly and
+  all 132 tests pass.
+
+### Fixed
+
+- **`VERSION` constants** — both bins now report the package version
+  (`--version` previously printed the placeholder `0.1.0`).
+
 ## [0.2.0] — 2026-05-11
 
 First version actually published to npm. The `[0.1.0]` entry below was never

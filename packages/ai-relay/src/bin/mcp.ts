@@ -6,7 +6,7 @@ import { loadConfig } from "../config.js";
 import { registerOpenAIChat } from "../openai/index.js";
 import { parseEnvFile } from "./env-file.js";
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 
 const USAGE = `Usage: ai-relay-mcp [flags]
 
