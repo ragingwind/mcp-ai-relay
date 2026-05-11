@@ -15,6 +15,14 @@
     "./openai": {
       "types": "./dist/openai/index.d.ts",
       "import": "./dist/openai/index.js"
+    },
+    "./env": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js"
+    },
+    "./auth": {
+      "types": "./dist/auth.d.ts",
+      "import": "./dist/auth.js"
     }
   },
   "bin": {
