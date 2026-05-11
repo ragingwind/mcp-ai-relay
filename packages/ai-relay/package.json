@@ -18,7 +18,8 @@
     }
   },
   "bin": {
-    "ai-relay": "./dist/bin/cli.js"
+    "ai-relay": "./dist/bin/cli.js",
+    "ai-relay-mcp": "./dist/bin/mcp.js"
   },
   "files": [
     "dist",
@@ -26,10 +27,12 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').chmodSync('dist/bin/cli.js', 0o755)\"",
+    "build": "tsc -p tsconfig.build.json && node -e \"const fs=require('node:fs');fs.chmodSync('dist/bin/cli.js',0o755);fs.chmodSync('dist/bin/mcp.js',0o755);\"",
     "build:watch": "tsc -p tsconfig.build.json --watch",
     "test": "vitest run --passWithNoTests",
-    "clean": "rm -rf dist"
+    "test:bin": "vitest run tests/integration/bin-tarball.test.ts",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm run clean && pnpm run build && pnpm run test"
   },
   "dependencies": {
     "zod": "^4.4.3"

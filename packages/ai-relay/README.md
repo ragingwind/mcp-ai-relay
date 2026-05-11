@@ -34,15 +34,30 @@ compatibility — Bun, Deno, Cloudflare Workers with `nodejs_compat`).
 
 ---
 
-## CLI
+## CLIs
 
-`ai-relay <provider> <tool> -m <model> [flags] [input]` — one-shot
-invocation that prints the tool result as JSON on stdout.
+This package ships two bins:
+
+- **`ai-relay`** — one-shot invocation that prints a single tool result
+  as JSON to stdout, then exits. For scripts, CI smoke tests, and ad-hoc
+  use.
+- **`ai-relay-mcp`** — long-lived stdio MCP server that an MCP host
+  (Claude Desktop, Claude Code, Cursor, …) spawns as a child process.
+  Speaks the JSON-RPC MCP protocol over stdin/stdout. See
+  [Claude Desktop / Claude Code / Cursor — stdio MCP server](#claude-desktop--claude-code--cursor--stdio-mcp-server)
+  below.
+
+### One-shot CLI — `ai-relay`
+
+`ai-relay <provider> <tool> -m <model> [flags] [input]` — prints the
+tool result as JSON on stdout.
 
 ```bash
 ai-relay openai chat -m gpt-4o-mini "ping"
 ai-relay openai chat -m gpt-4o-mini -s "be terse" "explain TLS"
 ai-relay openai chat -m gpt-4o-mini '{"messages":[{"role":"user","content":"ping"}]}'
+ai-relay openai chat -m gpt-4o-mini --api-key sk-... "ping"
+ai-relay openai chat -m gpt-4o-mini --base-url https://my-azure.openai.azure.com/v1 "ping"
 ai-relay openai chat -m gpt-4o-mini --env ./prod.env "ping"
 echo '{"messages":[…]}' | ai-relay openai chat -m gpt-4o-mini
 ```
@@ -77,15 +92,33 @@ runtime/upstream error, `2` on a usage error.
 
 CLI flags > `--env` file > process env > built-in defaults.
 
-### Claude Desktop integration
+### Claude Desktop / Claude Code / Cursor — stdio MCP server
 
-The CLI is intentionally one-shot and does **not** speak the long-lived
-stdio MCP protocol. Wire Claude Desktop at the HTTP MCP endpoint of a
-deployed relay (Vercel / Cloudflare Workers / your own host) instead —
-the reference relay in this repo serves `/api/mcp`. See the
-[stdio example](https://github.com/ragingwind/mcp-ai-relay/tree/main/examples/stdio)
-for how to compose `registerOpenAIChat` into your own stdio MCP server
-when that is what you need.
+`ai-relay` (the one-shot bin) is intentionally not an MCP server. Use the
+second bin shipped in this package — `ai-relay-mcp` — when you need a
+long-lived stdio MCP server that an MCP host can spawn directly. It
+accepts the same configuration flags (`--api-key`, `--base-url`,
+`--max-tokens`, `--timeout`, `--env`) and reads the same `AI_RELAY_*`
+env vars.
+
+```json
+{
+  "mcpServers": {
+    "ai-relay": {
+      "command": "npx",
+      "args": ["-y", "ai-relay-mcp"],
+      "env": { "AI_RELAY_API_KEY": "sk-..." }
+    }
+  }
+}
+```
+
+Point at an OpenAI-compatible endpoint (Azure / vLLM / Ollama / AI
+Gateway) by adding `"AI_RELAY_BASE_URL"` to the `env` block, or by
+passing `--base-url <url>` in `args`.
+
+For HTTP/SSE MCP transport instead of stdio, deploy the reference Hono
+app in this repo (`/api/mcp` route) — see the project root README.
 
 ---
 

@@ -20,6 +20,7 @@ MCP host  ──►  ai-relay  ──►  OpenAI-compatible API
 | 표면 | 전송 | 설치 | 사용 시점 |
 |---|---|---|---|
 | `npx ai-relay` | 없음 (단발) | 없음 | 빠른 테스트, 스크립팅, CI 스모크 |
+| `npx ai-relay-mcp` | stdio MCP | 없음 | Claude Desktop / Claude Code / Cursor 직접 등록 |
 | SDK (`ai-relay`) | 호출자 선택 (stdio / HTTP / Workers) | npm | 커스텀 MCP 서버에 임베드 |
 | App (`./app`, Hono) | HTTP | `git clone` (Node에 셀프 호스트) | 개인 또는 팀 HTTP 엔드포인트 |
 | Docker (`ghcr.io/ragingwind/ai-relay`) | HTTP | `docker run` (빌드 없음) | 컨테이너 배포, 멀티 아키텍처 (amd64/arm64) |
@@ -36,11 +37,52 @@ AI_RELAY_API_KEY=sk-... npx ai-relay openai chat -m gpt-4o-mini \
 
 echo "explain TLS in 2 sentences" \
   | AI_RELAY_API_KEY=sk-... npx ai-relay openai chat -m gpt-4o-mini -s "be terse"
+
+# 환경변수 없이 플래그로 API 키 직접 전달:
+npx ai-relay openai chat --api-key sk-... -m gpt-4o-mini "ping"
+
+# Azure OpenAI / vLLM / Ollama / AI Gateway 등 OpenAI 호환 엔드포인트 지정:
+AI_RELAY_API_KEY=sk-... npx ai-relay openai chat \
+  --base-url https://my-azure.openai.azure.com/v1 \
+  -m gpt-4o-mini "ping"
 ```
 
 `-m/--model`은 필수입니다. 입력은 위치 인자이거나 stdin으로 파이프되며 (정확히
 하나 — XOR 관계). 평문 위치 인자는 `{messages:[…]}` 배열이 되고, JSON 리터럴
 (`{` / `[`)은 그대로 전달됩니다.
+
+---
+
+## 빠른 시작 — stdio MCP 서버 (`ai-relay-mcp`)
+
+Claude Desktop, Claude Code, Cursor 등 자식 프로세스를 spawn해 stdin/stdout으로
+JSON-RPC를 주고받는 MCP 호스트에 직접 등록할 때 사용합니다.
+
+```json
+{
+  "mcpServers": {
+    "ai-relay": {
+      "command": "npx",
+      "args": ["-y", "ai-relay-mcp"],
+      "env": { "AI_RELAY_API_KEY": "sk-..." }
+    }
+  }
+}
+```
+
+Azure OpenAI / vLLM / Ollama / AI Gateway 같은 OpenAI 호환 엔드포인트를
+가리키려면 `env` 블록에 `"AI_RELAY_BASE_URL"`을 추가:
+
+```json
+"env": {
+  "AI_RELAY_API_KEY": "sk-...",
+  "AI_RELAY_BASE_URL": "https://my-azure.openai.azure.com/v1"
+}
+```
+
+`ai-relay-mcp`는 one-shot CLI와 동일한 플래그(`--api-key`, `--base-url`,
+`--max-tokens`, `--timeout`, `--env <path>`)도 받습니다. 전체 목록은
+`npx ai-relay-mcp --help`.
 
 ---
 

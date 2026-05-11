@@ -34,6 +34,8 @@ Examples:
   ai-relay openai chat -m gpt-4o-mini "ping"
   ai-relay openai chat -m gpt-4o-mini -s "be terse" "explain TLS"
   ai-relay openai chat -m gpt-4o-mini '{"messages":[{"role":"user","content":"ping"}]}'
+  ai-relay openai chat -m gpt-4o-mini --api-key sk-... "ping"
+  ai-relay openai chat -m gpt-4o-mini --base-url https://my-azure.openai.azure.com/v1 "ping"
   echo '{"messages":[…]}' | ai-relay openai chat -m gpt-4o-mini
 `;
 

@@ -131,23 +131,39 @@ async function runBin(
 
 let scratchDir: string | null = null;
 let binPath: string;
+let mcpBinPath: string;
 let mock: MockServer;
 
 beforeAll(async () => {
-  for (const name of readdirSync(SDK_DIR)) {
-    if (name.endsWith(".tgz")) rmSync(join(SDK_DIR, name));
+  scratchDir = mkdtempSync(join(tmpdir(), "ai-relay-bin-"));
+  // --ignore-scripts: this test exercises the installed-tarball shape, not
+  // the prepublish lifecycle. Running scripts would recurse — `npm pack`
+  // invokes `prepublishOnly`, which invokes this test, which calls `npm
+  // pack` again.
+  // --pack-destination: keep the tarball out of SDK_DIR so concurrent
+  // `pnpm publish` flows don't race on the same path.
+  // Strip dry-run env that the outer process may have set (e.g. when this
+  // test runs inside `pnpm publish --dry-run` via prepublishOnly). Without
+  // this, the child `npm pack` inherits `npm_config_dry_run=true` and
+  // prints the tarball name without writing the file.
+  const packEnv: NodeJS.ProcessEnv = { ...process.env };
+  for (const k of Object.keys(packEnv)) {
+    if (k === "npm_config_dry_run" || k === "NPM_CONFIG_DRY_RUN") delete packEnv[k];
   }
-  execFileSync("npm", ["pack"], { cwd: SDK_DIR, stdio: "pipe" });
-  const tarballs = readdirSync(SDK_DIR).filter((f) => f.endsWith(".tgz"));
+  execFileSync("npm", ["pack", "--ignore-scripts", "--pack-destination", scratchDir], {
+    cwd: SDK_DIR,
+    stdio: "pipe",
+    env: packEnv,
+  });
+  const tarballs = readdirSync(scratchDir).filter((f) => f.endsWith(".tgz"));
   const firstTarball = tarballs[0];
   if (tarballs.length !== 1 || !firstTarball) {
     throw new Error(
       `Expected 1 tarball after npm pack, got ${tarballs.length}: ${tarballs.join(", ")}`,
     );
   }
-  const tarball = join(SDK_DIR, firstTarball);
+  const tarball = join(scratchDir, firstTarball);
 
-  scratchDir = mkdtempSync(join(tmpdir(), "ai-relay-bin-"));
   writeFileSync(
     join(scratchDir, "package.json"),
     JSON.stringify({ name: "bin-tarball-test", private: true, type: "module" }),
@@ -155,10 +171,15 @@ beforeAll(async () => {
   execFileSync("npm", ["install", "--no-audit", "--no-fund", tarball], {
     cwd: scratchDir,
     stdio: "pipe",
+    env: packEnv,
   });
   binPath = join(scratchDir, "node_modules", ".bin", "ai-relay");
   if (!existsSync(binPath)) {
     throw new Error(`bin not present at ${binPath} after install`);
+  }
+  mcpBinPath = join(scratchDir, "node_modules", ".bin", "ai-relay-mcp");
+  if (!existsSync(mcpBinPath)) {
+    throw new Error(`mcp bin not present at ${mcpBinPath} after install`);
   }
   rmSync(tarball);
 
@@ -230,5 +251,194 @@ describe("ai-relay bin — installed tarball", () => {
     const r = await runBin(["--version"]);
     expect(r.status).toBe(0);
     expect(r.stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+});
+
+interface JsonRpcResponse {
+  jsonrpc: "2.0";
+  id: number | string | null;
+  result?: unknown;
+  error?: { code: number; message: string };
+}
+
+interface McpSessionResult {
+  status: number | null;
+  responses: JsonRpcResponse[];
+  stderr: string;
+}
+
+async function runMcpSession(
+  requests: readonly object[],
+  opts: {
+    env?: Record<string, string | undefined>;
+    args?: readonly string[];
+    expectStartupFailure?: boolean;
+  } = {},
+): Promise<McpSessionResult> {
+  return new Promise((resolveProm, reject) => {
+    const spawnOpts: SpawnOptions = {
+      env: { ...process.env, ...opts.env } as NodeJS.ProcessEnv,
+      stdio: ["pipe", "pipe", "pipe"],
+    };
+    const child = spawn(mcpBinPath, [...(opts.args ?? [])], spawnOpts);
+    const responses: JsonRpcResponse[] = [];
+    let stdoutBuf = "";
+    let stderr = "";
+    let closed = false;
+
+    const expectedResponses = requests.filter(
+      (r) => "id" in r && (r as { id: unknown }).id !== undefined,
+    ).length;
+
+    const closeStdinSoon = () => {
+      if (closed) return;
+      closed = true;
+      child.stdin?.end();
+    };
+
+    child.stdout?.on("data", (c: Buffer) => {
+      stdoutBuf += c.toString("utf8");
+      for (;;) {
+        const nl = stdoutBuf.indexOf("\n");
+        if (nl === -1) break;
+        const line = stdoutBuf.slice(0, nl).trim();
+        stdoutBuf = stdoutBuf.slice(nl + 1);
+        if (!line) continue;
+        try {
+          responses.push(JSON.parse(line) as JsonRpcResponse);
+        } catch {
+          // ignore non-JSON lines (e.g., diagnostics)
+        }
+        if (responses.length >= expectedResponses) closeStdinSoon();
+      }
+    });
+    child.stderr?.on("data", (c: Buffer) => {
+      stderr += c.toString("utf8");
+    });
+    child.on("error", reject);
+    child.on("close", (code) => resolveProm({ status: code, responses, stderr }));
+
+    // Send all messages line-delimited.
+    for (const req of requests) {
+      child.stdin?.write(`${JSON.stringify(req)}\n`);
+    }
+    // If we expect a startup failure (no responses), close stdin immediately
+    // so the child can exit. Otherwise wait until expected responses arrive.
+    if (opts.expectStartupFailure || expectedResponses === 0) closeStdinSoon();
+  });
+}
+
+const initRequest = {
+  jsonrpc: "2.0" as const,
+  id: 1,
+  method: "initialize",
+  params: {
+    protocolVersion: "2024-11-05",
+    capabilities: {},
+    clientInfo: { name: "vitest", version: "0" },
+  },
+};
+const initializedNotification = {
+  jsonrpc: "2.0" as const,
+  method: "notifications/initialized",
+};
+
+describe("ai-relay-mcp bin — installed tarball, stdio JSON-RPC", () => {
+  it("P1: initialize handshake returns protocolVersion + serverInfo", async () => {
+    const r = await runMcpSession([initRequest, initializedNotification], {
+      env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
+    });
+    expect(r.status).toBe(0);
+    expect(r.responses).toHaveLength(1);
+    const initRes = r.responses[0]?.result as {
+      protocolVersion?: string;
+      serverInfo?: { name?: string; version?: string };
+      capabilities?: { tools?: unknown };
+    };
+    expect(initRes?.protocolVersion).toBe("2024-11-05");
+    expect(initRes?.serverInfo?.name).toBe("ai-relay");
+    expect(initRes?.capabilities?.tools).toBeDefined();
+  });
+
+  it("P2: tools/list returns openai_chat with input schema", async () => {
+    const r = await runMcpSession(
+      [initRequest, initializedNotification, { jsonrpc: "2.0", id: 2, method: "tools/list" }],
+      { env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL } },
+    );
+    expect(r.status).toBe(0);
+    expect(r.responses).toHaveLength(2);
+    const listRes = r.responses[1]?.result as {
+      tools?: Array<{ name: string; inputSchema?: { required?: string[] } }>;
+    };
+    expect(listRes?.tools).toHaveLength(1);
+    expect(listRes?.tools?.[0]?.name).toBe("openai_chat");
+    expect(listRes?.tools?.[0]?.inputSchema?.required).toEqual(
+      expect.arrayContaining(["model", "messages"]),
+    );
+  });
+
+  it("P3: tools/call openai_chat forwards messages and returns assistant text", async () => {
+    mock.requests.length = 0;
+    mock.setResponse(() => ({ status: 200, body: defaultSseBody("pong") }));
+
+    const r = await runMcpSession(
+      [
+        initRequest,
+        initializedNotification,
+        {
+          jsonrpc: "2.0",
+          id: 2,
+          method: "tools/call",
+          params: {
+            name: "openai_chat",
+            arguments: {
+              model: "gpt-4o-mini",
+              messages: [{ role: "user", content: "ping" }],
+            },
+          },
+        },
+      ],
+      { env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL } },
+    );
+    expect(r.status).toBe(0);
+    expect(mock.requests).toHaveLength(1);
+    expect(mock.requests[0]?.authorization).toBe("Bearer test-k");
+    expect(mock.requests[0]?.body).toMatchObject({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: "ping" }],
+    });
+    const callRes = r.responses[1]?.result as {
+      content?: Array<{ type: string; text: string }>;
+      structuredContent?: { model?: string };
+      isError?: boolean;
+    };
+    expect(callRes?.isError).toBe(false);
+    expect(callRes?.content?.[0]?.text).toBe("pong");
+    expect(callRes?.structuredContent?.model).toBe("gpt-4o-mini");
+  });
+
+  it("D1: missing AI_RELAY_API_KEY → exits 2 with stderr message; no upstream call", async () => {
+    mock.requests.length = 0;
+    const r = await runMcpSession([initRequest], {
+      env: { AI_RELAY_API_KEY: undefined, AI_RELAY_BASE_URL: mock.baseURL },
+      expectStartupFailure: true,
+    });
+    expect(r.status).toBe(2);
+    expect(r.stderr.length).toBeGreaterThan(0);
+    expect(mock.requests).toHaveLength(0);
+  });
+
+  it("N1: --version prints SDK version", async () => {
+    const r = await runMcpSession([], { args: ["--version"] });
+    expect(r.status).toBe(0);
+  });
+
+  it("D2: unknown flag exits 2", async () => {
+    const r = await runMcpSession([], {
+      args: ["--bogus"],
+      expectStartupFailure: true,
+    });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("unknown flag");
   });
 });

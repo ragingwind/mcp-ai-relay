@@ -21,6 +21,7 @@ MCP host  ──►  ai-relay  ──►  OpenAI-compatible API
 | Surface | Transport | Install | When |
 |---|---|---|---|
 | `npx ai-relay` | none (one-shot) | none | quick test, scripting, CI smoke |
+| `npx ai-relay-mcp` | stdio MCP | none | direct registration in Claude Desktop / Claude Code / Cursor |
 | SDK (`ai-relay`) | caller's choice (stdio / HTTP / Workers) | npm | embed in custom MCP server |
 | App (`./app`, Hono) | HTTP | `git clone` (self-host on Node) | personal or team HTTP endpoint |
 | Docker (`ghcr.io/ragingwind/ai-relay`) | HTTP | `docker run` (no build) | container deployment, multi-arch (amd64/arm64) |
@@ -37,11 +38,52 @@ AI_RELAY_API_KEY=sk-... npx ai-relay openai chat -m gpt-4o-mini \
 
 echo "explain TLS in 2 sentences" \
   | AI_RELAY_API_KEY=sk-... npx ai-relay openai chat -m gpt-4o-mini -s "be terse"
+
+# Inline key via flag (no env var):
+npx ai-relay openai chat --api-key sk-... -m gpt-4o-mini "ping"
+
+# Point at Azure OpenAI / vLLM / Ollama / AI Gateway (any OpenAI-compatible endpoint):
+AI_RELAY_API_KEY=sk-... npx ai-relay openai chat \
+  --base-url https://my-azure.openai.azure.com/v1 \
+  -m gpt-4o-mini "ping"
 ```
 
 `-m/--model` is mandatory. Input is either a positional argument or piped via
 stdin (exactly one — they are XOR). A plain-text positional becomes a
 `{messages:[…]}` array; a JSON literal (`{` / `[`) is passed verbatim.
+
+---
+
+## Quick start — stdio MCP server (`ai-relay-mcp`)
+
+For direct registration in Claude Desktop, Claude Code, Cursor, or any other
+MCP host that spawns a child process and speaks JSON-RPC over stdin/stdout:
+
+```json
+{
+  "mcpServers": {
+    "ai-relay": {
+      "command": "npx",
+      "args": ["-y", "ai-relay-mcp"],
+      "env": { "AI_RELAY_API_KEY": "sk-..." }
+    }
+  }
+}
+```
+
+Point at an OpenAI-compatible endpoint (Azure OpenAI / vLLM / Ollama / AI
+Gateway) by adding `"AI_RELAY_BASE_URL"` to the `env` block:
+
+```json
+"env": {
+  "AI_RELAY_API_KEY": "sk-...",
+  "AI_RELAY_BASE_URL": "https://my-azure.openai.azure.com/v1"
+}
+```
+
+`ai-relay-mcp` accepts the same flags as the one-shot CLI for ad-hoc
+overrides (`--api-key`, `--base-url`, `--max-tokens`, `--timeout`,
+`--env <path>`). Run `npx ai-relay-mcp --help` for the full list.
 
 ---
 
