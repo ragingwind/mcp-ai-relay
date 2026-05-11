@@ -12,7 +12,7 @@ for shell pipelines and quick experimentation. The
 ships a Vercel/Next.js HTTP MCP server built on this package; see its
 README for deployment paths.
 
-> **v0.1.0** ships only the OpenAI provider. Future provider subpaths
+> **v0.2.0** ships only the OpenAI provider. Future provider subpaths
 > (`./anthropic`, `./gemini`, `./ai-gateway`) will land under their own
 > directories without breaking existing `./openai` consumers.
 

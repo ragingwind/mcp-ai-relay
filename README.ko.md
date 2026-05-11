@@ -1,10 +1,10 @@
-# mcp-ai-relay
+# ai-relay
 
 > OpenAI Chat Completions (및 OpenAI 호환 업스트림)을 Model Context Protocol 도구로 노출하는 MCP 릴레이입니다.
 
 > English: [README.md](./README.md)
 
-`mcp-ai-relay`를 사용하면 모든 [MCP (Model Context Protocol)](https://modelcontextprotocol.io)
+`ai-relay`를 사용하면 모든 [MCP (Model Context Protocol)](https://modelcontextprotocol.io)
 호스트가 OpenAI 호환 채팅 모델을 도구처럼 호출할 수 있습니다. 동일한 SDK가
 서로 교체 가능한 4개의 사용 표면을 제공하므로 — 배포 방식에 맞는 것을 고르세요.
 
