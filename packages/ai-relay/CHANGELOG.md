@@ -6,6 +6,18 @@ the project adheres to [Semantic Versioning](https://semver.org/) once
 v1.0 ships. Pre-v1.0 minor bumps may include breaking changes — read
 this file before upgrading.
 
+## [0.3.1] — 2026-05-11
+
+### Fixed
+
+- **`npx` invocation in docs** — 0.3.0 advertised `npx ai-relay-mcp`, which
+  fails with `E404 'ai-relay-mcp@*' is not in this registry` because npx
+  resolves the first argument as a package name. The bin lives inside the
+  `ai-relay` package, so the correct form is
+  `npx --package=ai-relay ai-relay-mcp`. Root `README.md`, `README.ko.md`,
+  the SDK `README.md`, and the bin's `--help` USAGE block now show the
+  correct command and `claude_desktop_config.json` arg array.
+
 ## [0.3.0] — 2026-05-11
 
 ### Added

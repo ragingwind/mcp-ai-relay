@@ -6,7 +6,7 @@ import { loadConfig } from "../config.js";
 import { registerOpenAIChat } from "../openai/index.js";
 import { parseEnvFile } from "./env-file.js";
 
-const VERSION = "0.3.0";
+const VERSION = "0.3.1";
 
 const USAGE = `Usage: ai-relay-mcp [flags]
 
@@ -28,7 +28,7 @@ Example claude_desktop_config.json:
     "mcpServers": {
       "ai-relay": {
         "command": "npx",
-        "args": ["-y", "ai-relay-mcp"],
+        "args": ["-y", "--package=ai-relay", "ai-relay-mcp"],
         "env": { "AI_RELAY_API_KEY": "sk-..." }
       }
     }

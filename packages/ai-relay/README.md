@@ -106,7 +106,7 @@ env vars.
   "mcpServers": {
     "ai-relay": {
       "command": "npx",
-      "args": ["-y", "ai-relay-mcp"],
+      "args": ["-y", "--package=ai-relay", "ai-relay-mcp"],
       "env": { "AI_RELAY_API_KEY": "sk-..." }
     }
   }

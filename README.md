@@ -21,7 +21,7 @@ MCP host  ──►  ai-relay  ──►  OpenAI-compatible API
 | Surface | Transport | Install | When |
 |---|---|---|---|
 | `npx ai-relay` | none (one-shot) | none | quick test, scripting, CI smoke |
-| `npx ai-relay-mcp` | stdio MCP | none | direct registration in Claude Desktop / Claude Code / Cursor |
+| `npx --package=ai-relay ai-relay-mcp` | stdio MCP | none | direct registration in Claude Desktop / Claude Code / Cursor |
 | SDK (`ai-relay`) | caller's choice (stdio / HTTP / Workers) | npm | embed in custom MCP server |
 | App (`./app`, Hono) | HTTP | `git clone` (self-host on Node) | personal or team HTTP endpoint |
 | Docker (`ghcr.io/ragingwind/ai-relay`) | HTTP | `docker run` (no build) | container deployment, multi-arch (amd64/arm64) |
@@ -64,7 +64,7 @@ MCP host that spawns a child process and speaks JSON-RPC over stdin/stdout:
   "mcpServers": {
     "ai-relay": {
       "command": "npx",
-      "args": ["-y", "ai-relay-mcp"],
+      "args": ["-y", "--package=ai-relay", "ai-relay-mcp"],
       "env": { "AI_RELAY_API_KEY": "sk-..." }
     }
   }
@@ -83,7 +83,7 @@ Gateway) by adding `"AI_RELAY_BASE_URL"` to the `env` block:
 
 `ai-relay-mcp` accepts the same flags as the one-shot CLI for ad-hoc
 overrides (`--api-key`, `--base-url`, `--max-tokens`, `--timeout`,
-`--env <path>`). Run `npx ai-relay-mcp --help` for the full list.
+`--env <path>`). Run `npx --package=ai-relay ai-relay-mcp --help` for the full list.
 
 ---
 
