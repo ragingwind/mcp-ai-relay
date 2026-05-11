@@ -29,6 +29,12 @@ shipped to the registry and exists for historical reference only.
   (`--openai-completion`) and the standalone `mcp-ai-relay` stdio bin
   alias have been removed.
 
+### Changed
+
+- `zod` runtime dep floor bumped `^4.3.6` → `^4.4.3` (#35). No API
+  change; ensures consumers pull a version with the latest validator
+  fixes.
+
 ### Removed
 
 - `OPENAI_*` env vars (replaced by `RelayConfig` per #60)

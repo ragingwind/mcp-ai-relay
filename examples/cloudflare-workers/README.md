@@ -14,6 +14,18 @@ registers the SDK's tool in `init()` and adds a bearer-token gate.
 > `OpenAIRelay extends McpAgent` and `serveSSE("/sse")` calls per
 > Cloudflare's latest docs.
 
+> **Note (zod cross-major in this example)**
+>
+> `ai-relay@0.2.0` ships `zod@^4`, but `agents@^0.0.50` (Cloudflare's
+> agent runtime) transitively pulls `@ai-sdk/*` which requires `zod@^3`.
+> pnpm resolves both versions side-by-side. The SDK's tool input schemas
+> stay on zod@4; the `agents` runtime uses its own zod@3 instance for
+> its internal types. There is no schema-instance crossing between them
+> (the `McpAgent` boundary serializes to MCP wire format), so the dual
+> resolution is functionally safe but unavoidable until Cloudflare's
+> stack adopts zod@4. Track upstream:
+> https://github.com/cloudflare/agents
+
 ## Run from this monorepo
 
 ```bash

@@ -118,7 +118,7 @@ await server.connect(new StdioServerTransport());
 
 ## 상태
 
-**v0.1.0** (npm SDK) / **v1 릴레이 앱** — 도구 1개 `openai_chat`,
+**v0.2.0** (npm SDK) / **v1 릴레이 앱** — 도구 1개 `openai_chat`,
 Bearer 토큰 인증, Streamable HTTP 트랜스포트. v2 백로그(Responses API,
 OAuth 2.1, rate limiting, budget caps, observability)는
 [`doc/ARCHITECTURE.ko.md` §11](./doc/ARCHITECTURE.ko.md#11-v2-백로그)에
