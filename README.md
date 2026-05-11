@@ -1,10 +1,10 @@
-# mcp-ai-relay
+# ai-relay
 
 > An MCP relay that exposes OpenAI Chat Completions (and any OpenAI-compatible upstream) as a Model Context Protocol tool.
 
 > 한국어: [README.ko.md](./README.ko.md)
 
-`mcp-ai-relay` lets any [MCP (Model Context Protocol)](https://modelcontextprotocol.io)
+`ai-relay` lets any [MCP (Model Context Protocol)](https://modelcontextprotocol.io)
 host call OpenAI-compatible chat models as if they were tools. The same SDK
 ships four interchangeable surfaces — pick the one that fits how you want to
 deploy.
@@ -119,7 +119,7 @@ Full runnable versions live in [`examples/stdio/`](./examples/stdio/),
 
 ## Status
 
-**v0.1.0** (npm SDK) / **v1 relay app** — single tool `openai_chat`,
+**v0.2.0** (npm SDK) / **v1 relay app** — single tool `openai_chat`,
 bearer token authentication, Streamable HTTP transport. The v2 backlog
 (Responses API, OAuth 2.1, rate limiting, budget caps, observability) is
 tracked in

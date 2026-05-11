@@ -20,4 +20,4 @@ new_sqlite_classes = ["OpenAIRelay"]
 # Secrets (set via `wrangler secret put AI_RELAY_API_KEY`):
 #   AI_RELAY_API_KEY        — required
 #   AI_RELAY_BASE_URL       — optional override
-#   RELAY_AUTH_TOKEN      — bearer token for the gate (32+ bytes)
+#   AI_RELAY_AUTH_TOKEN     — bearer token for the gate (32+ bytes)

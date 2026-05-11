@@ -6,7 +6,59 @@ the project adheres to [Semantic Versioning](https://semver.org/) once
 v1.0 ships. Pre-v1.0 minor bumps may include breaking changes — read
 this file before upgrading.
 
-## [0.1.0] — Unreleased
+## [0.2.0] — 2026-05-11
+
+First version actually published to npm. The `[0.1.0]` entry below was never
+shipped to the registry and exists for historical reference only.
+
+### Changed (BREAKING)
+
+- **Package name** — published as `ai-relay` (unscoped). The repo previously
+  drafted `@ragingwind/mcp-ai-relay` (#51) and `@ragingwind/ai-relay` (#54)
+  before settling on the unscoped form. Consumers install via
+  `npm install ai-relay`.
+  > _If npm rejected the unscoped name at publish time, the actual published
+  > name is `@ragingwind/ai-relay` — see `package.json` `name`._
+- **Config model (#60)** — single `RelayConfig` shape consumed via
+  `loadConfig()`. The 0.1.0-era `OPENAI_*` env schema (`OPENAI_API_KEY`,
+  `OPENAI_BASE_URL`, `OPENAI_MAX_OUTPUT_TOKENS_CEILING`,
+  `OPENAI_REQUEST_TIMEOUT_MS`) and the HTTP-only env schema have been
+  removed.
+- **CLI form (#61)** — one-shot `<provider> <tool>` form:
+  `npx ai-relay openai completion-chat`. The previous flag form
+  (`--openai-completion`) and the standalone `mcp-ai-relay` stdio bin
+  alias have been removed.
+
+### Changed
+
+- `zod` runtime dep floor bumped `^4.3.6` → `^4.4.3` (#35). No API
+  change; ensures consumers pull a version with the latest validator
+  fixes.
+
+### Removed
+
+- `OPENAI_*` env vars (replaced by `RelayConfig` per #60)
+- `mcp-ai-relay` stdio bin alias (collapsed into the single `ai-relay` bin per #61)
+
+### Tested against
+
+| Peer | Version |
+|---|---|
+| `@modelcontextprotocol/sdk` | `^1.26` |
+| `openai` | `^6` (currently `6.37.x`) |
+| `node` | `>=20.10` |
+
+### Migration from 0.1.0 (repo-only consumers)
+
+| Old | New |
+|---|---|
+| `npx mcp-ai-relay --openai-completion` | `npx ai-relay openai completion-chat` |
+| `OPENAI_API_KEY=…` env-only | `RelayConfig` via `loadConfig()` |
+| `import … from '@ragingwind/mcp-ai-relay'` | `import … from 'ai-relay'` |
+
+## [0.1.0] — Never released, superseded by 0.2.0
+
+> See 0.2.0 above for the actual first release.
 
 First public release. Extracts the durable, framework-agnostic core of
 [mcp-ai-relay](https://github.com/ragingwind/mcp-ai-relay) into a

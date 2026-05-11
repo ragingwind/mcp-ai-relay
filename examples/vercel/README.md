@@ -1,6 +1,6 @@
 # Vercel deployment (community-supported)
 
-The official deploy path for `mcp-ai-relay` is the Docker image at
+The official deploy path for `ai-relay` is the Docker image at
 `ghcr.io/ragingwind/ai-relay` (see `doc/DEPLOY.md`). This directory keeps
 a Vercel deployment recipe for users who prefer that surface.
 
@@ -15,7 +15,7 @@ shipped before it became framework-agnostic. The interesting parts:
 
 ## How to use it
 
-`mcp-ai-relay` is no longer a Next.js project, so you cannot deploy
+`ai-relay` is no longer a Next.js project, so you cannot deploy
 this repository directly to Vercel. Instead, build a thin Next.js
 project that consumes the published `ai-relay` SDK:
 

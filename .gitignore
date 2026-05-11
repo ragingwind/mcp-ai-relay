@@ -16,3 +16,9 @@ tsconfig.tsbuildinfo
 .claude/
 .vercel
 packages/*/dist
+
+# Wrangler local dev cache (Cloudflare Workers smoke tests)
+.wrangler/
+
+# Cloudflare Workers local dev secrets
+.dev.vars
