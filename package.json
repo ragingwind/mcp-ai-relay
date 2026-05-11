@@ -18,6 +18,7 @@
     "test": "pnpm --filter ai-relay build && vitest run --passWithNoTests",
     "test:unit": "pnpm --filter ai-relay test",
     "test:integration": "pnpm --filter ai-relay build && vitest run --project integration --passWithNoTests",
+    "examples:smoke": "pnpm --filter @example/stdio smoke && pnpm --filter @example/multi-upstream smoke && pnpm --filter @example/vercel smoke && pnpm --filter @example/cloudflare-workers smoke",
     "verify": "node --env-file-if-exists=.env.local scripts/verify.mjs",
     "inspect": "node --env-file-if-exists=.env.local scripts/mcp-inspect.mjs",
     "check-env": "node --env-file-if-exists=.env.local scripts/check-dev-env.mjs"

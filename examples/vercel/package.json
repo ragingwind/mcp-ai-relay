@@ -1,0 +1,13 @@
+{
+  "name": "@example/vercel",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Metadata smoke checks for the community-supported Vercel deployment recipe.",
+  "scripts": {
+    "smoke": "bash scripts/smoke.sh"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

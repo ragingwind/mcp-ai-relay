@@ -1,0 +1,44 @@
+name: Examples Smoke
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "examples/**"
+      - "packages/ai-relay/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/examples-smoke.yml"
+  push:
+    branches: [main]
+    paths:
+      - "examples/**"
+      - "packages/ai-relay/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/examples-smoke.yml"
+
+jobs:
+  examples-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build SDK
+        run: pnpm build:sdk
+
+      - name: Run example smoke checks
+        run: pnpm examples:smoke

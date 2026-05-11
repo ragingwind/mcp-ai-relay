@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Single-tool stdio MCP server for Claude Desktop direct registration.",
   "scripts": {
+    "smoke": "bash scripts/smoke.sh",
     "start": "tsx server.ts"
   },
   "dependencies": {

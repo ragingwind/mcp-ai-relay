@@ -21,6 +21,14 @@ URL="http://localhost:${PORT}/sse"
 DEV_VARS="${EXAMPLE_DIR}/.dev.vars"
 WRANGLER_LOG="$(mktemp -t cf-smoke-wrangler.XXXXXX)"
 WRANGLER_PID=""
+if command -v pnpm >/dev/null 2>&1; then
+  PNPM=(pnpm)
+elif command -v corepack >/dev/null 2>&1; then
+  PNPM=(corepack pnpm)
+else
+  echo "[smoke] FAIL: pnpm or corepack is required"
+  exit 1
+fi
 
 cleanup() {
   if [ -n "$WRANGLER_PID" ] && kill -0 "$WRANGLER_PID" 2>/dev/null; then
@@ -56,7 +64,7 @@ fi
 
 # 2. Boot wrangler dev in background.
 echo "[smoke] booting wrangler dev on port $PORT (log: $WRANGLER_LOG)"
-pnpm exec wrangler dev --port "$PORT" --ip 127.0.0.1 >"$WRANGLER_LOG" 2>&1 &
+"${PNPM[@]}" exec wrangler dev --port "$PORT" --ip 127.0.0.1 >"$WRANGLER_LOG" 2>&1 &
 WRANGLER_PID=$!
 
 # Poll for readiness up to ~60s.
