@@ -25,6 +25,7 @@ if (process.env.AI_RELAY_API_KEY) {
   registerOpenAIChat(server, {
     name: "openai_chat",
     apiKey: process.env.AI_RELAY_API_KEY,
+    ...(process.env.AI_RELAY_BASE_URL ? { baseURL: process.env.AI_RELAY_BASE_URL } : {}),
     description: "OpenAI Chat Completions — proper",
   });
   registeredCount++;

@@ -62,6 +62,21 @@ vercel deploy --prod
 Set `AI_RELAY_API_KEY` and `AI_RELAY_AUTH_TOKEN` as Vercel
 environment variables before the first deploy.
 
+## Verification
+
+Run the committed smoke test from the repo root:
+
+```bash
+bash examples/vercel/scripts/smoke.sh
+```
+
+It validates that `vercel.json` parses as JSON and that this README
+neither references dropped env-var or package names from the pre-SDK
+era nor drifts away from the current SDK surface (`ai-relay`,
+`ai-relay/openai`, `registerOpenAIChat`, `verifyBearer`, `loadConfig`).
+The exact dropped-name list lives in `scripts/smoke.sh`. Ends with
+`=== PASS ===`.
+
 ## Why this is community-supported
 
 The Vercel target is no longer covered by this repository's CI or

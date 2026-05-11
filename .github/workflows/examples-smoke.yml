@@ -1,0 +1,39 @@
+name: examples-smoke
+
+on:
+  pull_request:
+    paths:
+      - "examples/**"
+      - "packages/ai-relay/**"
+      - ".github/workflows/examples-smoke.yml"
+  push:
+    branches: [main]
+    paths:
+      - "examples/**"
+      - "packages/ai-relay/**"
+      - ".github/workflows/examples-smoke.yml"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SKIP_CF_SMOKE: "1"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build SDK
+        run: pnpm --filter ai-relay build
+
+      - name: Run examples smoke
+        run: pnpm examples:smoke

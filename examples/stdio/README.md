@@ -70,6 +70,19 @@ point `command`/`args` at the compiled file.
 Restart Claude Desktop. The `openai_chat` tool will appear in the
 tools selector.
 
+## Verification
+
+Run the committed smoke test from the repo root:
+
+```bash
+pnpm --filter @example/stdio smoke
+```
+
+It boots an inline mock OpenAI HTTP server, spawns `server.ts` over stdio
+with `AI_RELAY_BASE_URL` pointed at the mock, drives `initialize` →
+`tools/list` → `tools/call openai_chat`, and asserts a sentinel string
+round-trips through the relay. Ends with `=== PASS ===`.
+
 ## Configuration
 
 Environment variables read by `server.ts`:

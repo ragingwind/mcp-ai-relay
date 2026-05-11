@@ -20,7 +20,8 @@
     "test:integration": "pnpm --filter ai-relay build && vitest run --project integration --passWithNoTests",
     "verify": "node --env-file-if-exists=.env.local scripts/verify.mjs",
     "inspect": "node --env-file-if-exists=.env.local scripts/mcp-inspect.mjs",
-    "check-env": "node --env-file-if-exists=.env.local scripts/check-dev-env.mjs"
+    "check-env": "node --env-file-if-exists=.env.local scripts/check-dev-env.mjs",
+    "examples:smoke": "node scripts/examples-smoke.mjs"
   },
   "dependencies": {
     "ai-relay": "workspace:*"

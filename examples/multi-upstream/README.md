@@ -55,11 +55,27 @@ time. To prove isolation, switch the `LOCAL_LLM_BASE_URL` mid-test to
 something that always 503s and verify the `openai_chat` tool keeps
 working independently.
 
+## Verification
+
+Run the committed smoke test from the repo root:
+
+```bash
+pnpm --filter @example/multi-upstream smoke
+```
+
+It boots two inline mock OpenAI HTTP servers on distinct ephemeral ports
+(sentinel `from-upstream-A` and `from-upstream-B`), spawns `server.ts`
+wired to mock A via `AI_RELAY_BASE_URL` and to mock B via
+`LOCAL_LLM_BASE_URL`, and asserts that `tools/call openai_chat` and
+`tools/call local_llm` each round-trip the correct sentinel. Ends with
+`=== PASS ===`.
+
 ## Configuration
 
 | Var | Effect |
 |---|---|
 | `AI_RELAY_API_KEY` | Registers `openai_chat` against OpenAI proper |
+| `AI_RELAY_BASE_URL` | Optional base URL override for `openai_chat` |
 | `AZURE_OPENAI_KEY` + `AZURE_AI_RELAY_BASE_URL` | Registers `azure_chat` |
 | `LOCAL_LLM_BASE_URL` | Registers `local_llm` (default ceiling 8192) |
 | `LOCAL_LLM_KEY` | Optional auth for the local LLM endpoint |
