@@ -22,8 +22,7 @@ const REPO_ROOT = resolve(SDK_DIR, "..", "..");
 const ALLOWED_TOP_LEVEL = new Set(["package.json", "README.md", "LICENSE"]);
 const FORBIDDEN_PATTERNS = [
   /(^|\/)\.env(\..+)?$/,
-  /\.spec\.[jt]s$/,
-  /\.test\.[jt]s$/,
+  /\.(spec|test)\.[mc]?[jt]sx?$/,
   /\.tsbuildinfo$/,
   /(^|\/)node_modules(\/|$)/,
   /(^|\/)src(\/|$)/,

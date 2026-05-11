@@ -32,9 +32,10 @@ jobs:
         run: pnpm --filter ai-relay build
 
       - name: Pack SDK
+        working-directory: packages/ai-relay
         run: |
           mkdir -p /tmp/pack
-          pnpm pack --filter ai-relay --pack-destination /tmp/pack
+          pnpm pack --pack-destination /tmp/pack
           ls -la /tmp/pack
 
       - name: Install tarball into smoke fixture
@@ -68,9 +69,10 @@ jobs:
         run: pnpm --filter ai-relay build
 
       - name: Pack SDK
+        working-directory: packages/ai-relay
         run: |
           mkdir -p /tmp/pack
-          pnpm pack --filter ai-relay --pack-destination /tmp/pack
+          pnpm pack --pack-destination /tmp/pack
 
       - name: Install tarball into Bun smoke fixture
         working-directory: tests/runtime-fixtures/smoke-bun
@@ -105,9 +107,10 @@ jobs:
         run: pnpm --filter ai-relay build
 
       - name: Pack SDK
+        working-directory: packages/ai-relay
         run: |
           mkdir -p /tmp/pack
-          pnpm pack --filter ai-relay --pack-destination /tmp/pack
+          pnpm pack --pack-destination /tmp/pack
 
       - name: Install tarball into CJS fixture
         working-directory: tests/runtime-fixtures/cjs-require
