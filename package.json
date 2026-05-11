@@ -21,7 +21,9 @@
     "verify": "node --env-file-if-exists=.env.local scripts/verify.mjs",
     "inspect": "node --env-file-if-exists=.env.local scripts/mcp-inspect.mjs",
     "check-env": "node --env-file-if-exists=.env.local scripts/check-dev-env.mjs",
-    "examples:smoke": "node scripts/examples-smoke.mjs"
+    "check-readme-parity": "node scripts/check-readme-parity.mjs",
+    "examples:smoke": "node scripts/examples-smoke.mjs",
+    "test:runtime": "node scripts/test-runtime.mjs"
   },
   "dependencies": {
     "ai-relay": "workspace:*"
