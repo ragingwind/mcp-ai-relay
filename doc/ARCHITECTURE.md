@@ -3,9 +3,11 @@
 > 한국어: [ARCHITECTURE.ko.md](./ARCHITECTURE.ko.md)
 
 A relay server that exposes the OpenAI Chat Completions API as an MCP
-(Model Context Protocol) tool. Deployable on Vercel (managed serverless) or
-as a Docker container (self-hosted): when an MCP host such as Claude Code
-calls in, this server calls OpenAI and returns the response back to the host.
+(Model Context Protocol) tool. Shipped as a multi-arch Docker image
+(`ghcr.io/ragingwind/ai-relay`, amd64+arm64) built on a minimal Hono HTTP
+server. A community-supported Vercel recipe lives in `examples/vercel/`.
+When an MCP host such as Claude Code calls in, this server calls OpenAI
+and returns the response back to the host.
 
 This document is the single source of truth (SSOT) for v1 architecture.
 For background research, tradeoffs, and alternatives considered, see the
@@ -17,11 +19,11 @@ sources in the [Reference index](#reference-index).
 
 | # | Decision | Rationale (summary) |
 |---|---|---|
-| D1 | **Next.js 15+ App Router** with a single route | Matches Vercel's official `mcp-handler` template layout and OAuth metadata route examples |
+| D1 | **Hono `^4` + `@hono/node-server`** with a single `/api/mcp` route + `/healthz` liveness | Web-Request native, ~30 KB runtime, plays directly with `mcp-handler`'s `(Request) => Promise<Response>` signature without a Next.js dependency |
 | D2 | **OpenAI Chat Completions API only** (`/v1/chat/completions`) | Most ubiquitous and stable; Responses API, embeddings, and image tools belong to v2 |
 | D3 | **Bearer shared-secret auth** (`withMcpAuth`) | Assumes single-user / small-scale use. OAuth 2.1 belongs to v2 |
 | D4 | **Simple architecture** — no observability, rate limiting, or external KV | Observability comes later; rate limiting and budget caps belong to v2 |
-| D5 | **Node.js 20.x + Fluid Compute, region `iad1`** | The official runtime for mcp-handler. Edge is excluded due to the 25s TTFB cap and compatibility issues |
+| D5 | **Node.js 20.x + multi-arch Docker** (`ghcr.io/ragingwind/ai-relay`, amd64+arm64) | Self-hosted; portable across cloud + on-prem. Vercel target moved to `examples/vercel/` (community-supported) |
 | D6 | **Streamable HTTP transport only** (SSE disabled) | Stateless. Avoids Redis dependency |
 | D7 | **OpenAI streams are accumulated server-side and returned as a single `CallToolResult`** | MCP `tools/call` returns a single result; there is no token-level streaming channel |
 
@@ -31,27 +33,31 @@ sources in the [Reference index](#reference-index).
 
 ```
 ┌──────────────────────┐                ┌─────────────────────────────┐                 ┌───────────────────┐
-│  MCP Host            │  Streamable    │  Relay  (Node 20.x)         │  HTTPS/SSE      │  OpenAI API       │
-│  (Claude Code, etc.) │  HTTP + Bearer │  Vercel Function or Docker  │  stream:true    │  /v1/chat/        │
-│                      │ ─────────────► │  /api/[transport]/route.ts  │ ─────────────► │  completions      │
-│                      │                │   ├─ withMcpAuth(bearer)    │                 │                   │
-│                      │ ◄───────────── │   ├─ mcp-handler            │ ◄───────────── │                   │
-│                      │  CallToolResult│   │   └─ openai_chat    │  delta chunks   │                   │
-└──────────────────────┘                │   └─ accumulate stream      │                 └───────────────────┘
-                                        │       → single text content │
+│  MCP Host            │  Streamable    │  Relay  (Node 20.x, Hono)   │  HTTPS/SSE      │  OpenAI API       │
+│  (Claude Code, etc.) │  HTTP + Bearer │  ghcr.io/ragingwind/ai-relay│  stream:true    │  /v1/chat/        │
+│                      │ ─────────────► │  app/src/index.ts           │ ─────────────► │  completions      │
+│                      │                │   ├─ GET /healthz → 200 ok  │                 │                   │
+│                      │                │   ├─ ALL /api/mcp           │                 │                   │
+│                      │                │   │   ├─ withMcpAuth(bearer)│                 │                   │
+│                      │ ◄───────────── │   │   ├─ mcp-handler        │ ◄───────────── │                   │
+│                      │  CallToolResult│   │   │   └─ openai_chat    │  delta chunks   │                   │
+└──────────────────────┘                │   │   └─ accumulate stream  │                 └───────────────────┘
+                                        │   │       → single text     │
+                                        │   port: AI_RELAY_PORT       │
+                                        │         (default 8787)      │
                                         └─────────────────────────────┘
                                                      │
                                                      ▼
                                           AI_RELAY_API_KEY
-                                          RELAY_AUTH_TOKEN
+                                          AI_RELAY_AUTH_TOKEN
 ```
 
 ---
 
 ## 3. Request flow (happy path)
 
-1. The MCP host sends `Authorization: Bearer <RELAY_AUTH_TOKEN>` plus a `tools/call` JSON-RPC message via `POST /api/mcp`.
-2. `withMcpAuth` compares the header token to the `RELAY_AUTH_TOKEN` env var in constant time (timing-safe).
+1. The MCP host sends `Authorization: Bearer <AI_RELAY_AUTH_TOKEN>` plus a `tools/call` JSON-RPC message via `POST /api/mcp`.
+2. `withMcpAuth` compares the header token to the `AI_RELAY_AUTH_TOKEN` env var in constant time (timing-safe).
 3. `mcp-handler` parses the JSON-RPC and invokes the `openai_chat` tool handler.
 4. The tool handler validates input with zod → applies the server policy `max_tokens` ceiling → calls the `openai` SDK's `chat.completions.create({ stream: true, ... })` (with an `AbortController` attached).
 5. The upstream stream is accumulated as an async iterator (`for await (const chunk of stream)`).
@@ -67,7 +73,7 @@ sources in the [Reference index](#reference-index).
 
 ### Cancellation / disconnect
 - On MCP `notifications/cancelled` → `AbortController.abort()` → the OpenAI request terminates (token billing stops).
-- If the HTTP client disconnects, Next.js aborts `request.signal` → the same path propagates.
+- If the HTTP client disconnects, the underlying Node HTTP server aborts `request.signal` (forwarded by Hono via `c.req.raw`) → the same path propagates.
 
 ### Error mapping
 | Upstream | Response |
@@ -122,17 +128,19 @@ Invokes OpenAI Chat Completions once and returns the accumulated text.
 ## 5. Directory structure
 
 ```
-mcp-ai-relay/                              # repo root — Next.js relay app
-├── app/
-│   └── api/
-│       └── [transport]/
-│           └── route.ts                # MCP entry — imports the SDK package
+mcp-ai-relay/                              # repo root — pnpm workspace orchestrator
+├── app/                                # private workspace package — Hono HTTP server
+│   ├── src/
+│   │   ├── index.ts                    # MCP entry — Hono app: GET /healthz + ALL /api/mcp
+│   │   └── env.ts                      # AI_RELAY_* env validation (zod, redacted errors)
+│   ├── package.json                    # private; deps: hono, @hono/node-server, mcp-handler, ai-relay (workspace:*)
+│   ├── tsconfig.json
+│   └── Dockerfile                      # multi-stage; alpine; pnpm deploy --prod for runtime tree
 ├── packages/
-│   └── sdk/                            # ai-relay (publishable)
+│   └── ai-relay/                       # publishable SDK
 │       ├── src/
 │       │   ├── index.ts                # public re-exports (auth)
 │       │   ├── auth.ts                 # verifyBearer (portable, no node:crypto)
-│       │   ├── env.ts                  # parseEnv (opt-in subpath)
 │       │   └── openai/
 │       │       ├── index.ts            # provider re-exports
 │       │       ├── chat.ts             # registerOpenAIChat + makeOpenAIChatHandler
@@ -149,27 +157,33 @@ mcp-ai-relay/                              # repo root — Next.js relay app
 │       ├── tsconfig.build.json         # emits dist/ for npm consumers
 │       └── vitest.config.ts
 ├── tests/
-│   ├── setup-env.ts                    # seeds process.env for the route test
+│   ├── setup-env.ts                    # seeds process.env for the integration test
 │   └── integration/
-│       └── route.test.ts               # invokes route via Web Request → Response
+│       ├── route.test.ts               # imports `{ app }` from app/src/index.ts; calls app.fetch(request)
+│       └── app-env.test.ts             # exercises app/src/env.ts (AI_RELAY_AUTH_TOKEN, AI_RELAY_PORT)
 ├── scripts/
 │   ├── verify.mjs                      # automated C1/C2/C5 smoke against pnpm dev
 │   ├── mcp-inspect.mjs                 # ad-hoc tools/call wrapping MCP Inspector CLI
 │   └── check-dev-env.mjs               # pre-flight env check for pnpm dev
+├── examples/
+│   └── vercel/                         # community-supported Vercel deploy recipe
+│       ├── README.md
+│       └── vercel.json                 # ex-root config (pins maxDuration + region)
+├── .github/workflows/
+│   ├── ci.yml                          # typecheck + lint + build + test on PR
+│   └── release-app.yml                 # multi-arch buildx → ghcr push on `v*` tags
 ├── doc/
 │   ├── ARCHITECTURE.md                 # this document — design SSOT
-│   ├── DEPLOY.md                       # Vercel + Docker runbook
+│   ├── DEPLOY.md                       # Docker + Vercel runbook
 │   └── QA-MCP-INSPECTOR.md             # manual verification procedure
 ├── CLAUDE.md                           # AI agent collaboration guide
-├── Dockerfile                          # multi-stage, node:20-alpine digest-pinned
-├── compose.yml                         # single-host self-hosted launch
-├── vercel.json                         # pins maxDuration: 300, region: iad1
-├── pnpm-workspace.yaml                 # workspace declares packages/*
-├── package.json                        # depends on ai-relay (workspace:*)
+├── compose.yml                         # production: pulls ghcr.io/ragingwind/ai-relay:latest
+├── compose.dev.yml                     # local-build: builds from app/Dockerfile
+├── pnpm-workspace.yaml                 # workspace declares packages/* + examples/* + app
+├── package.json                        # workspace orchestrator; depends on ai-relay (workspace:*)
 ├── tsconfig.json
 ├── biome.json
 ├── vitest.workspace.ts                 # SDK unit + integration projects
-├── next.config.ts                      # transpilePackages: [ai-relay]
 ├── .env.example
 └── .gitignore
 ```
@@ -180,32 +194,35 @@ mcp-ai-relay/                              # repo root — Next.js relay app
 
 | Area | Choice |
 |---|---|
-| Framework | Next.js `^15` (App Router) |
+| Framework | Hono `^4` + `@hono/node-server` `^1.13` |
 | MCP handler | `mcp-handler@^1.1` |
 | MCP SDK | `@modelcontextprotocol/sdk@^1.26` |
-| Validation | `zod@^3` |
+| Validation | `zod@^4` |
 | OpenAI SDK | `openai@^6` |
-| Runtime | Node.js `20.x` + Fluid Compute |
+| Runtime | Node.js `20.x` (alpine container; multi-arch amd64+arm64) |
 | Language | TypeScript strict, NodeNext ESM, `verbatimModuleSyntax: true` |
 | Package manager | pnpm `^9` (pinned via `packageManager`) |
 | Lint/Format | Biome `^2` |
 | Test | vitest + msw (mock at the HTTP boundary) |
-| Deployment | Vercel Pro, region `iad1`, `maxDuration: 300` |
+| Deployment | `ghcr.io/ragingwind/ai-relay` multi-arch image; `compose.yml` for production, `compose.dev.yml` for local builds. Vercel recipe in `examples/vercel/` (community-supported). |
 | SDK build | `tsc -p tsconfig.build.json` → `packages/ai-relay/dist/`; ESM, peerDeps for `@modelcontextprotocol/sdk` and `openai` (optional) |
+| App build | `tsc -p app/tsconfig.json` → `app/dist/`; runtime image uses `pnpm deploy --prod /deploy` to produce a self-contained tree |
 
-### `vercel.json`
-```json
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["iad1"],
-  "functions": {
-    "app/api/**/route.ts": {
-      "maxDuration": 300,
-      "runtime": "nodejs20.x"
-    }
-  }
-}
-```
+### Container release
+
+Multi-arch image (amd64 + arm64) built and pushed by
+[`.github/workflows/release-app.yml`](../.github/workflows/release-app.yml)
+on every `v*` tag (and on demand via `workflow_dispatch`):
+
+- `ghcr.io/ragingwind/ai-relay:vX.Y.Z` — versioned tag
+- `ghcr.io/ragingwind/ai-relay:latest` — updated when pushed from default branch
+- Healthcheck baked into the image (`HEALTHCHECK ... /healthz`) — `compose.yml` inherits it.
+
+### Vercel recipe (community-supported)
+
+`examples/vercel/vercel.json` retains the original `regions: ["iad1"]` +
+`functions[..].maxDuration: 300` shape. To deploy, build a thin Next.js
+project that consumes `ai-relay` from npm (see `examples/vercel/README.md`).
 
 ### `tsconfig.json` essentials
 ```jsonc
@@ -235,11 +252,12 @@ mcp-ai-relay/                              # repo root — Next.js relay app
 |---|---|---|---|
 | `AI_RELAY_API_KEY` | ✅ | Sensitive | Upstream API key. Recommend separate keys for Production/Preview. |
 | `AI_RELAY_BASE_URL` | ❌ | Plain | Override the upstream base URL. Default: SDK built-in. Use to point at Azure OpenAI, a self-hosted vLLM/Ollama gateway, or a local mock. |
-| `RELAY_AUTH_TOKEN` | ✅ | Sensitive | Bearer token sent by the MCP host. 32+ random bytes. |
+| `AI_RELAY_AUTH_TOKEN` | ✅ | Sensitive | Bearer token sent by the MCP host. 32+ random bytes. |
 | `AI_RELAY_MAX_OUTPUT_TOKENS` | ❌ | Plain | Integer. Default `4096`. Overrides caller's value. |
 | `AI_RELAY_REQUEST_TIMEOUT_MS` | ❌ | Plain | Integer. Default `60000`. Upstream call timeout. |
+| `AI_RELAY_PORT` | ❌ | Plain | Integer 1..65535. Default `8787`. Bind port for the Hono server. |
 
-Record keys only in `.env.example`; never commit values. Register the secrets in the Vercel dashboard with the Sensitive flag.
+Record keys only in `.env.example`; never commit values. Register the secrets via your container orchestrator's secret store (Docker `--env-file`, k8s Secret, etc.). The Vercel community recipe uses Vercel's Sensitive env vars.
 
 ---
 
@@ -251,7 +269,7 @@ import { timingSafeEqual } from "node:crypto";
 
 export function verifyToken(req: Request, bearerToken: string | undefined) {
   if (!bearerToken) return undefined;            // unauthenticated
-  const expected = process.env.RELAY_AUTH_TOKEN;
+  const expected = process.env.AI_RELAY_AUTH_TOKEN;
   if (!expected) return undefined;                // fail-closed
   const a = Buffer.from(bearerToken);
   const b = Buffer.from(expected);
@@ -275,7 +293,8 @@ On unauthenticated requests, `mcp-handler` automatically responds with 401 + `WW
 - All tool inputs must be strictly validated with zod (use `.strict()`).
 - `max_tokens` accepts the caller's value but is clamped to the server ceiling.
 - `console` logs may include only metadata (model, token counts, latency, status). **Never log prompt/response bodies.**
-- Preview deployments are protected by Vercel Authentication (default).
+- Container images run as a non-root `app` user (uid 1001); orchestrators should not override with root.
+- The published image is private by default — flip to public via Settings → Packages → ai-relay only when ready.
 
 ### Not included in v1 (intentional)
 - Rate limiting (Upstash, etc.)
@@ -294,8 +313,8 @@ These items are listed as v2 candidates in §11.
 |---|---|---|
 | Unit (SDK) | vitest + msw, run inside `packages/ai-relay/` | `verifyBearer`, `parseEnv`, `registerOpenAIChat` factory — input validation, max_tokens clamp, error mapping |
 | Multi-registration | vitest + msw, real `McpServer` | Same server registered against multiple times with different `name` + `apiKey` + `baseURL` — each handler routes to its own upstream with no cross-talk |
-| Integration | vitest, route invoked directly via Web `Request`/`Response` | Bearer auth (present/missing/invalid), MCP `tools/list` and `tools/call` JSON-RPC flows |
-| Manual E2E | MCP Inspector | Locally run `pnpm dev` → `npx @modelcontextprotocol/inspector` → Streamable HTTP, connect to `http://localhost:3000/api/mcp` |
+| Integration | vitest, Hono `app.fetch(request)` invoked directly with Web `Request`/`Response` | Bearer auth (present/missing/invalid), MCP `tools/list` and `tools/call` JSON-RPC flows, `/healthz` liveness, `AI_RELAY_PORT` validation |
+| Manual E2E | MCP Inspector | Locally run `pnpm dev` → `npx @modelcontextprotocol/inspector` → Streamable HTTP, connect to `http://localhost:8787/api/mcp` |
 
 Principle: **mock only the OpenAI HTTP boundary** (MSW). Never mock the SDK module itself — the risk of missing an SDK upgrade is too high.
 
@@ -308,7 +327,7 @@ Principle: **mock only the OpenAI HTTP boundary** (MSW). Never mock the SDK modu
 - **OAuth 2.1** authentication (swap the `withMcpAuth` token verifier)
 - **Rate limiting** — Upstash Ratelimit (Edge Middleware, IP + token two-tier)
 - **Budget caps** — Upstash Redis daily token/dollar counters
-- **Observability** — `@vercel/otel` traces + Pino NDJSON logs + (optional) Sentry
+- **Observability** — OpenTelemetry traces + Pino NDJSON logs + (optional) Sentry
 - **Progress notifications** — handle `_meta.progressToken` and emit progress messages
 - **Tools/function-calling pass-through** — serialize `tool_calls` results into `structuredContent`
 

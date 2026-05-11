@@ -1,0 +1,15 @@
+# Local-development compose file — builds the image from source.
+# Use the default compose.yml for production (image pull from ghcr).
+#
+#   docker compose -f compose.dev.yml up --build
+
+services:
+  relay:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    ports:
+      - "${HOST_PORT:-8787}:8787"
+    env_file:
+      - .env.local
+    restart: unless-stopped

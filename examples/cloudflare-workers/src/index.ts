@@ -31,7 +31,7 @@ import { registerOpenAIChat } from "ai-relay/openai";
 interface Env {
   AI_RELAY_API_KEY: string;
   AI_RELAY_BASE_URL?: string;
-  RELAY_AUTH_TOKEN: string;
+  AI_RELAY_AUTH_TOKEN: string;
   MCP_OBJECT: DurableObjectNamespace;
 }
 
@@ -51,10 +51,10 @@ export class OpenAIRelay extends McpAgent<Env> {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    // Bearer gate: identical pattern to the Vercel/Next.js relay.
+    // Bearer gate: identical pattern to the Hono relay (`app/src/index.ts`).
     const auth = request.headers.get("authorization") ?? "";
     const token = auth.replace(/^Bearer\s+/i, "");
-    if (!verifyBearer(token, env.RELAY_AUTH_TOKEN)) {
+    if (!verifyBearer(token, env.AI_RELAY_AUTH_TOKEN)) {
       return new Response("unauthorized", {
         status: 401,
         headers: { "WWW-Authenticate": "Bearer" },

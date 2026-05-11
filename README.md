@@ -22,8 +22,8 @@ MCP host  ──►  ai-relay  ──►  OpenAI-compatible API
 |---|---|---|---|
 | `npx ai-relay` | none (one-shot) | none | quick test, scripting, CI smoke |
 | SDK (`ai-relay`) | caller's choice (stdio / HTTP / Workers) | npm | embed in custom MCP server |
-| App (`./app`, Next.js) | HTTP | `git clone` (self-host on Vercel/Node) | personal or team HTTP endpoint |
-| Docker (local build) | HTTP | `docker build` from this repo | container deployment now; published image lands with [#57](https://github.com/ragingwind/mcp-ai-relay/issues/57) |
+| App (`./app`, Hono) | HTTP | `git clone` (self-host on Node) | personal or team HTTP endpoint |
+| Docker (`ghcr.io/ragingwind/ai-relay`) | HTTP | `docker run` (no build) | container deployment, multi-arch (amd64/arm64) |
 
 ---
 
@@ -45,24 +45,27 @@ stdin (exactly one — they are XOR). A plain-text positional becomes a
 
 ---
 
-## Quick start — Docker (local build)
+## Quick start — Docker
 
 ```bash
-docker build -t mcp-ai-relay .
-
 docker run -p 8787:8787 \
   -e AI_RELAY_API_KEY=sk-... \
-  -e RELAY_AUTH_TOKEN=$(openssl rand -hex 32) \
-  mcp-ai-relay
+  -e AI_RELAY_AUTH_TOKEN=$(openssl rand -hex 32) \
+  ghcr.io/ragingwind/ai-relay:latest
 ```
 
-The MCP endpoint is then served at `http://localhost:8787/api/mcp`. A
-`compose.yml` is also provided in the repo root if you prefer
-`docker compose up`.
+The MCP endpoint is served at `http://localhost:8787/api/mcp` and a
+liveness check at `http://localhost:8787/healthz`. The image is multi-arch
+(amd64 + arm64) and ships from this repo's
+[`release-app` workflow](./.github/workflows/release-app.yml) on every
+`v*` tag.
 
-> When [#57](https://github.com/ragingwind/mcp-ai-relay/issues/57) lands, the
-> `docker build` step is replaced by a pull from
-> `ghcr.io/ragingwind/ai-relay`. Until then, build locally.
+A `compose.yml` is provided for `docker compose up` (pulls the published
+image). For local-build development, use `compose.dev.yml`:
+
+```bash
+docker compose -f compose.dev.yml up --build
+```
 
 ---
 
@@ -92,7 +95,8 @@ Full runnable versions live in [`examples/stdio/`](./examples/stdio/),
 | `AI_RELAY_BASE_URL` | upstream endpoint override | no | SDK default |
 | `AI_RELAY_MAX_OUTPUT_TOKENS` | per-request `max_tokens` ceiling | no | 4096 |
 | `AI_RELAY_REQUEST_TIMEOUT_MS` | upstream HTTP timeout | no | 60000 |
-| `RELAY_AUTH_TOKEN` | HTTP bearer for `./app` route (server-only) | yes (app) | — |
+| `AI_RELAY_AUTH_TOKEN` | HTTP bearer for `./app` route (server-only) | yes (app) | — |
+| `AI_RELAY_PORT` | bind port for the Hono server | no (app) | 8787 |
 
 ---
 
@@ -108,6 +112,8 @@ Full runnable versions live in [`examples/stdio/`](./examples/stdio/),
 | `OPENAI_BASE_URL` | `AI_RELAY_BASE_URL` | [#56](https://github.com/ragingwind/mcp-ai-relay/issues/56) |
 | `MAX_OUTPUT_TOKENS_CEILING` | `AI_RELAY_MAX_OUTPUT_TOKENS` | [#56](https://github.com/ragingwind/mcp-ai-relay/issues/56) |
 | `REQUEST_TIMEOUT_MS` | `AI_RELAY_REQUEST_TIMEOUT_MS` | [#56](https://github.com/ragingwind/mcp-ai-relay/issues/56) |
+| `RELAY_AUTH_TOKEN` | `AI_RELAY_AUTH_TOKEN` | [#57](https://github.com/ragingwind/mcp-ai-relay/issues/57) |
+| `docker build .` (Next.js, port 3000) | `docker run ghcr.io/ragingwind/ai-relay` (Hono, port 8787) | [#57](https://github.com/ragingwind/mcp-ai-relay/issues/57) |
 
 ---
 
@@ -144,13 +150,13 @@ Local development needs Node.js 20.x + pnpm 9:
 
 ```bash
 pnpm install
-cp .env.example .env.local        # fill AI_RELAY_API_KEY + RELAY_AUTH_TOKEN
-pnpm dev                          # http://localhost:3000/api/mcp
+cp .env.example .env.local        # fill AI_RELAY_API_KEY + AI_RELAY_AUTH_TOKEN
+pnpm dev                          # http://localhost:8787/api/mcp
 pnpm test                         # vitest
 ```
 
 `pnpm dev` refuses to start (with actionable instructions) when `.env.local`
-is missing or `RELAY_AUTH_TOKEN` is not set. All build/test/verify
+is missing or `AI_RELAY_AUTH_TOKEN` is not set. All build/test/verify
 commands are listed in
 [`CLAUDE.md` §3 — Verify Commands](./CLAUDE.md#3-verify-commands).
 

@@ -73,7 +73,7 @@ const METHOD = flags.method ?? "tools/call";
 
 if (!TOKEN) {
   console.error(
-    "[mcp-inspect] missing token. Set RELAY_AUTH_TOKEN in .env.local or pass --token=...",
+    "[mcp-inspect] missing token. Set AI_RELAY_AUTH_TOKEN in .env.local or pass --token=...",
   );
   process.exit(1);
 }

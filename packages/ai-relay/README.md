@@ -91,10 +91,12 @@ when that is what you need.
 
 ## SDK
 
-### Embed in a Vercel/Next.js MCP route
+### Embed in a Hono / Node HTTP MCP route
 
 ```ts
-// app/api/[transport]/route.ts
+// src/index.ts — minimal Hono server (mirrors `app/src/index.ts`)
+import { serve } from "@hono/node-server";
+import { Hono } from "hono";
 import { loadConfig, verifyBearer } from "ai-relay";
 import { registerOpenAIChat } from "ai-relay/openai";
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
@@ -118,16 +120,21 @@ const handler = createMcpHandler(
 const wrapped = withMcpAuth(
   handler,
   (_req, token) =>
-    verifyBearer(token, process.env.RELAY_AUTH_TOKEN)
+    verifyBearer(token, process.env.AI_RELAY_AUTH_TOKEN!)
       ? { token: token as string, clientId: "shared-secret", scopes: ["openai:chat"] }
       : undefined,
   { required: true, requiredScopes: ["openai:chat"] },
 );
 
-export const runtime = "nodejs";
-export const maxDuration = 300;
-export { wrapped as GET, wrapped as POST, wrapped as DELETE };
+const app = new Hono();
+app.get("/healthz", (c) => c.text("ok", 200));
+app.all("/api/mcp", (c) => wrapped(c.req.raw));
+
+serve({ fetch: app.fetch, port: Number(process.env.AI_RELAY_PORT ?? 8787) });
 ```
+
+For the Vercel/Next.js variant, see
+[`examples/vercel/README.md`](../../examples/vercel/README.md).
 
 ### Embed in a stdio MCP server (Claude Desktop direct)
 
@@ -253,9 +260,9 @@ const cfg = loadConfig({ env: process.env });
 
 Single resolution function for every embed shape. Pass `env`, `file`
 (JSON config), and/or `args` (programmatic overrides). The relay app's
-HTTP-only schema (`RELAY_AUTH_TOKEN` ≥ 32 bytes, `AI_RELAY_*`
-ceilings) is private to the deployed Vercel/Next.js app — embedders
-in other runtimes validate their own env.
+HTTP-only schema (`AI_RELAY_AUTH_TOKEN` ≥ 32 bytes, `AI_RELAY_*`
+ceilings, `AI_RELAY_PORT`) is private to the deployed `app/` Hono
+server — embedders in other runtimes validate their own env.
 
 ### `createOpenAIClient(config)`
 
