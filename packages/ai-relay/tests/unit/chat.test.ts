@@ -210,6 +210,38 @@ describe("openai chat — max_tokens clamp", () => {
     await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
     expect(observedMaxTokens).toBe(256);
   });
+
+  it("P4: treats max_tokens=0 as 'use default' (ceiling)", async () => {
+    let observedMaxTokens: number | undefined;
+    server.use(
+      http.post(ENDPOINT, async ({ request }) => {
+        const body = (await request.json()) as { max_tokens?: number };
+        observedMaxTokens = body.max_tokens;
+        return sseResponse([
+          JSON.stringify({ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }),
+        ]);
+      }),
+    );
+    const { handler } = makeHandler();
+    const result = await handler({
+      model: VALID_MODEL,
+      messages: VALID_MESSAGES,
+      max_tokens: 0,
+    });
+    expect(result.isError).toBe(false);
+    expect(observedMaxTokens).toBe(4096);
+  });
+
+  it("D1: still rejects negative max_tokens", async () => {
+    const { handler } = makeHandler();
+    await expect(
+      handler({
+        model: VALID_MODEL,
+        messages: VALID_MESSAGES,
+        max_tokens: -1,
+      }),
+    ).rejects.toThrow();
+  });
 });
 
 // =========================================================================

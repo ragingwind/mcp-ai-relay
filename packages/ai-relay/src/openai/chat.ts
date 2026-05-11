@@ -72,14 +72,15 @@ export function makeOpenAIChatSchema(ceiling: number) {
         )
         .min(1),
       temperature: z.number().min(0).max(2).optional(),
-      // Default to ceiling when omitted; clamp to ceiling when provided.
+      // Accept omitted OR 0 as "use the configured default"; clamp
+      // positive values to the ceiling. Negative values are rejected.
       // Result is always a positive integer ≤ ceiling.
       max_tokens: z
         .number()
         .int()
-        .positive()
+        .nonnegative()
         .optional()
-        .transform((n) => (n === undefined ? ceiling : Math.min(n, ceiling))),
+        .transform((n) => (n === undefined || n === 0 ? ceiling : Math.min(n, ceiling))),
       top_p: z.number().min(0).max(1).optional(),
       stop: z.union([z.string(), z.array(z.string())]).optional(),
     })

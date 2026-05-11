@@ -6,6 +6,17 @@ the project adheres to [Semantic Versioning](https://semver.org/) once
 v1.0 ships. Pre-v1.0 minor bumps may include breaking changes — read
 this file before upgrading.
 
+## [0.4.1] — 2026-05-12
+
+### Fixed
+
+- **`max_tokens: 0` now accepted as "use default"** — 0.4.0 rejected
+  zero with `Too small: expected number to be >0`, which broke clients
+  that emit `0` from a numeric input field to mean "no specific limit".
+  Zero is now treated the same as omitted: the configured ceiling
+  (default 4096) is injected. Negative values are still rejected.
+  Positive values clamp to the ceiling as before.
+
 ## [0.4.0] — 2026-05-12
 
 ### Changed (BREAKING — caller-visible)
