@@ -11,7 +11,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26",
     "ai-relay": "workspace:*",
-    "agents": "^0.0.40",
+    "agents": ">=0.0.50 <0.1.0",
     "openai": "^6"
   },
   "devDependencies": {

@@ -8,7 +8,8 @@ registers the SDK's tool in `init()` and adds a bearer-token gate.
 
 > **Note on framework dependencies**: The `agents` package is
 > Cloudflare's official MCP-on-Workers framework. Its API is still
-> evolving in 2026 — this example targets `agents@^0.0.40`. If your
+> evolving in 2026 — this example targets `agents@>=0.0.50 <0.1.0`
+> (the version range that ships the `agents/mcp` subpath). If your
 > deployment uses a different framework version, adapt the
 > `OpenAIRelay extends McpAgent` and `serveSSE("/sse")` calls per
 > Cloudflare's latest docs.
