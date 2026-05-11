@@ -8,24 +8,9 @@ importers:
 
   .:
     dependencies:
-      '@modelcontextprotocol/sdk':
-        specifier: 1.29.0
-        version: 1.29.0(zod@4.4.3)
       ai-relay:
         specifier: workspace:*
         version: link:packages/ai-relay
-      mcp-handler:
-        specifier: ^1.1.0
-        version: 1.1.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(next@16.2.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5))
-      next:
-        specifier: ^16.2.4
-        version: 16.2.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      openai:
-        specifier: ^6.37.0
-        version: 6.37.0(ws@8.18.0)(zod@4.4.3)
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.4.14
@@ -33,9 +18,6 @@ importers:
       '@types/node':
         specifier: ^25.6.0
         version: 25.6.0
-      '@types/react':
-        specifier: 19.2.14
-        version: 19.2.14
       msw:
         specifier: ^2.14.3
         version: 2.14.3(@types/node@25.6.0)(typescript@6.0.3)
@@ -45,6 +27,37 @@ importers:
       vitest:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@25.6.0)(msw@2.14.3(@types/node@25.6.0)(typescript@6.0.3))
+
+  app:
+    dependencies:
+      '@hono/node-server':
+        specifier: ^1.13.0
+        version: 1.19.14(hono@4.12.15)
+      '@modelcontextprotocol/sdk':
+        specifier: 1.29.0
+        version: 1.29.0(zod@4.4.3)
+      ai-relay:
+        specifier: workspace:*
+        version: link:../packages/ai-relay
+      hono:
+        specifier: ^4.6.0
+        version: 4.12.15
+      mcp-handler:
+        specifier: ^1.1.0
+        version: 1.1.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(next@16.2.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5))
+      openai:
+        specifier: ^6.37.0
+        version: 6.37.0(ws@8.18.0)(zod@4.4.3)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      tsx:
+        specifier: ^4.19.0
+        version: 4.21.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
 
   examples/cloudflare-workers:
     dependencies:
@@ -1114,9 +1127,6 @@ packages:
   '@types/node@25.6.0':
     resolution: {integrity: sha512-+qIYRKdNYJwY3vRCZMdJbPLJAtGjQBudzZzdzwQYkEPQd+PJGixUL5QfvCLDaULoLv+RhT3LDkwEfKaAkgSmNQ==}
 
-  '@types/react@19.2.14':
-    resolution: {integrity: sha512-ilcTH/UniCkMdtexkoCN0bI7pMcJDvmQFPvuPvmEaYA/NSfFTAgdUSLAoVjaRJm7+6PvcM+q1zYOwS4wTYMF9w==}
-
   '@types/set-cookie-parser@2.4.10':
     resolution: {integrity: sha512-GGmQVGpQWUe5qglJozEjZV/5dyxbOOZ0LHe/lqyWssB88Y4svNfst0uqBVscdDeIKl5Jy5+aPSvy7mI9tYRguw==}
 
@@ -1282,9 +1292,6 @@ packages:
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
     engines: {node: '>= 8'}
-
-  csstype@3.2.3:
-    resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
 
   debug@4.4.3:
     resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
@@ -2527,7 +2534,8 @@ snapshots:
       outvariant: 1.4.3
       strict-event-emitter: 0.5.1
 
-  '@next/env@16.2.4': {}
+  '@next/env@16.2.4':
+    optional: true
 
   '@next/swc-darwin-arm64@16.2.4':
     optional: true
@@ -2684,16 +2692,13 @@ snapshots:
   '@swc/helpers@0.5.15':
     dependencies:
       tslib: 2.8.1
+    optional: true
 
   '@types/estree@1.0.8': {}
 
   '@types/node@25.6.0':
     dependencies:
       undici-types: 7.19.2
-
-  '@types/react@19.2.14':
-    dependencies:
-      csstype: 3.2.3
 
   '@types/set-cookie-parser@2.4.10':
     dependencies:
@@ -2775,7 +2780,8 @@ snapshots:
 
   assertion-error@2.0.1: {}
 
-  baseline-browser-mapping@2.10.23: {}
+  baseline-browser-mapping@2.10.23:
+    optional: true
 
   blake3-wasm@2.1.5: {}
 
@@ -2807,7 +2813,8 @@ snapshots:
       call-bind-apply-helpers: 1.0.2
       get-intrinsic: 1.3.0
 
-  caniuse-lite@1.0.30001791: {}
+  caniuse-lite@1.0.30001791:
+    optional: true
 
   chai@5.3.3:
     dependencies:
@@ -2823,7 +2830,8 @@ snapshots:
 
   cli-width@4.1.0: {}
 
-  client-only@0.0.1: {}
+  client-only@0.0.1:
+    optional: true
 
   cliui@8.0.1:
     dependencies:
@@ -2863,8 +2871,6 @@ snapshots:
       path-key: 3.1.1
       shebang-command: 2.0.0
       which: 2.0.2
-
-  csstype@3.2.3: {}
 
   debug@4.4.3:
     dependencies:
@@ -3250,6 +3256,7 @@ snapshots:
     transitivePeerDependencies:
       - '@babel/core'
       - babel-plugin-macros
+    optional: true
 
   object-assign@4.1.1: {}
 
@@ -3307,6 +3314,7 @@ snapshots:
       nanoid: 3.3.11
       picocolors: 1.1.1
       source-map-js: 1.2.1
+    optional: true
 
   postcss@8.5.12:
     dependencies:
@@ -3336,8 +3344,10 @@ snapshots:
     dependencies:
       react: 19.2.5
       scheduler: 0.27.0
+    optional: true
 
-  react@19.2.5: {}
+  react@19.2.5:
+    optional: true
 
   redis@4.7.1:
     dependencies:
@@ -3399,7 +3409,8 @@ snapshots:
 
   safer-buffer@2.1.2: {}
 
-  scheduler@0.27.0: {}
+  scheduler@0.27.0:
+    optional: true
 
   semver@7.7.4: {}
 
@@ -3525,6 +3536,7 @@ snapshots:
     dependencies:
       client-only: 0.0.1
       react: 19.2.5
+    optional: true
 
   supports-color@10.2.2: {}
 
@@ -3552,7 +3564,8 @@ snapshots:
     dependencies:
       tldts: 7.0.30
 
-  tslib@2.8.1: {}
+  tslib@2.8.1:
+    optional: true
 
   tsx@4.21.0:
     dependencies:

@@ -3,19 +3,19 @@
 // MCP smoke checks against /api/mcp. Inputs (priority: flag > env > .env.local
 // > default):
 //
-//   --url=<URL>      MCP_URL          http://localhost:3000/api/mcp
-//   --token=<TOK>    RELAY_AUTH_TOKEN (required, falls back to .env.local)
-//   --tool=<NAME>    MCP_TOOL         openai_chat
-//   --model=<NAME>   MCP_MODEL        gpt-4o-mini
-//   --message=<TXT>  MCP_MESSAGE      ping
-//   --method=<RPC>                    tools/call   (also: tools/list)
+//   --url=<URL>      MCP_URL              http://localhost:8787/api/mcp
+//   --token=<TOK>    AI_RELAY_AUTH_TOKEN  (required, falls back to .env.local)
+//   --tool=<NAME>    MCP_TOOL             openai_chat
+//   --model=<NAME>   MCP_MODEL            gpt-4o-mini
+//   --message=<TXT>  MCP_MESSAGE          ping
+//   --method=<RPC>                        tools/call   (also: tools/list)
 //
 // Examples:
 //   pnpm inspect                                  # tools/call → openai_chat
 //   pnpm inspect --method=tools/list
 //   pnpm inspect --url=http://localhost:3001/api/mcp --model=gpt-4o
 //   pnpm inspect --tool=other_tool --message="..."
-//   MCP_URL=https://relay.example.com/api/mcp RELAY_AUTH_TOKEN=... pnpm inspect
+//   MCP_URL=https://relay.example.com/api/mcp AI_RELAY_AUTH_TOKEN=... pnpm inspect
 
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -60,9 +60,9 @@ const URL_BASE =
   flags.url ??
   process.env.MCP_URL ??
   dotenv.MCP_URL ??
-  "http://localhost:3000/api/mcp";
+  "http://localhost:8787/api/mcp";
 const TOKEN =
-  flags.token ?? process.env.RELAY_AUTH_TOKEN ?? dotenv.RELAY_AUTH_TOKEN;
+  flags.token ?? process.env.AI_RELAY_AUTH_TOKEN ?? dotenv.AI_RELAY_AUTH_TOKEN;
 const TOOL =
   flags.tool ?? process.env.MCP_TOOL ?? dotenv.MCP_TOOL ?? "openai_chat";
 const MODEL =

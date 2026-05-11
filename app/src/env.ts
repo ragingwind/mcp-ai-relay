@@ -1,14 +1,14 @@
 // HTTP-only environment parser for the relay app.
 //
-// This is the relay app's private env schema — it lives in `app/lib/`
-// because `RELAY_AUTH_TOKEN` (≥ 32 bytes) is an HTTP-server-specific
-// concern, NOT of every consumer that embeds the `ai-relay` SDK in a
-// stdio launcher, Cloudflare Worker, or Hono server. The other keys
-// share the `AI_RELAY_*` namespace with the SDK so a single env
-// vocabulary serves both the CLI and the HTTP transport.
+// This is the relay app's private env schema — it lives in `app/src/`
+// because `AI_RELAY_AUTH_TOKEN` (≥ 32 bytes) and `AI_RELAY_PORT` are
+// HTTP-server-specific concerns, NOT of every consumer that embeds the
+// `ai-relay` SDK in a stdio launcher, Cloudflare Worker, or Hono server
+// elsewhere. The other keys share the `AI_RELAY_*` namespace with the SDK
+// so a single env vocabulary serves both the CLI and the HTTP transport.
 //
 // Side-effect-free module: importing this file does NOT read process.env.
-// Consumers (the route file, scripts, tests) call `parseEnv(source)`
+// Consumers (the entry file, scripts, tests) call `parseEnv(source)`
 // explicitly with whatever object they want validated.
 //
 // Error messages MUST never echo any env var value. Failure messages
@@ -26,20 +26,17 @@ const envSchema = z.object({
     (v) => (typeof v === "string" && v.trim().length === 0 ? undefined : v),
     z.string().url().optional(),
   ),
-  RELAY_AUTH_TOKEN: z
+  AI_RELAY_AUTH_TOKEN: z
     .string()
     .refine((s) => Buffer.byteLength(s, "utf8") >= 32, "must be at least 32 bytes"),
   AI_RELAY_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(4096),
   AI_RELAY_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+  AI_RELAY_PORT: z.coerce.number().int().min(1).max(65_535).default(8787),
 });
 
 export type Env = z.infer<typeof envSchema>;
 
-// Permissive env-shaped input. We deliberately do NOT type this as
-// `NodeJS.ProcessEnv` because `next/types/global.d.ts` augments that
-// interface with a required `NODE_ENV` key — `parseEnv` doesn't consume
-// `NODE_ENV` and forcing tests to set it would be noise. `process.env`
-// itself satisfies this signature, so callers passing it still type-check.
+// Permissive env-shaped input. `process.env` itself satisfies this signature.
 export type EnvSource = Record<string, string | undefined>;
 
 // Mirrors redactZodError in packages/ai-relay/src/config.ts; keep the two in lock-step.

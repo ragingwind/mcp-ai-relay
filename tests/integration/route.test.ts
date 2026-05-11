@@ -1,21 +1,21 @@
-// Integration tests for `app/api/[transport]/route.ts` — covers all 13
-// behaviors from plan §6 (B1-B13).
+// Integration tests for `app/src/index.ts` — covers all 13 behaviors
+// from plan §6 (B1-B13).
 //
-// What "integration" means here (per plan OQ-3 / CLAUDE.md §7): the route
-// handler is invoked end-to-end through Next.js's exported HTTP method
-// surface (`POST`, `GET`, `DELETE`) with real Web `Request` and `Response`
-// instances, exercising mcp-handler + withMcpAuth + zod + the openai_chat
-// tool wiring as one stack. Only the OpenAI HTTP boundary is mocked (MSW).
-// We never mock `mcp-handler` itself — that would defeat the purpose.
+// What "integration" means here (per plan OQ-3 / CLAUDE.md §7): the Hono
+// `app` is invoked end-to-end via `app.fetch(request)` with real Web
+// `Request` and `Response` instances, exercising mcp-handler + withMcpAuth
+// + zod + the openai_chat tool wiring as one stack. Only the OpenAI HTTP
+// boundary is mocked (MSW). We never mock `mcp-handler` itself — that
+// would defeat the purpose.
 //
 // MSW server lifecycle pattern: MSW listens FIRST in beforeAll, then the
-// route module is dynamically imported. The openai SDK captures `fetch` at
+// app module is dynamically imported. The openai SDK captures `fetch` at
 // constructor time inside `createOpenAIClient`; if MSW patches
 // `globalThis.fetch` AFTER that capture, the SDK still holds the real fetch
 // and tests hit api.openai.com.
 //
-// URL convention: route is `app/api/[transport]/route.ts` and `basePath`
-// in the route file is `"/api"`, so mcp-handler matches the streamable HTTP
+// URL convention: the Hono route is mounted at `/api/mcp` and `basePath`
+// in the entry file is `"/api"`, so mcp-handler matches the streamable HTTP
 // transport at pathname `/api/mcp`. Tests POST to `http://localhost/api/mcp`.
 //
 // Streamable HTTP semantics: in stateless mode (sessionIdGenerator
@@ -29,7 +29,7 @@
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { parseEnv } from "../../app/lib/env.js";
+import { parseEnv } from "../../app/src/env.js";
 
 // Parse the test-seeded env once. The setup file (tests/setup-env.ts) sets
 // process.env BEFORE this module loads, so the parse succeeds with defaults.
@@ -38,20 +38,15 @@ const env = parseEnv(process.env);
 // --- shared MSW server lifecycle ----------------------------------------
 
 const server = setupServer();
-let POST: (req: Request) => Promise<Response>;
-let GET: (req: Request) => Promise<Response>;
-let DELETE: (req: Request) => Promise<Response>;
+let app: { fetch: (req: Request) => Promise<Response> };
 
 beforeAll(async () => {
   server.listen({ onUnhandledRequest: "error" });
   // Dynamic import AFTER MSW listens. The openai SDK is constructed lazily
-  // inside createOpenAIClient when the route registers its tool; by
-  // importing the route module here, the SDK captures the MSW-patched fetch
-  // reference.
-  const mod = await import("../../app/api/[transport]/route.js");
-  POST = mod.POST;
-  GET = mod.GET;
-  DELETE = mod.DELETE;
+  // inside createOpenAIClient when the app registers its tool; by importing
+  // the entry module here, the SDK captures the MSW-patched fetch reference.
+  const mod = await import("../../app/src/index.js");
+  app = mod.app as { fetch: (req: Request) => Promise<Response> };
 });
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
@@ -186,7 +181,7 @@ function asCallToolResult(envelope: { result?: Record<string, unknown> }): CallT
 describe("route /api/mcp — bearer auth", () => {
   // B1: missing Authorization → 401 + WWW-Authenticate: Bearer ...
   it("D1: rejects POST without Authorization (401 + WWW-Authenticate header)", async () => {
-    const res = await POST(makeListRequest({ bearer: null }));
+    const res = await app.fetch(makeListRequest({ bearer: null }));
     expect(res.status).toBe(401);
     const wwwAuth = res.headers.get("www-authenticate");
     expect(wwwAuth).toBeTruthy();
@@ -195,7 +190,7 @@ describe("route /api/mcp — bearer auth", () => {
 
   // B2: wrong bearer → 401 (the InvalidTokenError path)
   it("D2: rejects POST with wrong bearer (401)", async () => {
-    const res = await POST(
+    const res = await app.fetch(
       makeListRequest({ bearer: "Bearer wrong-token-1234567890123456789012" }),
     );
     expect(res.status).toBe(401);
@@ -205,7 +200,7 @@ describe("route /api/mcp — bearer auth", () => {
   // Asserting status 200 + JSON-RPC envelope is enough — the handler-level
   // assertions live in the tools/list block below.
   it("P1: accepts POST with the configured bearer token", async () => {
-    const res = await POST(makeListRequest());
+    const res = await app.fetch(makeListRequest());
     expect(res.status).toBe(200);
     const envelope = await readJsonRpcResponse(res);
     expect(envelope.jsonrpc).toBe("2.0");
@@ -219,7 +214,7 @@ describe("route /api/mcp — bearer auth", () => {
 describe("route /api/mcp — tools/list", () => {
   // B4: returns exactly one tool, name "openai_chat"
   it("P1: exposes a single tool named openai_chat", async () => {
-    const res = await POST(makeListRequest());
+    const res = await app.fetch(makeListRequest());
     expect(res.status).toBe(200);
     const envelope = await readJsonRpcResponse(res);
     const tools = (envelope.result?.tools ?? []) as Array<{ name: string }>;
@@ -232,7 +227,7 @@ describe("route /api/mcp — tools/list", () => {
   // top-level structure (object, properties.model, required) — not the full
   // serialization, which is an SDK implementation detail.
   it("P2: tools/list response includes the input schema", async () => {
-    const res = await POST(makeListRequest());
+    const res = await app.fetch(makeListRequest());
     const envelope = await readJsonRpcResponse(res);
     const tools = (envelope.result?.tools ?? []) as Array<{
       name: string;
@@ -269,7 +264,7 @@ describe("route /api/mcp — tools/call (happy + clamp)", () => {
       ),
     );
 
-    const res = await POST(
+    const res = await app.fetch(
       makeCallRequest({
         model: "gpt-4o-mini",
         messages: [{ role: "user", content: "say hi" }],
@@ -302,7 +297,7 @@ describe("route /api/mcp — tools/call (happy + clamp)", () => {
         ]);
       }),
     );
-    const res = await POST(
+    const res = await app.fetch(
       makeCallRequest({
         model: "gpt-4o-mini",
         messages: [{ role: "user", content: "hi" }],
@@ -335,7 +330,7 @@ describe("route /api/mcp — tools/call (streaming + errors + cancel)", () => {
         ]),
       ),
     );
-    const res = await POST(
+    const res = await app.fetch(
       makeCallRequest({
         model: "gpt-4o-mini",
         messages: [{ role: "user", content: "hi" }],
@@ -359,7 +354,7 @@ describe("route /api/mcp — tools/call (streaming + errors + cancel)", () => {
           }),
       ),
     );
-    const res = await POST(
+    const res = await app.fetch(
       makeCallRequest({
         model: "gpt-4o-mini",
         messages: [{ role: "user", content: "hi" }],
@@ -384,7 +379,7 @@ describe("route /api/mcp — tools/call (streaming + errors + cancel)", () => {
           }),
       ),
     );
-    const res = await POST(
+    const res = await app.fetch(
       makeCallRequest({
         model: "gpt-4o-mini",
         messages: [{ role: "user", content: "hi" }],
@@ -402,7 +397,7 @@ describe("route /api/mcp — tools/call (streaming + errors + cancel)", () => {
     server.use(
       http.post(ENDPOINT, () => new HttpResponse(JSON.stringify({ error: {} }), { status: 500 })),
     );
-    const res = await POST(
+    const res = await app.fetch(
       makeCallRequest({
         model: "gpt-4o-mini",
         messages: [{ role: "user", content: "hi" }],
@@ -450,7 +445,7 @@ describe("route /api/mcp — tools/call (streaming + errors + cancel)", () => {
       let resolved = false;
       let rejected = false;
       try {
-        const res = await POST(
+        const res = await app.fetch(
           makeCallRequest(
             {
               model: "gpt-4o-mini",
@@ -485,17 +480,13 @@ describe("route /api/mcp — tools/call (streaming + errors + cancel)", () => {
 });
 
 // =========================================================================
-// E: HTTP method exports — confirm GET/DELETE are bound (smoke)
+// E: HTTP method exports — Hono /healthz + smoke
 // =========================================================================
 
-describe("route /api/mcp — HTTP method exports", () => {
-  it("P1: GET, POST, DELETE are exported and callable", () => {
-    // Function identity check — all three exports are bound to the same
-    // wrapped handler per the route file. We only confirm they exist and
-    // are functions; behavior under GET/DELETE is mcp-handler's contract
-    // (HTTP 405 in stateless mode, per its source).
-    expect(typeof POST).toBe("function");
-    expect(typeof GET).toBe("function");
-    expect(typeof DELETE).toBe("function");
+describe("route — Hono surface", () => {
+  it("P1: GET /healthz returns 200 ok (no auth)", async () => {
+    const res = await app.fetch(new Request("http://localhost/healthz"));
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("ok");
   });
 });
