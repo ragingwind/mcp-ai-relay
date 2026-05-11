@@ -3,6 +3,10 @@
 // Self-skips when Docker is unavailable (so this stays cheap on dev
 // machines without Docker). The script itself prints PASS/FAIL per
 // assertion; we only assert on its exit code.
+//
+// Also gated behind RUN_DOCKER_SMOKE because the underlying docker build
+// + smoke run takes several minutes; opt in explicitly to keep
+// `pnpm test` snappy on machines that have Docker installed.
 
 import { execSync, spawn } from "node:child_process";
 import { resolve } from "node:path";
@@ -22,7 +26,9 @@ function hasDocker(): boolean {
   }
 }
 
-describe.skipIf(!hasDocker())("docker smoke", () => {
+const SHOULD_RUN = !!process.env.RUN_DOCKER_SMOKE;
+
+describe.skipIf(!SHOULD_RUN || !hasDocker())("docker smoke", () => {
   it(
     "app/scripts/docker-smoke.sh exits 0",
     async () => {

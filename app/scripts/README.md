@@ -37,6 +37,7 @@ flows on dev machines without Docker.
 | `DOCKER_SMOKE_MULTIARCH` | unset | Set `=1` to enable B-3 multi-arch buildx. Slow; off by default. |
 | `MOCK_PORT` | dynamic | Mock OpenAI fixture port. Auto-picked when unset (the mock prints `LISTENING port=N`). |
 | `SMOKE_HOST_PORT` | `18787` | Published host port for the container under test. |
+| `RUN_DOCKER_SMOKE` | unset | Set to any non-empty value to enable the `tests/integration/docker.test.ts` vitest wrapper inside `pnpm test`. The dedicated `pnpm docker:smoke` always runs the script regardless of this flag. |
 
 ### Assertions
 
