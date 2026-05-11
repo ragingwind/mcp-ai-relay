@@ -7,7 +7,11 @@ export default defineConfig({
     // spawn npm pack + npm install in a temp dir and exercise the
     // installed bin end-to-end, catching packaging regressions that
     // unit tests can't see.
-    include: ["tests/unit/**/*.test.ts", "tests/integration/**/*.test.ts"],
+    include: [
+      "tests/unit/**/*.test.ts",
+      "tests/integration/**/*.test.ts",
+      "tests/cli/**/*.test.ts",
+    ],
     setupFiles: ["./tests/setup-env.ts"],
     environment: "node",
     pool: "threads",
