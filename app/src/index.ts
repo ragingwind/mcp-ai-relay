@@ -19,6 +19,7 @@
 // at the bottom only starts `serve(...)` when this file is executed
 // directly (not when imported by tests or other modules).
 
+import { pathToFileURL } from "node:url";
 import { serve } from "@hono/node-server";
 import { verifyBearer } from "ai-relay";
 import { registerOpenAIChat } from "ai-relay/openai";
@@ -49,10 +50,11 @@ const handler = createMcpHandler(
 const wrapped = withMcpAuth(
   handler,
   (_req, token) => {
+    if (typeof token !== "string") return undefined;
     if (!verifyBearer(token, env.AI_RELAY_AUTH_TOKEN)) return undefined;
     // `token` is the validated bearer; echoing it back to the SDK lets
     // downstream handlers attribute calls without re-parsing the header.
-    return { token: token as string, clientId: "shared-secret", scopes: ["openai:chat"] };
+    return { token, clientId: "shared-secret", scopes: ["openai:chat"] };
   },
   {
     required: true,
@@ -74,8 +76,7 @@ app.all("/api/mcp", (c) => wrapped(c.req.raw));
 // `node dist/index.js` or `tsx watch src/index.ts`). Tests that import
 // `app` get the handler without binding a port.
 const isDirectRun =
-  typeof process.argv[1] === "string" &&
-  import.meta.url === new URL(`file://${process.argv[1]}`).href;
+  typeof process.argv[1] === "string" && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (isDirectRun) {
   serve({ fetch: app.fetch, port: env.AI_RELAY_PORT }, (info) => {

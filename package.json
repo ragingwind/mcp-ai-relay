@@ -32,8 +32,17 @@
     "vitest": "^2.0.0"
   },
   "pnpm": {
+    "overrides": {
+      "next": "npm:empty-npm-package@1.0.0",
+      "react": "npm:empty-npm-package@1.0.0",
+      "react-dom": "npm:empty-npm-package@1.0.0",
+      "@modelcontextprotocol/sdk": "1.26.0"
+    },
     "peerDependencyRules": {
-      "ignoreMissing": ["next"]
+      "allowedVersions": {
+        "react": "*",
+        "react-dom": "*"
+      }
     }
   }
 }

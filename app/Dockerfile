@@ -8,7 +8,9 @@
 # Built and pushed by .github/workflows/release-app.yml as
 # ghcr.io/ragingwind/ai-relay (multi-arch: amd64+arm64).
 
-FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS deps
+ARG NODE_IMAGE=node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293
+
+FROM ${NODE_IMAGE} AS deps
 WORKDIR /repo
 RUN corepack enable pnpm
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
@@ -16,7 +18,7 @@ COPY packages/ai-relay/package.json ./packages/ai-relay/
 COPY app/package.json ./app/
 RUN pnpm install --frozen-lockfile
 
-FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS builder
+FROM ${NODE_IMAGE} AS builder
 WORKDIR /repo
 RUN corepack enable pnpm
 COPY --from=deps /repo/node_modules ./node_modules
@@ -29,12 +31,13 @@ RUN pnpm -r build
 # Materialize a self-contained tree for the app via `pnpm deploy` —
 # this is the documented pnpm-workspace pattern for producing a
 # minimal runtime image (resolves workspace:* links + prod deps).
-# --no-optional skips Next.js's @img/sharp + native binaries that mcp-handler's
-# `next` peer dependency drags in transitively (the Hono runtime never needs
-# them). Reduces the deploy bundle from ~500 MB → ~45 MB.
+# Root `pnpm.overrides` substitutes `next`/`react`/`react-dom` (mcp-handler's
+# unused peer deps) with the 328-byte `empty-npm-package` stub so they do not
+# bloat the deploy bundle. `--no-optional` additionally skips any optional
+# native binaries. Combined, the deploy tree shrinks from ~500 MB → ~30 MB.
 RUN pnpm --filter app deploy --prod --no-optional /deploy
 
-FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS runner
+FROM ${NODE_IMAGE} AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV AI_RELAY_PORT=8787
