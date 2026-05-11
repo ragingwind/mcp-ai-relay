@@ -1,0 +1,45 @@
+name: docker-smoke
+
+on:
+  pull_request:
+    branches: [main, 'epic/**']
+    paths:
+      - 'app/**'
+      - 'examples/docker/**'
+      - 'pnpm-lock.yaml'
+      - 'tests/fixtures/mock-openai/**'
+      - 'app/scripts/docker-smoke.sh'
+      - '.github/workflows/docker-smoke.yml'
+  push:
+    branches: [main, 'epic/**']
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Docker smoke
+        run: pnpm docker:smoke
+
+  smoke-multiarch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'docker-multiarch')
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Multi-arch build (B-3)
+        env:
+          DOCKER_SMOKE_MULTIARCH: '1'
+        run: bash app/scripts/docker-smoke.sh

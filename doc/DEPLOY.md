@@ -162,6 +162,12 @@ defaults.
 
 ### 3.4 Verification checklist
 
+**Before deploying, run `pnpm docker:smoke`** to verify build correctness,
+runtime health, distroless invariants (no shell, non-root uid 65532), and
+the image-size budget. The harness exits non-zero on any regression — see
+[`app/scripts/README.md`](../app/scripts/README.md) for the assertion
+catalog and tunable env vars (image tag, size budget, multi-arch opt-in).
+
 - [ ] `docker compose up -d` (or `docker run`) starts without error.
 - [ ] HEALTHCHECK reports healthy within ~30 s of start:
       ```bash
