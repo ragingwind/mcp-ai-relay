@@ -251,13 +251,19 @@ fi
 # R-6: POST /api/mcp with bearer -> 200 + protocolVersion
 # ===========================================================================
 echo "--- R-6: POST /api/mcp initialize with bearer -> 200 + protocolVersion ---"
-init_resp=$(curl -s \
+# mcp-handler v1.1+ uses Streamable HTTP — the response sets a
+# Mcp-Session-Id header that subsequent requests (R-7) MUST echo back.
+# We capture the headers via `-D` so the session id propagates to R-7.
+init_headers=$(mktemp)
+init_resp=$(curl -s -D "$init_headers" \
   "http://localhost:${SMOKE_HOST_PORT}/api/mcp" \
   -X POST \
   -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
   -H "authorization: Bearer ${SMOKE_BEARER}" \
   -d "$init_body")
+SESSION_ID=$(grep -i '^Mcp-Session-Id:' "$init_headers" | awk '{print $2}' | tr -d '\r\n')
+rm -f "$init_headers"
 if echo "$init_resp" | grep -q '"protocolVersion"'; then
   pass "R-6 authenticated initialize returned protocolVersion"
 else
@@ -269,12 +275,15 @@ fi
 # ===========================================================================
 echo "--- R-7: tools/call openai_chat -> canned reply ---"
 call_body='{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"openai_chat","arguments":{"model":"gpt-4o-mini","messages":[{"role":"user","content":"ping"}]}}}'
+# Mcp-Session-Id is required for stateful MCP transport — without it the
+# server treats this as an out-of-session request and returns no result.
 call_resp=$(curl -s \
   "http://localhost:${SMOKE_HOST_PORT}/api/mcp" \
   -X POST \
   -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
   -H "authorization: Bearer ${SMOKE_BEARER}" \
+  -H "Mcp-Session-Id: ${SESSION_ID}" \
   -d "$call_body")
 if echo "$call_resp" | grep -q "smoke-canned-reply"; then
   pass "R-7 tools/call returned mock canned reply"
