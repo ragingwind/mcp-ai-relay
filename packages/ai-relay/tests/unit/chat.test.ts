@@ -532,3 +532,33 @@ describe("openai chat — handler bundle surface", () => {
     expect(bundle.description).toBe("Azure deployment");
   });
 });
+
+// =========================================================================
+// G: Timeout — requestTimeoutMs propagates to the SDK and aborts in time
+// =========================================================================
+
+describe("openai chat — requestTimeoutMs propagation", () => {
+  it("D1: returns upstream_error within ~timeout when upstream stalls", async () => {
+    server.use(
+      http.post(ENDPOINT, async () => {
+        // Stall well past the configured timeout. The SDK's timeout should
+        // fire BEFORE this resolves, so the handler returns within ~timeout.
+        await new Promise((r) => setTimeout(r, 500));
+        return sseResponse([
+          JSON.stringify({ choices: [{ delta: { content: "late" }, finish_reason: "stop" }] }),
+        ]);
+      }),
+    );
+    const { handler } = makeHandler({ requestTimeoutMs: 50 });
+    const t0 = Date.now();
+    const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const elapsed = Date.now() - t0;
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent.code).toBe("upstream_error");
+    // SDK timeouts are not always tight; allow generous headroom but reject
+    // the "no timeout fired" case (which would resolve only after the full
+    // 500 ms stall).
+    expect(elapsed).toBeLessThan(450);
+    assertNoSecretLeak(result);
+  });
+});

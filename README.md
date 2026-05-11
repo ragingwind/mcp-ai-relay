@@ -109,6 +109,21 @@ image). For local-build development, use `compose.dev.yml`:
 docker compose -f compose.dev.yml up --build
 ```
 
+### Verification
+
+Before publishing or trusting a local build, run the committed smoke
+harness against the distroless runner image:
+
+```bash
+pnpm docker:smoke
+```
+
+`pnpm docker:smoke` invokes [`app/scripts/docker-smoke.sh`](./app/scripts/docker-smoke.sh),
+which builds the image and runs build-correctness + runtime assertions
+(image-size budget, distroless invariants, bearer auth, MCP `initialize`
++ `tools/call` round-trip). See [`app/scripts/README.md`](./app/scripts/README.md)
+for the assertion catalog and tunable env vars.
+
 ---
 
 ## Quick start — embed the SDK

@@ -347,6 +347,11 @@ limited to `node:async_hooks`.
 
 ---
 
+## Testing
+
+CLI spawn-harness coverage (real subprocess + mocked upstream) lives in
+[`tests/cli/README.md`](./tests/cli/README.md).
+
 ## License
 
 MIT.

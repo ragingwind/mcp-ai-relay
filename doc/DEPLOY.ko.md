@@ -242,6 +242,12 @@ docker run --rm -p 8787:3000 --env-file .env.production mcp-ai-relay
 
 ### 4.3 검증 체크리스트
 
+**배포 전에 `pnpm docker:smoke`를 실행해** 빌드 정합성, 런타임 헬스, distroless 불변
+조건(셸 없음, non-root uid 65532), 이미지 크기 예산을 확인합니다. 회귀가
+발생하면 하네스가 non-zero 종료 — 어설션 카탈로그와 환경변수
+(이미지 태그, 크기 예산, 멀티아치 opt-in)는
+[`app/scripts/README.md`](../app/scripts/README.md) 참고.
+
 HEALTHCHECK:
 
 ```bash

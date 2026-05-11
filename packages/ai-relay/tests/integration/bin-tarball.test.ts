@@ -252,6 +252,39 @@ describe("ai-relay bin — installed tarball", () => {
     expect(r.status).toBe(0);
     expect(r.stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
   });
+
+  it("T-1: full one-shot round-trip — positional, stdin JSON, plain text", async () => {
+    mock.requests.length = 0;
+    mock.setResponse(() => ({ status: 200, body: defaultSseBody("hello world") }));
+
+    const r1 = await runBin(["openai", "chat", "-m", "gpt-4o-mini", "ping"], {
+      env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
+    });
+    expect(r1.status).toBe(0);
+    const out1 = JSON.parse(r1.stdout.trim());
+    expect(out1.isError).toBe(false);
+    expect(out1.content[0].text).toBe("hello world");
+
+    mock.requests.length = 0;
+    mock.setResponse(() => ({ status: 200, body: defaultSseBody("ok") }));
+    const r2 = await runBin(["openai", "chat", "-m", "gpt-4o-mini"], {
+      env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
+      input: '{"messages":[{"role":"user","content":"hi"}]}',
+    });
+    expect(r2.status).toBe(0);
+    expect(mock.requests[0]?.body).toMatchObject({
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    mock.requests.length = 0;
+    const r3 = await runBin(["openai", "chat", "-m", "gpt-4o-mini", "plain-text-input"], {
+      env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
+    });
+    expect(r3.status).toBe(0);
+    expect(mock.requests[0]?.body).toMatchObject({
+      messages: [{ role: "user", content: "plain-text-input" }],
+    });
+  });
 });
 
 interface JsonRpcResponse {

@@ -79,8 +79,19 @@ const isDirectRun =
   typeof process.argv[1] === "string" && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (isDirectRun) {
-  serve({ fetch: app.fetch, port: env.AI_RELAY_PORT }, (info) => {
+  const server = serve({ fetch: app.fetch, port: env.AI_RELAY_PORT }, (info) => {
     // Single-line startup log — no secrets, only port + endpoint.
     console.log(`mcp-ai-relay listening on http://localhost:${info.port}/api/mcp`);
   });
+
+  // Container orchestrators (Docker, Kubernetes) send SIGTERM before SIGKILL.
+  // Without an explicit handler the process is killed at the grace-period
+  // boundary (Docker default 10 s) and exits 137. Closing the listener stops
+  // accepting new connections and lets in-flight requests finish.
+  const shutdown = () => {
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 5000).unref();
+  };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 }
