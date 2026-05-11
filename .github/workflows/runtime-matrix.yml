@@ -1,0 +1,118 @@
+name: Runtime Matrix
+
+on:
+  pull_request:
+    branches: [main, "epic/**"]
+  push:
+    branches: [main, "epic/**"]
+
+jobs:
+  node-matrix:
+    name: Smoke (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["20.10.0", "20.x", "22.x", "24.x"]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build SDK
+        run: pnpm --filter ai-relay build
+
+      - name: Pack SDK
+        run: |
+          mkdir -p /tmp/pack
+          pnpm pack --filter ai-relay --pack-destination /tmp/pack
+          ls -la /tmp/pack
+
+      - name: Install tarball into smoke fixture
+        working-directory: tests/runtime-fixtures/smoke-node
+        run: npm install --no-audit --no-fund /tmp/pack/ai-relay-*.tgz
+
+      - name: Run smoke
+        working-directory: tests/runtime-fixtures/smoke-node
+        run: node smoke.mjs
+
+  bun-smoke:
+    name: Smoke (Bun)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build SDK
+        run: pnpm --filter ai-relay build
+
+      - name: Pack SDK
+        run: |
+          mkdir -p /tmp/pack
+          pnpm pack --filter ai-relay --pack-destination /tmp/pack
+
+      - name: Install tarball into Bun smoke fixture
+        working-directory: tests/runtime-fixtures/smoke-bun
+        run: npm install --no-audit --no-fund /tmp/pack/ai-relay-*.tgz
+
+      - name: Run smoke (Bun)
+        working-directory: tests/runtime-fixtures/smoke-bun
+        run: bun run smoke.mjs
+
+  esm-only-cjs-require:
+    name: ESM-only / CJS require assertion
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["20.x", "22.x"]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build SDK
+        run: pnpm --filter ai-relay build
+
+      - name: Pack SDK
+        run: |
+          mkdir -p /tmp/pack
+          pnpm pack --filter ai-relay --pack-destination /tmp/pack
+
+      - name: Install tarball into CJS fixture
+        working-directory: tests/runtime-fixtures/cjs-require
+        run: npm install --no-audit --no-fund /tmp/pack/ai-relay-*.tgz
+
+      - name: Run CJS require smoke
+        working-directory: tests/runtime-fixtures/cjs-require
+        run: node smoke.cjs
