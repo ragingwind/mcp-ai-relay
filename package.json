@@ -10,6 +10,7 @@
   },
   "scripts": {
     "dev": "node scripts/check-dev-env.mjs && pnpm -r --filter ai-relay build && pnpm -F app dev",
+    "docker:smoke": "bash app/scripts/docker-smoke.sh",
     "build": "pnpm -r build",
     "build:sdk": "pnpm --filter ai-relay build",
     "start": "pnpm -F app start",
