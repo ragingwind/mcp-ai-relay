@@ -1,13 +1,8 @@
 #!/usr/bin/env node
-// Pre-flight for `pnpm dev`. app/src/env.ts re-validates at module load, but
-// that only fires when the server boots — by then `pnpm -F app dev` may have
-// printed an unrelated stack trace. Catching it here keeps the failure mode
-// visible before the server starts.
+// Standalone env pre-flight. Invoke via `pnpm check-env` (which auto-loads
+// .env.local via Node's --env-file-if-exists flag). Replicates the runtime
+// validation in app/src/env.ts to surface failures without booting the server.
 
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
-
-const ENV_PATH = resolve(process.cwd(), ".env.local");
 const REQUIRED = ["AI_RELAY_AUTH_TOKEN"];
 
 function fail(lines) {
@@ -15,53 +10,24 @@ function fail(lines) {
   process.exit(1);
 }
 
-if (!existsSync(ENV_PATH)) {
-  fail([
-    "",
-    "[mcp-ai-relay] .env.local is missing.",
-    "",
-    "  cp .env.example .env.local",
-    "  # then set AI_RELAY_AUTH_TOKEN (required) and AI_RELAY_API_KEY (optional)",
-    "  # token: openssl rand -hex 32",
-    "",
-  ]);
-}
-
-const raw = readFileSync(ENV_PATH, "utf8");
-const dotenv = Object.fromEntries(
-  raw
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("#") && line.includes("="))
-    .map((line) => {
-      const idx = line.indexOf("=");
-      const k = line.slice(0, idx).trim();
-      let v = line.slice(idx + 1).trim();
-      if (
-        (v.startsWith('"') && v.endsWith('"')) ||
-        (v.startsWith("'") && v.endsWith("'"))
-      ) {
-        v = v.slice(1, -1);
-      }
-      return [k, v];
-    }),
-);
-
-const missing = REQUIRED.filter((key) => !dotenv[key]);
+const missing = REQUIRED.filter((k) => !process.env[k]);
 if (missing.length > 0) {
   fail([
     "",
-    `[mcp-ai-relay] .env.local missing required values: ${missing.join(", ")}`,
+    `[mcp-ai-relay] missing required env: ${missing.join(", ")}`,
     "",
-    "  Edit .env.local and set:",
+    "  Set in .env.local (auto-loaded by pnpm scripts):",
     ...missing.map((k) => `    ${k}=...`),
+    "",
+    "  Or export in your shell:",
+    ...missing.map((k) => `    export ${k}=...`),
     "",
     "  Generate AI_RELAY_AUTH_TOKEN if needed:  openssl rand -hex 32",
     "",
   ]);
 }
 
-if (Buffer.byteLength(dotenv.AI_RELAY_AUTH_TOKEN, "utf8") < 32) {
+if (Buffer.byteLength(process.env.AI_RELAY_AUTH_TOKEN, "utf8") < 32) {
   fail([
     "",
     "[mcp-ai-relay] AI_RELAY_AUTH_TOKEN must be at least 32 bytes.",

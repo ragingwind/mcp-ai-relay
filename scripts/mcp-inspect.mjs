@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // CLI wrapper around `npx @modelcontextprotocol/inspector --cli` for ad-hoc
-// MCP smoke checks against /api/mcp. Inputs (priority: flag > env > .env.local
-// > default):
+// MCP smoke checks against /api/mcp. Inputs (priority: flag > env (incl.
+// --env-file-if-exists=.env.local) > default):
 //
 //   --url=<URL>      MCP_URL              http://localhost:8787/api/mcp
-//   --token=<TOK>    AI_RELAY_AUTH_TOKEN  (required, falls back to .env.local)
+//   --token=<TOK>    AI_RELAY_AUTH_TOKEN  (required)
 //   --tool=<NAME>    MCP_TOOL             openai_chat
 //   --model=<NAME>   MCP_MODEL            gpt-4o-mini
 //   --message=<TXT>  MCP_MESSAGE          ping
@@ -18,31 +18,6 @@
 //   MCP_URL=https://relay.example.com/api/mcp AI_RELAY_AUTH_TOKEN=... pnpm inspect
 
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
-
-function loadDotenv() {
-  const p = resolve(process.cwd(), ".env.local");
-  if (!existsSync(p)) return {};
-  return Object.fromEntries(
-    readFileSync(p, "utf8")
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l && !l.startsWith("#") && l.includes("="))
-      .map((l) => {
-        const i = l.indexOf("=");
-        const k = l.slice(0, i).trim();
-        let v = l.slice(i + 1).trim();
-        if (
-          (v.startsWith('"') && v.endsWith('"')) ||
-          (v.startsWith("'") && v.endsWith("'"))
-        ) {
-          v = v.slice(1, -1);
-        }
-        return [k, v];
-      }),
-  );
-}
 
 const flags = Object.fromEntries(
   process.argv
@@ -54,21 +29,12 @@ const flags = Object.fromEntries(
     }),
 );
 
-const dotenv = loadDotenv();
-
 const URL_BASE =
-  flags.url ??
-  process.env.MCP_URL ??
-  dotenv.MCP_URL ??
-  "http://localhost:8787/api/mcp";
-const TOKEN =
-  flags.token ?? process.env.AI_RELAY_AUTH_TOKEN ?? dotenv.AI_RELAY_AUTH_TOKEN;
-const TOOL =
-  flags.tool ?? process.env.MCP_TOOL ?? dotenv.MCP_TOOL ?? "openai_chat";
-const MODEL =
-  flags.model ?? process.env.MCP_MODEL ?? dotenv.MCP_MODEL ?? "gpt-4o-mini";
-const MESSAGE =
-  flags.message ?? process.env.MCP_MESSAGE ?? dotenv.MCP_MESSAGE ?? "ping";
+  flags.url ?? process.env.MCP_URL ?? "http://localhost:8787/api/mcp";
+const TOKEN = flags.token ?? process.env.AI_RELAY_AUTH_TOKEN;
+const TOOL = flags.tool ?? process.env.MCP_TOOL ?? "openai_chat";
+const MODEL = flags.model ?? process.env.MCP_MODEL ?? "gpt-4o-mini";
+const MESSAGE = flags.message ?? process.env.MCP_MESSAGE ?? "ping";
 const METHOD = flags.method ?? "tools/call";
 
 if (!TOKEN) {

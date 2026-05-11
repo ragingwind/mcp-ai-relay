@@ -12,39 +12,11 @@
 //   C6 (cancellation)     — relies on visual inspection of the OpenAI usage
 //      page; stays manual per QA-MCP-INSPECTOR.md.
 
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
-
-const ENV_PATH = resolve(process.cwd(), ".env.local");
-
-if (!existsSync(ENV_PATH)) {
-  console.error("[verify] .env.local missing — run `pnpm dev` once to surface setup steps.");
-  process.exit(1);
-}
-
-const raw = readFileSync(ENV_PATH, "utf8");
-const dotenv = Object.fromEntries(
-  raw
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("#") && line.includes("="))
-    .map((line) => {
-      const idx = line.indexOf("=");
-      const k = line.slice(0, idx).trim();
-      let v = line.slice(idx + 1).trim();
-      if (
-        (v.startsWith('"') && v.endsWith('"')) ||
-        (v.startsWith("'") && v.endsWith("'"))
-      ) {
-        v = v.slice(1, -1);
-      }
-      return [k, v];
-    }),
-);
-
-const TOKEN = dotenv.AI_RELAY_AUTH_TOKEN;
+const TOKEN = process.env.AI_RELAY_AUTH_TOKEN;
 if (!TOKEN) {
-  console.error("[verify] AI_RELAY_AUTH_TOKEN missing in .env.local");
+  console.error(
+    "[verify] AI_RELAY_AUTH_TOKEN missing — set in .env.local (auto-loaded by `pnpm verify`) or export in your shell",
+  );
   process.exit(1);
 }
 

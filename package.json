@@ -6,7 +6,7 @@
   "author": "Jimmy Moon <ragingwind@gmail.com>",
   "packageManager": "pnpm@9.15.0",
   "engines": {
-    "node": ">=20.0.0 <21.0.0"
+    "node": ">=20.10.0 <21.0.0"
   },
   "scripts": {
     "dev": "node scripts/check-dev-env.mjs && pnpm -r --filter ai-relay build && pnpm -F app dev",
@@ -18,8 +18,9 @@
     "test": "pnpm --filter ai-relay build && vitest run --passWithNoTests",
     "test:unit": "pnpm --filter ai-relay test",
     "test:integration": "pnpm --filter ai-relay build && vitest run --project integration --passWithNoTests",
-    "verify": "node scripts/verify.mjs",
-    "inspect": "node scripts/mcp-inspect.mjs"
+    "verify": "node --env-file-if-exists=.env.local scripts/verify.mjs",
+    "inspect": "node --env-file-if-exists=.env.local scripts/mcp-inspect.mjs",
+    "check-env": "node --env-file-if-exists=.env.local scripts/check-dev-env.mjs"
   },
   "dependencies": {
     "ai-relay": "workspace:*"
