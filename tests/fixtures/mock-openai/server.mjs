@@ -111,7 +111,10 @@ const server = createServer((req, res) => {
   res.end(JSON.stringify({ error: { message: "not found" } }));
 });
 
-server.listen(port, "127.0.0.1", () => {
+// Bind 0.0.0.0 so the docker-smoke harness can reach this fixture from
+// inside the container via host.docker.internal. 127.0.0.1 would only
+// be reachable from the host's loopback interface.
+server.listen(port, "0.0.0.0", () => {
   const addr = server.address();
   const boundPort = typeof addr === "object" && addr ? addr.port : port;
   process.stdout.write(`LISTENING port=${boundPort}\n`);

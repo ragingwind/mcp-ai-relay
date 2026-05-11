@@ -151,7 +151,7 @@ if [ -z "$mock_port" ]; then
   echo "summary: passed=$PASS_COUNT failed=$FAIL_COUNT"
   exit 1
 fi
-echo "mock OpenAI listening on 127.0.0.1:${mock_port} (pid=${MOCK_PID})"
+echo "mock OpenAI listening on 0.0.0.0:${mock_port} (pid=${MOCK_PID})"
 
 # ===========================================================================
 # Container launch
@@ -263,10 +263,6 @@ init_resp=$(curl -s -D "$init_headers" \
   -H "authorization: Bearer ${SMOKE_BEARER}" \
   -d "$init_body")
 SESSION_ID=$(grep -i '^Mcp-Session-Id:' "$init_headers" | awk '{print $2}' | tr -d '\r\n')
-echo "        DEBUG: init response headers ↓"
-sed 's/^/          /' "$init_headers"
-echo "        DEBUG: init body (first 400 chars): ${init_resp:0:400}"
-echo "        DEBUG: SESSION_ID='${SESSION_ID}' (empty = stateless mcp-handler, fallback below)"
 rm -f "$init_headers"
 if echo "$init_resp" | grep -q '"protocolVersion"'; then
   pass "R-6 authenticated initialize returned protocolVersion"
@@ -279,24 +275,30 @@ fi
 # ===========================================================================
 echo "--- R-7: tools/call openai_chat -> canned reply ---"
 call_body='{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"openai_chat","arguments":{"model":"gpt-4o-mini","messages":[{"role":"user","content":"ping"}]}}}'
-# Mcp-Session-Id is required for stateful MCP transport — without it the
-# server treats this as an out-of-session request and returns no result.
-call_resp=$(curl -s \
-  "http://localhost:${SMOKE_HOST_PORT}/api/mcp" \
-  -X POST \
-  -H 'content-type: application/json' \
-  -H 'accept: application/json, text/event-stream' \
-  -H "authorization: Bearer ${SMOKE_BEARER}" \
-  -H "Mcp-Session-Id: ${SESSION_ID}" \
-  -d "$call_body")
-echo "        DEBUG: tools/call body (first 800 chars): ${call_resp:0:800}"
-echo "        DEBUG: container logs tail (last 30 lines):"
-docker logs --tail 30 "$CONTAINER_NAME" 2>&1 | sed 's/^/          /'
-echo "        DEBUG: mock fixture pid=$mock_pid alive? $(kill -0 "$mock_pid" 2>/dev/null && echo yes || echo no)"
+# Pass Mcp-Session-Id only when the server returned one (stateful mode).
+# mcp-handler runs stateless by default — no header to forward.
+if [ -n "$SESSION_ID" ]; then
+  call_resp=$(curl -s \
+    "http://localhost:${SMOKE_HOST_PORT}/api/mcp" \
+    -X POST \
+    -H 'content-type: application/json' \
+    -H 'accept: application/json, text/event-stream' \
+    -H "authorization: Bearer ${SMOKE_BEARER}" \
+    -H "Mcp-Session-Id: ${SESSION_ID}" \
+    -d "$call_body")
+else
+  call_resp=$(curl -s \
+    "http://localhost:${SMOKE_HOST_PORT}/api/mcp" \
+    -X POST \
+    -H 'content-type: application/json' \
+    -H 'accept: application/json, text/event-stream' \
+    -H "authorization: Bearer ${SMOKE_BEARER}" \
+    -d "$call_body")
+fi
 if echo "$call_resp" | grep -q "smoke-canned-reply"; then
   pass "R-7 tools/call returned mock canned reply"
 else
-  fail "R-7 tools/call did not return canned reply"
+  fail "R-7 tools/call did not return canned reply (response: ${call_resp:0:300})"
 fi
 
 # ===========================================================================
