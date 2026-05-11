@@ -26,6 +26,32 @@ registers the SDK's tool in `init()` and adds a bearer-token gate.
 > stack adopts zod@4. Track upstream:
 > https://github.com/cloudflare/agents
 
+## Local development
+
+1. Copy `.dev.vars.example` to `.dev.vars` and fill in real values
+   (`.dev.vars` is gitignored).
+2. `pnpm install`
+3. `pnpm dev` (runs `wrangler dev` on `http://localhost:8787` by default).
+4. Hit it with the bearer token from `.dev.vars`:
+   ```bash
+   TOKEN=$(grep AI_RELAY_AUTH_TOKEN .dev.vars | cut -d'"' -f2)
+   curl -N -H "Authorization: Bearer $TOKEN" \
+     -H 'Accept: text/event-stream' \
+     http://localhost:8787/sse
+   ```
+   Expect HTTP 200 plus an SSE stream whose first frame is
+   `event: endpoint` pointing at `/sse/message?sessionId=...` (the
+   `agents/mcp` handshake). Without the bearer header the same endpoint
+   returns `401`. Subsequent JSON-RPC messages are POSTed to the
+   `/sse/message?sessionId=...` URL announced by that first frame.
+
+For an automated end-to-end smoke (boots wrangler, asserts both the
+no-auth 401 and the authenticated non-401 path), run:
+
+```bash
+pnpm smoke
+```
+
 ## Run from this monorepo
 
 ```bash

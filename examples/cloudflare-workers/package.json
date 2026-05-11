@@ -6,7 +6,8 @@
   "description": "Cloudflare Workers MCP server using the SDK + agents/mcp framework.",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "smoke": "bash scripts/smoke.sh"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26",
