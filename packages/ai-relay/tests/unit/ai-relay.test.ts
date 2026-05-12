@@ -64,8 +64,8 @@ describe("ai-relay — argv short-circuits", () => {
     expect(cap.stdout.value).toBe(`${VERSION}\n`);
   });
 
-  it("P5: VERSION matches package version (0.7.x)", () => {
-    expect(VERSION).toMatch(/^0\.7\.\d+$/);
+  it("P5: VERSION matches package version (0.8.x)", () => {
+    expect(VERSION).toMatch(/^0\.8\.\d+$/);
   });
 });
 

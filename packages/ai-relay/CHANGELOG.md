@@ -6,6 +6,62 @@ the project adheres to [Semantic Versioning](https://semver.org/) once
 v1.0 ships. Pre-v1.0 minor bumps may include breaking changes — read
 this file before upgrading.
 
+## [0.8.0] — 2026-05-12
+
+### Changed (BREAKING — caller-visible)
+
+- **First positional is now `<provider>`, not `<api-type>`.** Both bins
+  gained a provider axis that is separate from the tool name. The MCP
+  tool registered on the server is still named `chat-completions` — the
+  provider is conveyed by the positional (and by the fact that this
+  server instance was started with `openai`), not baked into the tool
+  name.
+
+  MCP host configuration:
+  ```diff
+   "mcpServers": {
+     "ai-relay": {
+       "command": "npx",
+  -    "args": ["-y", "ai-relay", "chat-completions"],
+  +    "args": ["-y", "ai-relay", "openai"],
+       "env": { "AI_RELAY_API_KEY": "sk-..." }
+     }
+   }
+  ```
+
+  One-shot CLI:
+  ```diff
+  -ai-relay-cli chat-completions -m gpt-4o-mini "ping"
+  +ai-relay-cli openai chat-completions -m gpt-4o-mini "ping"
+  ```
+
+  The CLI now requires two positionals — `<provider>` then `<tool>` —
+  looked up provider-scoped via the registry. Missing either, or an
+  unknown provider / unknown tool for the named provider, exits 2 with
+  a usage message.
+
+- **Registry restructured.** `resolveApiType` is gone. The registry is
+  keyed by provider:
+  ```ts
+  registry.openai = {
+    registerOnServer: registerOpenAIProvider,
+    tools: { "chat-completions": openAIChatTool },
+  };
+  ```
+  Adding a future provider/API now means adding a registry entry rather
+  than threading a new selector through the CLI parser.
+
+### Rationale
+
+Previously the server positional `<api-type>` and the registered tool
+name were the same string (`chat-completions`), so the selector and the
+identifier of the resulting tool were indistinguishable. Splitting the
+two axes — provider as the positional, tool name as the registered
+identifier — makes both bins extensible (multi-API and future
+providers) without renaming `chat-completions`. Namespacing
+(`<provider>.<api>`) is reserved for a future multi-provider-per-server
+mode; see [`doc/ARCHITECTURE.md` §11](../../doc/ARCHITECTURE.md#11-future-work-v2-backlog).
+
 ## [0.7.0] — 2026-05-12
 
 ### Added
