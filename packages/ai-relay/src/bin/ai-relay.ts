@@ -8,6 +8,13 @@ import { pathToFileURL } from "node:url";
 import { loadConfig } from "../config.js";
 import { VERSION } from "../version.js";
 import { parseEnvFile } from "./env-file.js";
+import {
+  createVerboseLogger,
+  isVerboseEnv,
+  redactArgv,
+  redactSecret,
+  snapshotRelayEnv,
+} from "./logger.js";
 import { startMcpServer } from "./mcp-server.js";
 import { type ParsedMcpInvocation, parseMcpArgv, UsageError } from "./parse.js";
 import { registry, resolveApiType } from "./registry.js";
@@ -29,6 +36,7 @@ Flags:
       --max-tokens <n>    Ceiling for max_tokens
       --timeout <ms>      Upstream request timeout in ms
       --env <path>        Load AI_RELAY_* keys from a dotenv file
+  -v, --verbose           Trace stages to stderr (also: AI_RELAY_VERBOSE=1)
   -h, --help              Show this message
   -V, --version           Print SDK version
 
@@ -80,6 +88,19 @@ export async function main(argv: readonly string[], io: AiRelayIO): Promise<numb
     io.stdout.write(`${VERSION}\n`);
     return 0;
   }
+
+  const verbose = createVerboseLogger({
+    enabled: parsed.verbose || isVerboseEnv(io.env),
+    stream: io.stderr,
+  });
+  verbose.log("argv", redactArgv(argv));
+  verbose.log("parsed-flags", {
+    apiType: parsed.apiType,
+    flags: redactMcpFlags(parsed.flags),
+    verbose: parsed.verbose,
+  });
+  verbose.log("env-snapshot", snapshotRelayEnv(io.env));
+
   if (parsed.apiType === undefined) {
     io.stderr.write(USAGE_NO_API_TYPE);
     return 2;
@@ -135,9 +156,17 @@ export async function main(argv: readonly string[], io: AiRelayIO): Promise<numb
     return 2;
   }
 
+  verbose.log("loaded-config", {
+    apiKey: redactSecret(providerConfig.apiKey),
+    baseURL: providerConfig.baseURL ?? "(default)",
+    maxOutputTokens: providerConfig.maxOutputTokens ?? "(default)",
+    requestTimeoutMs: providerConfig.requestTimeoutMs ?? "(default)",
+  });
+
   await startMcpServer({
     apiType,
     version: VERSION,
+    logger: verbose,
     config: {
       apiKey: providerConfig.apiKey,
       ...(providerConfig.baseURL !== undefined ? { baseURL: providerConfig.baseURL } : {}),
@@ -150,6 +179,14 @@ export async function main(argv: readonly string[], io: AiRelayIO): Promise<numb
     },
   });
   return 0;
+}
+
+function redactMcpFlags(flags: ParsedMcpInvocation["flags"]): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...flags };
+  if (out["api-key"] !== undefined) {
+    out["api-key"] = redactSecret(out["api-key"] as string);
+  }
+  return out;
 }
 
 // Entry shim — invoked when this file is executed directly as the bin.

@@ -1,7 +1,7 @@
 // Argv parser tests for `ai-relay-cli <tool> [flags] [input]`.
 
 import { describe, expect, it } from "vitest";
-import { parseArgv, UsageError } from "../../src/bin/parse.js";
+import { parseArgv, parseMcpArgv, UsageError } from "../../src/bin/parse.js";
 
 describe("parseArgv — basic shape", () => {
   it("P1: <tool> <input> → ParsedInvocation", () => {
@@ -93,6 +93,49 @@ describe("parseArgv — help/version short-circuit", () => {
   it("P2: -V short-circuits without requiring positionals", () => {
     expect(parseArgv(["-V"]).version).toBe(true);
     expect(parseArgv(["--version"]).version).toBe(true);
+  });
+});
+
+describe("parseArgv — verbose flag", () => {
+  it("P1: --verbose long flag sets verbose=true", () => {
+    const out = parseArgv(["chat-completions", "--verbose", "-m", "gpt-4o-mini", "hi"]);
+    expect(out.verbose).toBe(true);
+    expect(out.flags.model).toBe("gpt-4o-mini");
+    expect(out.positional).toBe("hi");
+  });
+
+  it("P2: -v short flag sets verbose=true", () => {
+    const out = parseArgv(["chat-completions", "-v", "-m", "gpt-4o-mini", "hi"]);
+    expect(out.verbose).toBe(true);
+  });
+
+  it("P3: omitted verbose flag → verbose=false", () => {
+    const out = parseArgv(["chat-completions", "-m", "gpt-4o-mini", "hi"]);
+    expect(out.verbose).toBe(false);
+  });
+
+  it("P4: -v is a boolean — does NOT consume the next token as a value", () => {
+    const out = parseArgv(["chat-completions", "-v", "hi"]);
+    expect(out.verbose).toBe(true);
+    expect(out.positional).toBe("hi");
+  });
+});
+
+describe("parseMcpArgv — verbose flag", () => {
+  it("P1: --verbose long flag sets verbose=true", () => {
+    const out = parseMcpArgv(["chat-completions", "--verbose"]);
+    expect(out.verbose).toBe(true);
+    expect(out.apiType).toBe("chat-completions");
+  });
+
+  it("P2: -v short flag sets verbose=true", () => {
+    const out = parseMcpArgv(["chat-completions", "-v"]);
+    expect(out.verbose).toBe(true);
+  });
+
+  it("P3: omitted verbose flag → verbose=false", () => {
+    const out = parseMcpArgv(["chat-completions"]);
+    expect(out.verbose).toBe(false);
   });
 });
 

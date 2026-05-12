@@ -3,7 +3,7 @@
 // Surface: `ai-relay-cli <tool> [flags] [input]`
 //
 // Long flags: --system -s, --model -m, --api-key, --base-url,
-//             --max-tokens, --timeout, --env,
+//             --max-tokens, --timeout, --env, --verbose -v,
 //             --help -h, --version -V.
 //
 // Short forms: only the ones listed above are accepted.
@@ -28,6 +28,7 @@ export interface ParsedFlags {
 export interface ParsedInvocation {
   help: boolean;
   version: boolean;
+  verbose: boolean;
   tool: string;
   flags: ParsedFlags;
   positional?: string;
@@ -48,6 +49,7 @@ const SHORT_TO_LONG: Record<string, string> = {
   m: "model",
   h: "help",
   V: "version",
+  v: "verbose",
 };
 
 function parseNumber(name: string, raw: string): number {
@@ -62,6 +64,7 @@ export function parseArgv(argv: readonly string[]): ParsedInvocation {
   const out: ParsedInvocation = {
     help: false,
     version: false,
+    verbose: false,
     tool: "",
     flags: {},
   };
@@ -91,6 +94,10 @@ export function parseArgv(argv: readonly string[]): ParsedInvocation {
       }
       if (key === "version") {
         out.version = true;
+        continue;
+      }
+      if (key === "verbose") {
+        out.verbose = true;
         continue;
       }
       if (!VALUE_FLAGS.has(key)) {
@@ -130,6 +137,10 @@ export function parseArgv(argv: readonly string[]): ParsedInvocation {
       }
       if (long === "version") {
         out.version = true;
+        continue;
+      }
+      if (long === "verbose") {
+        out.verbose = true;
         continue;
       }
       let value: string;
@@ -183,7 +194,7 @@ export function parseArgv(argv: readonly string[]): ParsedInvocation {
 //
 // Surface: `ai-relay <api-type> [flags]`
 // Flags: --api-key, --base-url, --max-tokens, --timeout, --env,
-//        --help -h, --version -V.
+//        --verbose -v, --help -h, --version -V.
 
 export interface ParsedMcpFlags {
   "api-key"?: string;
@@ -196,6 +207,7 @@ export interface ParsedMcpFlags {
 export interface ParsedMcpInvocation {
   help: boolean;
   version: boolean;
+  verbose: boolean;
   apiType?: string;
   flags: ParsedMcpFlags;
 }
@@ -207,6 +219,7 @@ export function parseMcpArgv(argv: readonly string[]): ParsedMcpInvocation {
   const out: ParsedMcpInvocation = {
     help: false,
     version: false,
+    verbose: false,
     flags: {},
   };
   const positionals: string[] = [];
@@ -235,6 +248,10 @@ export function parseMcpArgv(argv: readonly string[]): ParsedMcpInvocation {
       }
       if (key === "version") {
         out.version = true;
+        continue;
+      }
+      if (key === "verbose") {
+        out.verbose = true;
         continue;
       }
       if (!MCP_VALUE_FLAGS.has(key)) {
@@ -267,6 +284,10 @@ export function parseMcpArgv(argv: readonly string[]): ParsedMcpInvocation {
       }
       if (body === "V") {
         out.version = true;
+        continue;
+      }
+      if (body === "v") {
+        out.verbose = true;
         continue;
       }
       throw new UsageError(`unknown flag: -${body}`);

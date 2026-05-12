@@ -62,6 +62,12 @@ JSON 리터럴 (`{` / `[`)은 그대로 전달됩니다.
 모델 해결 순서(먼저 발견된 값이 우선): JSON 입력의 `model` 필드 →
 `-m`/`--model <id>` 플래그 → `AI_RELAY_MODEL` 환경변수.
 
+**디버깅:** `-v` / `--verbose` 플래그(또는 `AI_RELAY_VERBOSE=1` 환경
+변수)를 사용하면 각 단계(`argv`, `parsed-flags`, `env-snapshot`,
+`loaded-config`, `openai-request`, `result` 등)가 stderr로 추적됩니다.
+시크릿과 응답 본문은 자동으로 마스킹되며, stdout JSON 채널은 절대 오염되지
+않습니다.
+
 ---
 
 ## 빠른 시작 — stdio MCP 서버 (`ai-relay <api-type>`)

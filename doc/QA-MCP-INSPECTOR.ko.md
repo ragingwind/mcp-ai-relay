@@ -88,6 +88,23 @@ pnpm inspect --tool=other_tool --message="..."
 C4(클램프), C6(취소), production 재검증을 위해서는 아래 수동 절차로 fall
 through (섹션 A–E).
 
+**팁 — verbose 추적.** 시나리오가 실패하거나, 파싱된 플래그/환경 스냅샷/
+OpenAI 요청/JSON-RPC 트래픽을 들여다봐야 할 때는 bin에 `-v` / `--verbose`를
+넘기거나 `AI_RELAY_VERBOSE=1`을 설정하세요. 추적은 **stderr**로 출력되므로
+Inspector가 읽는 stdout JSON-RPC 채널은 깨끗하게 유지됩니다.
+
+```bash
+ai-relay-cli chat-completions -v -m gpt-4o-mini "ping"
+
+AI_RELAY_VERBOSE=1 npx @modelcontextprotocol/inspector --cli \
+  node packages/ai-relay/dist/bin/ai-relay.js chat-completions \
+  --method tools/list
+```
+
+시크릿(`AI_RELAY_API_KEY`, `--api-key` 값)은 `***redacted(Nchars)***`로만
+표시되며, OpenAI / MCP 응답 본문은 문자 수 + finish reason 메타데이터로만
+요약됩니다. 응답 본문 자체가 stderr에 출력되는 일은 없습니다.
+
 ## A. 준비
 
 1. `.env.local`에 **개인 dev OpenAI 키**(production 키 아님)와 원하는

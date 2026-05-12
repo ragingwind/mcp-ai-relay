@@ -7,6 +7,14 @@ import { loadConfig } from "../config.js";
 import type { OpenAIChatConfig, OpenAIChatHandlerBundle } from "../openai/index.js";
 import { VERSION } from "../version.js";
 import { parseEnvFile } from "./env-file.js";
+import {
+  createVerboseLogger,
+  isVerboseEnv,
+  redactArgv,
+  redactSecret,
+  snapshotRelayEnv,
+  summariseMessages,
+} from "./logger.js";
 import { type ParsedInvocation, parseArgv, UsageError } from "./parse.js";
 import { type AnyTool, resolveTool } from "./registry.js";
 
@@ -34,6 +42,7 @@ Flags:
       --max-tokens <n>    Cap on max_tokens
       --timeout <ms>      Request timeout in ms
       --env <path>        Load AI_RELAY_* keys from a dotenv file
+  -v, --verbose           Trace stages to stderr (also: AI_RELAY_VERBOSE=1)
   -h, --help              Show this message
   -V, --version           Print SDK version
 
@@ -76,6 +85,19 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
     return 0;
   }
 
+  const verbose = createVerboseLogger({
+    enabled: parsed.verbose || isVerboseEnv(io.env),
+    stream: io.stderr,
+  });
+  verbose.log("argv", redactArgv(argv));
+  verbose.log("parsed-flags", {
+    tool: parsed.tool,
+    positional: parsed.positional === undefined ? "(none)" : `(${parsed.positional.length} chars)`,
+    flags: redactParsedFlags(parsed.flags),
+    verbose: parsed.verbose,
+  });
+  verbose.log("env-snapshot", snapshotRelayEnv(io.env));
+
   const tool = resolveTool(parsed.tool);
   if (!tool) {
     io.stderr.write(`unknown tool: ${parsed.tool}\n`);
@@ -101,6 +123,12 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
     return 2;
   }
 
+  verbose.log("cli-input-raw", {
+    source: parsed.positional !== undefined ? "positional" : "stdin",
+    chars: rawInput.length,
+    kind: isJsonInput(rawInput) ? "json" : "plain-text",
+  });
+
   const fallbackModel = parsed.flags.model ?? io.env.AI_RELAY_MODEL;
 
   let inputObj: Record<string, unknown>;
@@ -114,12 +142,30 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
     return 2;
   }
 
+  verbose.log("cli-input-parsed", {
+    keys: Object.keys(inputObj),
+    model: inputObj.model,
+    messages: summariseMessages(inputObj.messages),
+  });
+
   // Resolve model: input JSON > flag > env. If the input already carries
   // `model`, it wins; otherwise inject the fallback so the schema accepts.
   const resolvedModel =
     typeof inputObj.model === "string" && inputObj.model.length > 0
       ? inputObj.model
       : fallbackModel;
+
+  verbose.log("cli-resolved-model", {
+    model: resolvedModel ?? "(none — will error)",
+    source:
+      typeof inputObj.model === "string" && inputObj.model.length > 0
+        ? "from JSON input"
+        : parsed.flags.model !== undefined
+          ? "from -m flag"
+          : io.env.AI_RELAY_MODEL !== undefined
+            ? "from AI_RELAY_MODEL env"
+            : "none — will error",
+  });
 
   // Plain-text desugar without a resolved model means there's no way for
   // the tool to know what to call upstream. JSON input is allowed to slip
@@ -179,6 +225,13 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
     return 2;
   }
 
+  verbose.log("loaded-config", {
+    apiKey: redactSecret(providerConfig.apiKey),
+    baseURL: providerConfig.baseURL ?? "(default)",
+    maxOutputTokens: providerConfig.maxOutputTokens ?? "(default)",
+    requestTimeoutMs: providerConfig.requestTimeoutMs ?? "(default)",
+  });
+
   const toolConfig: OpenAIChatConfig = {
     apiKey: providerConfig.apiKey,
     ...(providerConfig.baseURL !== undefined ? { baseURL: providerConfig.baseURL } : {}),
@@ -191,11 +244,58 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
   };
 
   const bundle: OpenAIChatHandlerBundle = tool.makeHandler(toolConfig);
+
+  verbose.log("openai-request", {
+    model: merged.model,
+    messages: summariseMessages(merged.messages),
+    max_tokens: merged.max_tokens,
+    temperature: merged.temperature,
+    top_p: merged.top_p,
+    stop: merged.stop,
+  });
+
+  const streamStart = Date.now();
   const result = await bundle.handler(merged);
+  const elapsedMs = Date.now() - streamStart;
+
+  if (result.isError) {
+    verbose.log("openai-error", {
+      code: result.structuredContent.code,
+      retryAfter: result.structuredContent.retryAfter,
+      elapsedMs,
+    });
+  } else {
+    const text = result.content[0]?.text ?? "";
+    verbose.log("openai-response-stream-end", {
+      model: result.structuredContent.model,
+      finish_reason: result.structuredContent.finish_reason,
+      usage: result.structuredContent.usage,
+      chars: text.length,
+      elapsedMs,
+    });
+  }
+
+  verbose.log("result", {
+    isError: result.isError,
+    contentChars: result.content[0]?.text?.length ?? 0,
+    structuredContent: {
+      model: result.structuredContent.model,
+      finish_reason: result.structuredContent.finish_reason,
+      code: result.structuredContent.code,
+    },
+  });
 
   const output = io.isTTY ? JSON.stringify(result, null, 2) : JSON.stringify(result);
   io.stdout.write(`${output}\n`);
   return result.isError ? 1 : 0;
+}
+
+function redactParsedFlags(flags: ParsedInvocation["flags"]): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...flags };
+  if (out["api-key"] !== undefined) {
+    out["api-key"] = redactSecret(out["api-key"] as string);
+  }
+  return out;
 }
 
 function isJsonInput(raw: string): boolean {

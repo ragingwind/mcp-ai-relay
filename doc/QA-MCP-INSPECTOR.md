@@ -88,6 +88,25 @@ Flags (priority: `--flag=` > `process.env` > `.env.local` > default):
 C4 (clamp), C6 (cancellation), and production re-verification, fall through
 to the manual procedure below (sections A–E).
 
+**Tip — verbose tracing.** When a scenario fails or you want to inspect the
+parsed flags, env snapshot, OpenAI request, and JSON-RPC traffic, run the
+bin with `-v` / `--verbose` (or set `AI_RELAY_VERBOSE=1`). The trace is
+written to **stderr** so the stdout JSON-RPC channel that Inspector reads
+remains clean.
+
+```bash
+ai-relay-cli chat-completions -v -m gpt-4o-mini "ping"
+
+AI_RELAY_VERBOSE=1 npx @modelcontextprotocol/inspector --cli \
+  node packages/ai-relay/dist/bin/ai-relay.js chat-completions \
+  --method tools/list
+```
+
+Secrets (`AI_RELAY_API_KEY`, `--api-key` value) appear only as
+`***redacted(Nchars)***`; OpenAI / MCP response bodies are summarised by
+character count + finish reason. The response body itself never reaches
+stderr.
+
 ## A. Preparation
 
 1. Populate `.env.local` with **a personal dev OpenAI key** (not the production key)

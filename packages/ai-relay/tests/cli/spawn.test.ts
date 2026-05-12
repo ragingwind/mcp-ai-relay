@@ -361,4 +361,39 @@ describe("D: Resilience / Lifecycle", () => {
     expect(r.status).toBe(0);
     expect(r.stderr).not.toContain(canary);
   });
+
+  it("V-1: -v flag emits verbose stage lines on stderr, stdout is single JSON line", async () => {
+    const r = await runCli({
+      args: ["chat-completions", "-v", "-m", "gpt-4o-mini", "hi"],
+      env: happyEnv(),
+    });
+    expect(r.status).toBe(0);
+    expect(r.stdout.trim().split("\n")).toHaveLength(1);
+    expect(() => JSON.parse(r.stdout.trim())).not.toThrow();
+    expect(r.stderr).toMatch(/\[verbose \d{4}-\d{2}-\d{2}T/);
+    for (const stage of ["argv", "openai-request", "result"]) {
+      expect(r.stderr).toContain(`] ${stage}:`);
+    }
+  });
+
+  it("V-2: AI_RELAY_VERBOSE=1 env enables verbose without the flag", async () => {
+    const r = await runCli({
+      args: ["chat-completions", "-m", "gpt-4o-mini", "hi"],
+      env: { ...happyEnv(), AI_RELAY_VERBOSE: "1" },
+    });
+    expect(r.status).toBe(0);
+    expect(r.stderr).toContain("] argv:");
+    expect(r.stderr).toContain("] openai-request:");
+  });
+
+  it("V-3: -v + secret API key → secret never appears in stderr", async () => {
+    const canary = "sk-leak-canary-VERBOSE";
+    const r = await runCli({
+      args: ["chat-completions", "-v", "-m", "gpt-4o-mini", "--api-key", canary, "hi"],
+      env: { AI_RELAY_BASE_URL: mock.baseURL },
+    });
+    expect(r.status).toBe(0);
+    expect(r.stderr).not.toContain(canary);
+    expect(r.stderr).toContain("***redacted(");
+  });
 });

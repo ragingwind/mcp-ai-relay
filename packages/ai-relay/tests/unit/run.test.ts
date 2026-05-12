@@ -460,6 +460,98 @@ describe("run — flag-driven config", () => {
   });
 });
 
+describe("run — verbose stderr", () => {
+  it("P1: -v flag emits verbose stage lines to stderr, stdout stays single JSON line", async () => {
+    server.use(http.post(ENDPOINT, () => happyResponse("ok")));
+    const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
+    const code = await run(["chat-completions", "-v", "-m", "gpt-4o-mini", "hi"], cap.io);
+    expect(code).toBe(0);
+    // stdout stays exactly one JSON line (no verbose pollution)
+    expect(cap.stdout.value.trim().split("\n")).toHaveLength(1);
+    // stderr contains the expected stage sequence
+    for (const stage of [
+      "argv",
+      "parsed-flags",
+      "env-snapshot",
+      "cli-input-raw",
+      "cli-input-parsed",
+      "cli-resolved-model",
+      "loaded-config",
+      "openai-request",
+      "openai-response-stream-end",
+      "result",
+    ]) {
+      expect(cap.stderr.value).toContain(`] ${stage}:`);
+    }
+    // every verbose line starts with the [verbose <iso>] prefix
+    for (const line of cap.stderr.value.split("\n").filter((l) => l.length > 0)) {
+      expect(line).toMatch(/^\[verbose \d{4}-\d{2}-\d{2}T/);
+    }
+  });
+
+  it("P2: AI_RELAY_VERBOSE=1 env enables verbose without the -v flag", async () => {
+    server.use(http.post(ENDPOINT, () => happyResponse("ok")));
+    const cap = makeIO({ env: { AI_RELAY_API_KEY: "k", AI_RELAY_VERBOSE: "1" } });
+    const code = await run(["chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
+    expect(code).toBe(0);
+    expect(cap.stderr.value).toContain("] argv:");
+    expect(cap.stderr.value).toContain("] openai-request:");
+  });
+
+  it("P3: no -v and no AI_RELAY_VERBOSE → no verbose lines on stderr", async () => {
+    server.use(http.post(ENDPOINT, () => happyResponse("ok")));
+    const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
+    const code = await run(["chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
+    expect(code).toBe(0);
+    expect(cap.stderr.value).toBe("");
+  });
+
+  it("D1: --api-key value MUST NOT appear in verbose stderr", async () => {
+    server.use(http.post(ENDPOINT, () => happyResponse("ok")));
+    const sentinel = "sk-leak-canary-7777";
+    const cap = makeIO({ env: {} });
+    const code = await run(
+      ["chat-completions", "-v", "-m", "gpt-4o-mini", "--api-key", sentinel, "hi"],
+      cap.io,
+    );
+    expect(code).toBe(0);
+    expect(cap.stderr.value).not.toContain(sentinel);
+    expect(cap.stderr.value).toContain("***redacted(");
+  });
+
+  it("D2: AI_RELAY_API_KEY env value MUST NOT appear in verbose stderr", async () => {
+    server.use(http.post(ENDPOINT, () => happyResponse("ok")));
+    const sentinel = "sk-env-leak-canary-8888";
+    const cap = makeIO({ env: { AI_RELAY_API_KEY: sentinel } });
+    const code = await run(["chat-completions", "-v", "-m", "gpt-4o-mini", "hi"], cap.io);
+    expect(code).toBe(0);
+    expect(cap.stderr.value).not.toContain(sentinel);
+  });
+
+  it("D3: OpenAI response body text MUST NOT appear in verbose stderr (length only)", async () => {
+    const upstreamMarker = "upstream-body-leak-marker-3333";
+    server.use(http.post(ENDPOINT, () => happyResponse(upstreamMarker)));
+    const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
+    const code = await run(["chat-completions", "-v", "-m", "gpt-4o-mini", "hi"], cap.io);
+    expect(code).toBe(0);
+    expect(cap.stderr.value).not.toContain(upstreamMarker);
+    // stdout still carries the body (this is the JSON channel)
+    expect(cap.stdout.value).toContain(upstreamMarker);
+  });
+
+  it("D4: upstream error path emits openai-error stage", async () => {
+    server.use(
+      http.post(ENDPOINT, () =>
+        HttpResponse.json({ error: { message: "no auth" } }, { status: 401 }),
+      ),
+    );
+    const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
+    const code = await run(["chat-completions", "-v", "-m", "gpt-4o-mini", "hi"], cap.io);
+    expect(code).toBe(1);
+    expect(cap.stderr.value).toContain("] openai-error:");
+  });
+});
+
 describe("run — exit-code mapping", () => {
   it("P1: success → exit 0 + JSON on stdout", async () => {
     server.use(http.post(ENDPOINT, () => happyResponse("done")));

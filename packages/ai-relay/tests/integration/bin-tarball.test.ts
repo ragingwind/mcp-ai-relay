@@ -537,4 +537,85 @@ describe("ai-relay bin — installed tarball, MCP stdio mode (chat-completions p
     expect(r.status).toBe(2);
     expect(r.stderr).toContain("unknown flag");
   });
+
+  it("V1: --verbose emits mcp-rpc-in/out + stage lines on stderr; stdout stays valid JSON-RPC", async () => {
+    mock.requests.length = 0;
+    const r = await runMcpSession(
+      [initRequest, initializedNotification, { jsonrpc: "2.0", id: 2, method: "tools/list" }],
+      {
+        args: ["chat-completions", "--verbose"],
+        env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
+      },
+    );
+    expect(r.status).toBe(0);
+    expect(r.responses).toHaveLength(2);
+    expect(r.stderr).toContain("] mcp-server-ready:");
+    expect(r.stderr).toContain("] mcp-rpc-in:");
+    expect(r.stderr).toContain("] mcp-rpc-out:");
+    expect(r.stderr).toMatch(/\[verbose \d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("V2: AI_RELAY_VERBOSE=1 enables verbose without the flag", async () => {
+    const r = await runMcpSession([initRequest, initializedNotification], {
+      args: ["chat-completions"],
+      env: {
+        AI_RELAY_API_KEY: "test-k",
+        AI_RELAY_BASE_URL: mock.baseURL,
+        AI_RELAY_VERBOSE: "1",
+      },
+    });
+    expect(r.status).toBe(0);
+    expect(r.stderr).toContain("] argv:");
+    expect(r.stderr).toContain("] mcp-rpc-in:");
+  });
+
+  it("V3: --verbose redacts the AI_RELAY_API_KEY in stderr", async () => {
+    const canary = "sk-mcp-leak-canary-9999";
+    const r = await runMcpSession([initRequest, initializedNotification], {
+      args: ["chat-completions", "--verbose"],
+      env: { AI_RELAY_API_KEY: canary, AI_RELAY_BASE_URL: mock.baseURL },
+    });
+    expect(r.status).toBe(0);
+    expect(r.stderr).not.toContain(canary);
+    expect(r.stderr).toContain("***redacted(");
+  });
+
+  it("V4: --verbose tools/call summarises messages content as length only", async () => {
+    mock.requests.length = 0;
+    const upstreamMarker = "upstream-body-canary-MCP";
+    mock.setResponse(() => ({ status: 200, body: defaultSseBody(upstreamMarker) }));
+    const userMarker = "user-prompt-canary-MCP";
+    const r = await runMcpSession(
+      [
+        initRequest,
+        initializedNotification,
+        {
+          jsonrpc: "2.0",
+          id: 2,
+          method: "tools/call",
+          params: {
+            name: "chat-completions",
+            arguments: {
+              model: "gpt-4o-mini",
+              messages: [{ role: "user", content: userMarker }],
+            },
+          },
+        },
+      ],
+      {
+        args: ["chat-completions", "--verbose"],
+        env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
+      },
+    );
+    expect(r.status).toBe(0);
+    expect(r.responses).toHaveLength(2);
+    // Outgoing JSON-RPC must still carry the upstream text on stdout
+    const callRes = r.responses[1]?.result as {
+      content?: Array<{ text: string }>;
+    };
+    expect(callRes?.content?.[0]?.text).toBe(upstreamMarker);
+    // But verbose must NOT echo upstream body or user prompt verbatim
+    expect(r.stderr).not.toContain(upstreamMarker);
+    expect(r.stderr).not.toContain(userMarker);
+  });
 });

@@ -98,8 +98,33 @@ key to fall back on), the CLI exits 2 with `no model resolved`.
 | `--max-tokens <n>` | Cap on `max_tokens`. |
 | `--timeout <ms>` | Per-request timeout. |
 | `--env <path>` | Load `AI_RELAY_*` keys from a dotenv file. |
+| `-v, --verbose` | Trace stages to stderr (also: `AI_RELAY_VERBOSE=1`). |
 | `-h, --help` | Show usage. |
 | `-V, --version` | Print SDK version. |
+
+#### Verbose tracing
+
+Pass `-v` / `--verbose`, or set `AI_RELAY_VERBOSE=1` (`true` / `yes` /
+`on` also work), to print a structured trace of each pipeline stage to
+**stderr**. The stdout JSON channel is never polluted.
+
+```bash
+ai-relay-cli chat-completions -v -m gpt-4o-mini "ping"   # one-shot CLI
+AI_RELAY_VERBOSE=1 ai-relay chat-completions             # MCP server
+```
+
+Stages emitted:
+
+- `argv`, `parsed-flags`, `env-snapshot`, `loaded-config`
+- `cli-input-raw`, `cli-input-parsed`, `cli-resolved-model` (CLI only)
+- `mcp-server-ready`, `mcp-rpc-in`, `mcp-rpc-out` (MCP only)
+- `openai-request`, `openai-response-stream-end` (or `openai-error`)
+- `result`
+
+Secrets (`AI_RELAY_API_KEY`, `AI_RELAY_AUTH_TOKEN`, `--api-key` value)
+are redacted to a length-only marker; OpenAI / MCP response bodies are
+summarised by char count + finish reason — the body text itself never
+reaches stderr.
 
 ### Environment variables
 

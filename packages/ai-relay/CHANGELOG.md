@@ -6,6 +6,45 @@ the project adheres to [Semantic Versioning](https://semver.org/) once
 v1.0 ships. Pre-v1.0 minor bumps may include breaking changes — read
 this file before upgrading.
 
+## [0.7.0] — 2026-05-12
+
+### Added
+
+- **`--verbose` / `-v` flag (also `AI_RELAY_VERBOSE=1` env).** Both
+  bins now accept a `--verbose` / `-v` flag, and either bin honors the
+  `AI_RELAY_VERBOSE` environment variable (truthy values: `1`, `true`,
+  `yes`, `on`; case-insensitive). Either source turns verbose on.
+
+  When enabled the bin emits structured stage events to **stderr**:
+
+  ```
+  [verbose 2026-05-12T11:50:23.456Z] argv: [...]
+  [verbose 2026-05-12T11:50:23.456Z] parsed-flags: {...}
+  [verbose 2026-05-12T11:50:23.456Z] env-snapshot: {...}
+  [verbose 2026-05-12T11:50:23.456Z] loaded-config: {...}
+  [verbose 2026-05-12T11:50:23.456Z] openai-request: {...}
+  [verbose 2026-05-12T11:50:23.456Z] openai-response-stream-end: {...}
+  [verbose 2026-05-12T11:50:23.456Z] result: {...}
+  ```
+
+  For the MCP server (`ai-relay <api-type> --verbose`), additional
+  events bracket the JSON-RPC traffic: `mcp-server-ready`,
+  `mcp-rpc-in`, `mcp-rpc-out`. The stdout JSON-RPC channel is
+  **never** polluted — every verbose line goes to stderr.
+
+  Secrets (`AI_RELAY_API_KEY`, `AI_RELAY_AUTH_TOKEN`, `--api-key` flag
+  values) are redacted to length-only markers
+  (`***redacted(<n>chars)***`). OpenAI / MCP response bodies are
+  reported as length + metadata; the body text itself never reaches
+  stderr — that is reserved for the result on stdout.
+
+  Usage:
+
+  ```bash
+  ai-relay-cli chat-completions -v -m gpt-4o-mini "ping"
+  AI_RELAY_VERBOSE=1 ai-relay chat-completions
+  ```
+
 ## [0.6.1] — 2026-05-12
 
 ### Fixed

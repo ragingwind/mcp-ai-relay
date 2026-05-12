@@ -65,6 +65,11 @@ The model is resolved in this order (first match wins): `model` field in
 the JSON input, then `-m`/`--model <id>` flag, then the `AI_RELAY_MODEL`
 env var.
 
+**Debugging:** pass `-v` / `--verbose` (or set `AI_RELAY_VERBOSE=1`) to
+trace each stage (`argv`, `parsed-flags`, `env-snapshot`, `loaded-config`,
+`openai-request`, `result`, …) to stderr. Secrets and response bodies
+are redacted; stdout JSON is never polluted.
+
 ---
 
 ## Quick start — stdio MCP server (`ai-relay <api-type>`)
