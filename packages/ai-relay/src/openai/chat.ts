@@ -90,6 +90,22 @@ export function makeOpenAIChatSchema(ceiling: number) {
 export type OpenAIChatSchema = ReturnType<typeof makeOpenAIChatSchema>;
 export type OpenAIChatInput = z.infer<OpenAIChatSchema>;
 
+export const openAIChatOutputSchema = z
+  .object({
+    model: z.string(),
+    usage: z
+      .object({
+        prompt_tokens: z.number(),
+        completion_tokens: z.number(),
+        total_tokens: z.number(),
+      })
+      .optional(),
+    finish_reason: z.string().optional(),
+    code: z.string().optional(),
+    retryAfter: z.number().optional(),
+  })
+  .strict();
+
 // --- result shape ---------------------------------------------------------
 
 export type OpenaiUsage = {
@@ -212,7 +228,15 @@ export function makeOpenAIChatHandler(config: OpenAIChatConfig): OpenAIChatHandl
 
 export function registerOpenAIChat(server: McpServer, config: OpenAIChatConfig): void {
   const { schema, handler, name, description } = makeOpenAIChatHandler(config);
-  server.tool(name, description, schema.shape, handler);
+  server.registerTool(
+    name,
+    {
+      description,
+      inputSchema: schema.shape,
+      outputSchema: openAIChatOutputSchema.shape,
+    },
+    handler,
+  );
 }
 
 // --- transport-agnostic tool descriptor ----------------------------------

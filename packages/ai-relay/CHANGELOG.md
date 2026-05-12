@@ -6,6 +6,36 @@ the project adheres to [Semantic Versioning](https://semver.org/) once
 v1.0 ships. Pre-v1.0 minor bumps may include breaking changes — read
 this file before upgrading.
 
+## [0.6.1] — 2026-05-12
+
+### Fixed
+
+- **`structuredContent` now reaches the client.** `registerOpenAIChat`
+  previously called the deprecated `server.tool(name, description,
+  inputSchema, handler)` 4-arg form, which omits the tool's
+  `outputSchema` from the MCP `tools/list` response. Without an
+  `outputSchema` declaration the SDK silently drops the
+  `structuredContent` field on the way out, so callers received only
+  the `content[0].text` body and lost the `model`, `usage`,
+  `finish_reason` metadata. Switched to `server.registerTool(name,
+  { description, inputSchema, outputSchema }, handler)` and exported
+  `openAIChatOutputSchema` so consumers wiring the tool by hand can
+  align with the same shape.
+
+Symptom seen by a downstream MCP host (Backend.AI dol):
+```diff
+- output={"content":[{"type":"text","text":"…"}]}
++ output={"content":[{"type":"text","text":"…"}],
++         "structuredContent":{"model":"gpt-4o",
++           "usage":{"prompt_tokens":…,"completion_tokens":…,
++                    "total_tokens":…},
++           "finish_reason":"stop"}}
+```
+
+No API surface change for consumers using `registerOpenAIChat` —
+they simply start receiving the structured result they were always
+documented to get.
+
 ## [0.6.0] — 2026-05-12
 
 ### Changed (BREAKING — caller-visible)
