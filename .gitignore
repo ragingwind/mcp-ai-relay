@@ -17,6 +17,9 @@ tsconfig.tsbuildinfo
 .vercel
 packages/*/dist
 
+# Next.js build output (if a contributor experiments with Next locally)
+.next/
+
 # Wrangler local dev cache (Cloudflare Workers smoke tests)
 .wrangler/
 
