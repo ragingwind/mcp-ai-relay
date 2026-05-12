@@ -3,8 +3,11 @@
 // before the stdio transport is ever constructed. The transport itself
 // is exercised by tests/integration/bin-tarball.test.ts.
 
+import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
 import { type AiRelayIO, main, VERSION } from "../../src/bin/ai-relay.js";
+
+const pkg = createRequire(import.meta.url)("../../package.json") as { version: string };
 
 interface CapturedIO {
   stdout: { value: string };
@@ -64,8 +67,9 @@ describe("ai-relay — argv short-circuits", () => {
     expect(cap.stdout.value).toBe(`${VERSION}\n`);
   });
 
-  it("P5: VERSION matches package version (0.8.x)", () => {
-    expect(VERSION).toMatch(/^0\.8\.\d+$/);
+  it("P5: VERSION equals package.json version and is a valid semver", () => {
+    expect(VERSION).toBe(pkg.version);
+    expect(VERSION).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/);
   });
 });
 
