@@ -380,8 +380,8 @@ describe("D: Resilience / Lifecycle", () => {
     expect(r.status).toBe(0);
     expect(r.stdout.trim().split("\n")).toHaveLength(1);
     expect(() => JSON.parse(r.stdout.trim())).not.toThrow();
-    expect(r.stderr).toMatch(/\[verbose \d{4}-\d{2}-\d{2}T/);
-    for (const stage of ["argv", "openai-request", "result"]) {
+    expect(r.stderr).toMatch(/^\[ai-relay\] /m);
+    for (const stage of ["argv", "openai-stream-start", "openai-http-request", "result"]) {
       expect(r.stderr).toContain(`] ${stage}:`);
     }
   });
@@ -393,7 +393,7 @@ describe("D: Resilience / Lifecycle", () => {
     });
     expect(r.status).toBe(0);
     expect(r.stderr).toContain("] argv:");
-    expect(r.stderr).toContain("] openai-request:");
+    expect(r.stderr).toContain("] openai-stream-start:");
   });
 
   it("V-3: -v + secret API key → secret never appears in stderr", async () => {

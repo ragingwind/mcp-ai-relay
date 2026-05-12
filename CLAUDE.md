@@ -62,7 +62,8 @@ inspect:  pnpm inspect       # ad-hoc tools/call via MCP Inspector CLI (see doc/
 The following items extend or override the global `core.md`.
 
 ### Absolutely forbidden
-- **Never log OpenAI/MCP response bodies via `console`/logs/error messages** — only metadata (model, token counts, latency, status) is allowed.
+- **Never log OpenAI/MCP response bodies via `console`/logs/error messages at default/info levels** — only metadata (model, token counts, latency, status) is allowed at default output.
+- **Exception — `--verbose` debug stream**: when explicitly enabled via `--verbose` flag or `AI_RELAY_VERBOSE=1`, the stderr trace MAY emit full request/response bodies (assistant text, tool arguments, OpenAI HTTP body). Secrets — API keys, bearer tokens, env values matching `*_KEY` / `*_TOKEN`, and the `Authorization` header value — MUST still be redacted via `redactSecret()`. Operators MUST treat the verbose stderr stream as sensitive: never persist it to shared logging infrastructure, never include it in PR comments or issue evidence, never check it into git.
 - Never expose `AI_RELAY_API_KEY` or `AI_RELAY_AUTH_TOKEN` in plain text in code/tests/docs/commits.
 - Never use `===` to compare bearer tokens — always use `timingSafeEqual` from `node:crypto`.
 - Never add features outside v1 scope (Responses API, OAuth, rate limiting, external KV, observability — see [`doc/ARCHITECTURE.md` §11](./doc/ARCHITECTURE.md#11-future-work-v2-backlog)).

@@ -626,3 +626,128 @@ describe("openai chat — requestTimeoutMs propagation", () => {
     assertNoSecretLeak(result);
   });
 });
+
+// =========================================================================
+// H: Verbose logger injection — request/response trace + secret redaction
+// =========================================================================
+
+describe("openai chat — verbose logger injection", () => {
+  function makeLogger() {
+    const lines: string[] = [];
+    const stream = {
+      write(chunk: string) {
+        lines.push(chunk);
+      },
+    };
+    return {
+      lines,
+      stream,
+      logger: {
+        enabled: true,
+        log(stage: string, data: unknown) {
+          const rendered = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+          lines.push(`[ai-relay] ${stage}: ${rendered}\n`);
+        },
+      },
+    };
+  }
+
+  it("P1: openai-http-request emits redacted Authorization + full request body", async () => {
+    server.use(
+      http.post(ENDPOINT, () =>
+        sseResponse([
+          JSON.stringify({ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }),
+        ]),
+      ),
+    );
+    const { lines, logger } = makeLogger();
+    const { handler } = makeHandler({ logger });
+    const userMarker = "verbose-injection-user-marker";
+    await handler({
+      model: VALID_MODEL,
+      messages: [{ role: "user", content: userMarker }],
+    });
+    const combined = lines.join("");
+    // openai-http-request line exists
+    expect(combined).toContain("openai-http-request");
+    // Authorization is redacted (Bearer + redacted marker), never the raw key
+    expect(combined).toMatch(/Bearer \*\*\*redacted\(\d+chars\)\*\*\*/);
+    expect(combined).not.toContain(TEST_API_KEY);
+    // Body messages are emitted verbatim
+    expect(combined).toContain(userMarker);
+  });
+
+  it("P2: openai-stream-start emits messages verbatim (role + content)", async () => {
+    server.use(
+      http.post(ENDPOINT, () =>
+        sseResponse([
+          JSON.stringify({ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }),
+        ]),
+      ),
+    );
+    const { lines, logger } = makeLogger();
+    const { handler } = makeHandler({ logger });
+    const userMarker = "stream-start-user-marker-7777";
+    await handler({
+      model: VALID_MODEL,
+      messages: [{ role: "user", content: userMarker }],
+    });
+    const startLine = lines.find((l) => l.includes("openai-stream-start"));
+    expect(startLine).toBeDefined();
+    expect(startLine).toContain(userMarker);
+    expect(startLine).toContain('"role"');
+  });
+
+  it("P3: openai-stream-end emits the full accumulated text", async () => {
+    server.use(
+      http.post(ENDPOINT, () =>
+        sseResponse([
+          JSON.stringify({ choices: [{ delta: { content: "Hello " } }] }),
+          JSON.stringify({
+            choices: [{ delta: { content: "world" }, finish_reason: "stop" }],
+          }),
+        ]),
+      ),
+    );
+    const { lines, logger } = makeLogger();
+    const { handler } = makeHandler({ logger });
+    await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const endLine = lines.find((l) => l.includes("openai-stream-end"));
+    expect(endLine).toBeDefined();
+    expect(endLine).toContain("Hello world");
+    expect(endLine).toContain("accumulatedText");
+  });
+
+  it("D1: openai-cancelled emitted when abort fires (pre-aborted signal)", async () => {
+    server.use(
+      http.post(ENDPOINT, () =>
+        sseResponse([
+          JSON.stringify({ choices: [{ delta: { content: "x" }, finish_reason: "stop" }] }),
+        ]),
+      ),
+    );
+    const { lines, logger } = makeLogger();
+    const { handler } = makeHandler({ logger });
+    const ac = new AbortController();
+    ac.abort();
+    await handler({ model: VALID_MODEL, messages: VALID_MESSAGES }, { signal: ac.signal });
+    expect(lines.some((l) => l.includes("openai-cancelled"))).toBe(true);
+  });
+
+  it("D2: secret API key sentinel never appears in any verbose line", async () => {
+    server.use(
+      http.post(ENDPOINT, () =>
+        sseResponse([
+          JSON.stringify({ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }),
+        ]),
+      ),
+    );
+    const sentinel = "sk-supersecret-canary-12345";
+    const { lines, logger } = makeLogger();
+    const { handler } = makeHandler({ logger, apiKey: sentinel });
+    await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const combined = lines.join("");
+    expect(combined).not.toContain(sentinel);
+    expect(combined).not.toContain("supersecret");
+  });
+});

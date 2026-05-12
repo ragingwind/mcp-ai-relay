@@ -560,7 +560,8 @@ describe("ai-relay bin — installed tarball, MCP stdio mode (openai provider po
     expect(r.stderr).toContain("] mcp-server-ready:");
     expect(r.stderr).toContain("] mcp-rpc-in:");
     expect(r.stderr).toContain("] mcp-rpc-out:");
-    expect(r.stderr).toMatch(/\[verbose \d{4}-\d{2}-\d{2}T/);
+    expect(r.stderr).toMatch(/^\[ai-relay\] /m);
+    expect(r.stderr).not.toMatch(/^\[verbose \d{4}-/m);
   });
 
   it("V2: AI_RELAY_VERBOSE=1 enables verbose without the flag", async () => {
@@ -588,7 +589,7 @@ describe("ai-relay bin — installed tarball, MCP stdio mode (openai provider po
     expect(r.stderr).toContain("***redacted(");
   });
 
-  it("V4: --verbose tools/call summarises messages content as length only", async () => {
+  it("V4: --verbose tools/call emits messages content + upstream text verbatim (body disclosure trade-off)", async () => {
     mock.requests.length = 0;
     const upstreamMarker = "upstream-body-canary-MCP";
     mock.setResponse(() => ({ status: 200, body: defaultSseBody(upstreamMarker) }));
@@ -622,8 +623,9 @@ describe("ai-relay bin — installed tarball, MCP stdio mode (openai provider po
       content?: Array<{ text: string }>;
     };
     expect(callRes?.content?.[0]?.text).toBe(upstreamMarker);
-    // But verbose must NOT echo upstream body or user prompt verbatim
-    expect(r.stderr).not.toContain(upstreamMarker);
-    expect(r.stderr).not.toContain(userMarker);
+    // Verbose now emits both the user prompt AND the accumulated upstream text
+    // (operator opted into --verbose; secrets remain redacted independently).
+    expect(r.stderr).toContain(userMarker);
+    expect(r.stderr).toContain(upstreamMarker);
   });
 });

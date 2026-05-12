@@ -22,12 +22,18 @@
 import { pathToFileURL } from "node:url";
 import { serve } from "@hono/node-server";
 import { verifyBearer } from "ai-relay";
+import { createVerboseLogger, isVerboseEnv } from "ai-relay/logger";
 import { registerOpenAIChat } from "ai-relay/openai";
 import { Hono } from "hono";
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import { parseEnv } from "./env.js";
 
 const env = parseEnv(process.env);
+
+const logger = createVerboseLogger({
+  enabled: isVerboseEnv(process.env),
+  stream: process.stderr,
+});
 
 const handler = createMcpHandler(
   (server) => {
@@ -36,6 +42,7 @@ const handler = createMcpHandler(
       ...(env.AI_RELAY_BASE_URL ? { baseURL: env.AI_RELAY_BASE_URL } : {}),
       maxOutputTokensCeiling: env.AI_RELAY_MAX_OUTPUT_TOKENS,
       requestTimeoutMs: env.AI_RELAY_REQUEST_TIMEOUT_MS,
+      ...(logger.enabled ? { logger } : {}),
     });
   },
   {},

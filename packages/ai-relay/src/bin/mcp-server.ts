@@ -5,7 +5,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { OpenAIChatConfig } from "../openai/index.js";
-import type { VerboseLogger } from "./logger.js";
+import { dumpMessages, type VerboseLogger } from "./logger.js";
 import type { ProviderEntry } from "./registry.js";
 
 export interface StartMcpServerOptions {
@@ -18,9 +18,10 @@ export interface StartMcpServerOptions {
 
 export async function startMcpServer(opts: StartMcpServerOptions): Promise<void> {
   const server = new McpServer({ name: "ai-relay", version: opts.version });
-  opts.providerEntry.registerOnServer(server, opts.config);
-
   const logger = opts.logger;
+  const configWithLogger: OpenAIChatConfig = logger ? { ...opts.config, logger } : opts.config;
+  opts.providerEntry.registerOnServer(server, configWithLogger);
+
   const transport = new StdioServerTransport();
 
   if (logger?.enabled) {
@@ -114,15 +115,8 @@ function summariseArguments(args: unknown): unknown {
   const a = args as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(a)) {
-    if (k === "messages" && Array.isArray(v)) {
-      out.messages = v.map((m) => {
-        const msg = m as { role?: unknown; content?: unknown };
-        const content = msg.content;
-        if (typeof content === "string") {
-          return { role: msg.role, chars: content.length };
-        }
-        return { role: msg.role, chars: 0, kind: typeof content };
-      });
+    if (k === "messages") {
+      out.messages = dumpMessages(v);
     } else {
       out[k] = v;
     }
@@ -136,22 +130,8 @@ function summariseResult(result: unknown): Record<string, unknown> {
   }
   const r = result as Record<string, unknown>;
   const out: Record<string, unknown> = {};
-  if ("content" in r && Array.isArray(r.content)) {
-    let totalChars = 0;
-    for (const c of r.content as Array<{ text?: unknown }>) {
-      if (typeof c?.text === "string") totalChars += c.text.length;
-    }
-    out.contentChars = totalChars;
-  }
-  if ("structuredContent" in r && r.structuredContent && typeof r.structuredContent === "object") {
-    const sc = r.structuredContent as Record<string, unknown>;
-    out.structuredContent = {
-      model: sc.model,
-      finish_reason: sc.finish_reason,
-      code: sc.code,
-      usage: sc.usage,
-    };
-  }
+  if ("content" in r) out.content = r.content;
+  if ("structuredContent" in r) out.structuredContent = r.structuredContent;
   if ("isError" in r) out.isError = r.isError;
   if ("tools" in r && Array.isArray(r.tools)) {
     out.toolCount = r.tools.length;

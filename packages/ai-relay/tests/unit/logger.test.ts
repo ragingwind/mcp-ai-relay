@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createVerboseLogger,
+  dumpMessages,
   isVerboseEnv,
   redactArgv,
   redactSecret,
@@ -63,34 +64,31 @@ describe("createVerboseLogger — disabled", () => {
 });
 
 describe("createVerboseLogger — enabled", () => {
-  it("P1: format is `[verbose <ISO>] <stage>: <data>` with trailing newline", () => {
+  it("P1: format is `[ai-relay] <stage>: <data>` with trailing newline", () => {
     const { buf, stream } = makeStream();
-    const fixed = new Date("2026-05-12T11:50:23.456Z");
-    const logger = createVerboseLogger({ enabled: true, stream, now: () => fixed });
+    const logger = createVerboseLogger({ enabled: true, stream });
     logger.log("argv", ["chat-completions", "-m", "gpt-4o-mini", "ping"]);
-    expect(buf.value).toMatch(/^\[verbose 2026-05-12T11:50:23\.456Z\] argv: \[\n/);
+    expect(buf.value).toMatch(/^\[ai-relay\] argv: \[\n/);
     expect(buf.value.endsWith("\n")).toBe(true);
   });
 
-  it("P2: timestamp uses a real ISO format when `now` is not overridden", () => {
+  it("P2: format does not include an ISO timestamp", () => {
     const { buf, stream } = makeStream();
     const logger = createVerboseLogger({ enabled: true, stream });
     logger.log("ping", "pong");
-    expect(buf.value).toMatch(
-      /^\[verbose \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z\] ping: pong\n$/,
-    );
+    expect(buf.value).toBe("[ai-relay] ping: pong\n");
+    expect(buf.value).not.toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
   });
 
   it("P3: multi-line data writes continuation prefix on subsequent lines", () => {
     const { buf, stream } = makeStream();
-    const fixed = new Date("2026-05-12T11:50:23.456Z");
-    const logger = createVerboseLogger({ enabled: true, stream, now: () => fixed });
+    const logger = createVerboseLogger({ enabled: true, stream });
     logger.log("data", { a: 1, b: 2 });
     const lines = buf.value.split("\n").filter((l) => l.length > 0);
     expect(lines.length).toBeGreaterThan(1);
-    expect(lines[0]).toMatch(/^\[verbose .*\] data: \{/);
+    expect(lines[0]).toMatch(/^\[ai-relay\] data: \{/);
     for (let i = 1; i < lines.length; i++) {
-      expect(lines[i]).toMatch(/^\[verbose .*\] {3}/);
+      expect(lines[i]).toMatch(/^\[ai-relay\] {3}/);
     }
   });
 });
@@ -154,5 +152,34 @@ describe("summariseMessages", () => {
 
   it("D1: returns error marker for non-array", () => {
     expect(summariseMessages("not-an-array")).toEqual({ error: "not-an-array (string)" });
+  });
+});
+
+describe("dumpMessages", () => {
+  it("P1: returns the array verbatim when input is an array", () => {
+    const messages = [
+      { role: "user", content: "ping" },
+      { role: "assistant", content: "x".repeat(500) },
+    ];
+    const out = dumpMessages(messages);
+    expect(out).toBe(messages);
+    expect(out).toEqual(messages);
+  });
+
+  it("P2: empty array passes through unchanged", () => {
+    const messages: unknown[] = [];
+    expect(dumpMessages(messages)).toBe(messages);
+  });
+
+  it("D1: non-array input returns error object (string)", () => {
+    expect(dumpMessages("not-an-array")).toEqual({ error: "not-an-array (string)" });
+  });
+
+  it("D2: non-array input returns error object (undefined)", () => {
+    expect(dumpMessages(undefined)).toEqual({ error: "not-an-array (undefined)" });
+  });
+
+  it("D3: object input returns error object (object)", () => {
+    expect(dumpMessages({ messages: [] })).toEqual({ error: "not-an-array (object)" });
   });
 });

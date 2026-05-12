@@ -21,6 +21,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import OpenAI from "openai";
 import { z } from "zod";
+import { dumpMessages, type VerboseLogger } from "../bin/logger.js";
 import { type CreatedOpenAIClient, createOpenAIClient, type RequestScope } from "./client.js";
 
 const DEFAULT_NAME = "chat-completions";
@@ -55,6 +56,11 @@ export interface OpenAIChatConfig {
    *  only when both `openaiClient` is supplied AND upstream-body
    *  redaction must remain wired. */
   requestScope?: RequestScope;
+  /** Optional verbose logger. When enabled, emits `openai-stream-start`,
+   *  `openai-stream-end`, and `openai-cancelled` events around the
+   *  upstream call. Pairs with the HTTP-level events from
+   *  `createOpenAIClient`. */
+  logger?: VerboseLogger;
 }
 
 // --- input schema ---------------------------------------------------------
@@ -207,6 +213,7 @@ export function makeOpenAIChatHandler(config: OpenAIChatConfig): OpenAIChatHandl
   const schema = makeOpenAIChatSchema(ceiling);
 
   const { client, requestScope } = resolveClient(config);
+  const logger = config.logger;
 
   const handler: OpenAIChatHandler = async (rawInput, extra = {}) => {
     const input: OpenAIChatInput = schema.parse(rawInput);
@@ -220,7 +227,7 @@ export function makeOpenAIChatHandler(config: OpenAIChatConfig): OpenAIChatHandl
       }
     }
 
-    return requestScope.run({}, () => runOnce(input, client, requestScope, ac));
+    return requestScope.run({}, () => runOnce(input, client, requestScope, ac, logger));
   };
 
   return { schema, handler, name, description };
@@ -278,6 +285,7 @@ function resolveClient(config: OpenAIChatConfig): CreatedOpenAIClient {
     apiKey: config.apiKey,
     ...(config.baseURL ? { baseURL: config.baseURL } : {}),
     requestTimeoutMs: config.requestTimeoutMs ?? DEFAULT_TIMEOUT_MS,
+    ...(config.logger ? { logger: config.logger } : {}),
   });
 }
 
@@ -286,7 +294,37 @@ async function runOnce(
   client: OpenAI,
   requestScope: RequestScope,
   ac: AbortController,
+  logger?: VerboseLogger,
 ): Promise<OpenAIChatResult> {
+  const startedAt = Date.now();
+  if (logger?.enabled) {
+    logger.log("openai-stream-start", {
+      model: input.model,
+      messages: dumpMessages(input.messages),
+      temperature: input.temperature,
+      max_tokens: input.max_tokens,
+      top_p: input.top_p,
+      stop: input.stop,
+      maxRetries: 0,
+    });
+    if (ac.signal.aborted) {
+      logger.log("openai-cancelled", {
+        reason: ac.signal.reason ?? "aborted",
+        elapsedMs: Date.now() - startedAt,
+      });
+    } else {
+      ac.signal.addEventListener(
+        "abort",
+        () => {
+          logger.log("openai-cancelled", {
+            reason: ac.signal.reason ?? "aborted",
+            elapsedMs: Date.now() - startedAt,
+          });
+        },
+        { once: true },
+      );
+    }
+  }
   try {
     const stream = await client.chat.completions.create(
       {
@@ -327,6 +365,15 @@ async function runOnce(
       ...(finishReason !== undefined ? { finish_reason: finishReason } : {}),
     };
 
+    if (logger?.enabled) {
+      logger.log("openai-stream-end", {
+        accumulatedText: accumulated,
+        finish_reason: finishReason,
+        usage,
+        elapsedMs: Date.now() - startedAt,
+      });
+    }
+
     return {
       content: [{ type: "text", text: accumulated }],
       structuredContent,
@@ -339,6 +386,15 @@ async function runOnce(
       code: mapped.code,
       ...(mapped.retryAfter !== undefined ? { retryAfter: mapped.retryAfter } : {}),
     };
+    if (logger?.enabled) {
+      logger.log("openai-stream-end", {
+        accumulatedText: "",
+        finish_reason: undefined,
+        usage: undefined,
+        elapsedMs: Date.now() - startedAt,
+        error: { code: mapped.code, message: mapped.message },
+      });
+    }
     return {
       content: [{ type: "text", text: mapped.message }],
       structuredContent,

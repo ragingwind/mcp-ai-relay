@@ -23,6 +23,10 @@
     "./auth": {
       "types": "./dist/auth.d.ts",
       "import": "./dist/auth.js"
+    },
+    "./logger": {
+      "types": "./dist/bin/logger.d.ts",
+      "import": "./dist/bin/logger.js"
     }
   },
   "bin": {

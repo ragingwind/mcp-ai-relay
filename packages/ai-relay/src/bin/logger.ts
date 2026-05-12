@@ -7,13 +7,15 @@
 // Output rules:
 //   - Channel is ALWAYS stderr. stdout carries the JSON-RPC / JSON
 //     result and MUST NOT be polluted.
-//   - One stage per line: `[verbose <ISO>] <stage>: <data>`.
+//   - One stage per line: `[ai-relay] <stage>: <data>`.
 //     `<data>` may contain embedded newlines (helper inserts a
 //     continuation prefix); each event still corresponds to one logical
 //     log entry.
-//   - Secrets are redacted to length-only (`***redacted(<n>chars)***`).
-//     OpenAI / MCP response bodies are summarised by length + metadata
-//     here; the bodies themselves never reach stderr.
+//   - Secrets (API keys, bearer tokens, Authorization header values) are
+//     redacted to length-only (`***redacted(<n>chars)***`). With those
+//     redactions in place, request/response bodies are emitted verbatim
+//     so operators can diagnose upstream issues. Treat the stderr stream
+//     as sensitive — never persist or share it (see CLAUDE.md §4).
 
 export interface VerboseLogger {
   readonly enabled: boolean;
@@ -23,8 +25,6 @@ export interface VerboseLogger {
 export interface VerboseLoggerOptions {
   enabled: boolean;
   stream: { write(chunk: string): void };
-  /** Override the ISO timestamp source. Used by tests for determinism. */
-  now?: () => Date;
 }
 
 const TRUTHY = new Set(["1", "true", "yes", "on"]);
@@ -44,17 +44,15 @@ export function createVerboseLogger(opts: VerboseLoggerOptions): VerboseLogger {
       },
     };
   }
-  const now = opts.now ?? (() => new Date());
   return {
     enabled: true,
     log(stage, data) {
-      const ts = now().toISOString();
       const rendered = renderData(data);
       const lines = rendered.split("\n");
       const first = lines[0] ?? "";
-      let out = `[verbose ${ts}] ${stage}: ${first}\n`;
+      let out = `[ai-relay] ${stage}: ${first}\n`;
       for (let i = 1; i < lines.length; i++) {
-        out += `[verbose ${ts}]   ${lines[i]}\n`;
+        out += `[ai-relay]   ${lines[i]}\n`;
       }
       opts.stream.write(out);
     },
@@ -124,6 +122,17 @@ export function snapshotRelayEnv(env: Record<string, string | undefined>): Recor
     }
   }
   return out;
+}
+
+/** Emit a chat `messages` array verbatim for verbose output (role + full
+ *  content). Returns the array unchanged when it IS an array; otherwise a
+ *  shape-matched error object. Use this when the operator opts into
+ *  `--verbose` and accepts the body-disclosure trade-off. */
+export function dumpMessages(messages: unknown): unknown[] | { error: string } {
+  if (!Array.isArray(messages)) {
+    return { error: `not-an-array (${typeof messages})` };
+  }
+  return messages;
 }
 
 /** Summarise a chat `messages` array for verbose output without leaking

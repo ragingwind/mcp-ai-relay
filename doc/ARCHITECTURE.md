@@ -300,7 +300,8 @@ On unauthenticated requests, `mcp-handler` automatically responds with 401 + `WW
 - Always compare bearer tokens with `timingSafeEqual`.
 - All tool inputs must be strictly validated with zod (use `.strict()`).
 - `max_tokens` accepts the caller's value but is clamped to the server ceiling.
-- `console` logs may include only metadata (model, token counts, latency, status). **Never log prompt/response bodies.**
+- `console` logs may include only metadata (model, token counts, latency, status). **Never log prompt/response bodies at default/info levels.**
+- **`--verbose` carve-out**: when explicitly enabled via `--verbose` flag or `AI_RELAY_VERBOSE=1`, the stderr trace MAY emit full request/response bodies (tool arguments, accumulated assistant text, OpenAI HTTP body). Secrets — API keys, bearer tokens, `Authorization` header values, and env vars whose names match `*_KEY`/`*_TOKEN` — remain redacted via `redactSecret()`. The verbose stream is operator-only diagnostic output: never persist it to shared logging, PR comments, or git. See [CLAUDE.md §4](../CLAUDE.md#4-coding-conventions-repo-specific) for the operational policy.
 - Container images run as a non-root `app` user (uid 1001); orchestrators should not override with root.
 - The published image is private by default — flip to public via Settings → Packages → ai-relay only when ready.
 

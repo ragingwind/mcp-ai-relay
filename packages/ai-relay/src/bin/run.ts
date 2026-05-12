@@ -9,11 +9,11 @@ import { VERSION } from "../version.js";
 import { parseEnvFile } from "./env-file.js";
 import {
   createVerboseLogger,
+  dumpMessages,
   isVerboseEnv,
   redactArgv,
   redactSecret,
   snapshotRelayEnv,
-  summariseMessages,
 } from "./logger.js";
 import { type ParsedInvocation, parseArgv, UsageError } from "./parse.js";
 import { type AnyTool, registry, resolveProvider, resolveProviderTool } from "./registry.js";
@@ -158,7 +158,7 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
   verbose.log("cli-input-parsed", {
     keys: Object.keys(inputObj),
     model: inputObj.model,
-    messages: summariseMessages(inputObj.messages),
+    messages: dumpMessages(inputObj.messages),
   });
 
   // Resolve model: input JSON > flag > env. If the input already carries
@@ -254,48 +254,24 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
     ...(providerConfig.requestTimeoutMs !== undefined
       ? { requestTimeoutMs: providerConfig.requestTimeoutMs }
       : {}),
+    ...(verbose.enabled ? { logger: verbose } : {}),
   };
 
   const bundle: OpenAIChatHandlerBundle = tool.makeHandler(toolConfig);
 
-  verbose.log("openai-request", {
-    model: merged.model,
-    messages: summariseMessages(merged.messages),
-    max_tokens: merged.max_tokens,
-    temperature: merged.temperature,
-    top_p: merged.top_p,
-    stop: merged.stop,
-  });
-
-  const streamStart = Date.now();
   const result = await bundle.handler(merged);
-  const elapsedMs = Date.now() - streamStart;
 
   if (result.isError) {
     verbose.log("openai-error", {
       code: result.structuredContent.code,
       retryAfter: result.structuredContent.retryAfter,
-      elapsedMs,
-    });
-  } else {
-    const text = result.content[0]?.text ?? "";
-    verbose.log("openai-response-stream-end", {
-      model: result.structuredContent.model,
-      finish_reason: result.structuredContent.finish_reason,
-      usage: result.structuredContent.usage,
-      chars: text.length,
-      elapsedMs,
     });
   }
 
   verbose.log("result", {
     isError: result.isError,
-    contentChars: result.content[0]?.text?.length ?? 0,
-    structuredContent: {
-      model: result.structuredContent.model,
-      finish_reason: result.structuredContent.finish_reason,
-      code: result.structuredContent.code,
-    },
+    content: result.content,
+    structuredContent: result.structuredContent,
   });
 
   const output = io.isTTY ? JSON.stringify(result, null, 2) : JSON.stringify(result);

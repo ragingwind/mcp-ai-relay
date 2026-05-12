@@ -508,16 +508,20 @@ describe("run — verbose stderr", () => {
       "cli-input-parsed",
       "cli-resolved-model",
       "loaded-config",
-      "openai-request",
-      "openai-response-stream-end",
+      "openai-stream-start",
+      "openai-http-request",
+      "openai-http-response",
+      "openai-stream-end",
       "result",
     ]) {
       expect(cap.stderr.value).toContain(`] ${stage}:`);
     }
-    // every verbose line starts with the [verbose <iso>] prefix
+    // every verbose line starts with the timestamp-free [ai-relay] prefix
     for (const line of cap.stderr.value.split("\n").filter((l) => l.length > 0)) {
-      expect(line).toMatch(/^\[verbose \d{4}-\d{2}-\d{2}T/);
+      expect(line).toMatch(/^\[ai-relay\] /);
     }
+    // no ISO timestamp should appear in the prefix
+    expect(cap.stderr.value).not.toMatch(/^\[verbose \d{4}-/m);
   });
 
   it("P2: AI_RELAY_VERBOSE=1 env enables verbose without the -v flag", async () => {
@@ -526,7 +530,7 @@ describe("run — verbose stderr", () => {
     const code = await run(["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(0);
     expect(cap.stderr.value).toContain("] argv:");
-    expect(cap.stderr.value).toContain("] openai-request:");
+    expect(cap.stderr.value).toContain("] openai-stream-start:");
   });
 
   it("P3: no -v and no AI_RELAY_VERBOSE → no verbose lines on stderr", async () => {
@@ -559,15 +563,39 @@ describe("run — verbose stderr", () => {
     expect(cap.stderr.value).not.toContain(sentinel);
   });
 
-  it("D3: OpenAI response body text MUST NOT appear in verbose stderr (length only)", async () => {
-    const upstreamMarker = "upstream-body-leak-marker-3333";
+  it("D3: Authorization header on outbound OpenAI request is redacted (Bearer secret never echoed)", async () => {
+    server.use(http.post(ENDPOINT, () => happyResponse("ok")));
+    const sentinel = "sk-supersecret-canary-12345";
+    const cap = makeIO({ env: { AI_RELAY_API_KEY: sentinel } });
+    const code = await run(["openai", "chat-completions", "-v", "-m", "gpt-4o-mini", "hi"], cap.io);
+    expect(code).toBe(0);
+    expect(cap.stderr.value).not.toContain(sentinel);
+    expect(cap.stderr.value).not.toContain("supersecret");
+    expect(cap.stderr.value).toMatch(/Bearer \*\*\*redacted\(\d+chars\)\*\*\*/);
+  });
+
+  it("D3b: verbose emits the accumulated upstream text verbatim (body disclosure trade-off)", async () => {
+    const upstreamMarker = "upstream-body-trace-marker-3333";
     server.use(http.post(ENDPOINT, () => happyResponse(upstreamMarker)));
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
     const code = await run(["openai", "chat-completions", "-v", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(0);
-    expect(cap.stderr.value).not.toContain(upstreamMarker);
-    // stdout still carries the body (this is the JSON channel)
+    // stderr now shows the body (operator opted into --verbose)
+    expect(cap.stderr.value).toContain(upstreamMarker);
+    // stdout also carries the body (this is the JSON channel)
     expect(cap.stdout.value).toContain(upstreamMarker);
+  });
+
+  it("D3c: verbose emits the request messages verbatim (role + content)", async () => {
+    server.use(http.post(ENDPOINT, () => happyResponse("ok")));
+    const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
+    const code = await run(
+      ["openai", "chat-completions", "-v", "-m", "gpt-4o-mini", "the-user-prompt-content"],
+      cap.io,
+    );
+    expect(code).toBe(0);
+    expect(cap.stderr.value).toContain("the-user-prompt-content");
+    expect(cap.stderr.value).toContain('"role"');
   });
 
   it("D4: upstream error path emits openai-error stage", async () => {
