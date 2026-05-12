@@ -6,6 +6,21 @@ the project adheres to [Semantic Versioning](https://semver.org/) once
 v1.0 ships. Pre-v1.0 minor bumps may include breaking changes — read
 this file before upgrading.
 
+## [0.8.1] — 2026-05-12
+
+### Docs
+
+- Rewrote root `README.md` / `README.ko.md` and `packages/ai-relay/README.md`
+  around a single use-case-first layout. The top of each document is now a
+  four-block Quick reference (one-shot CLI / stdio MCP / Docker HTTP / SDK
+  embed) with complete copy-paste commands; the sections that follow contain
+  only the detail not already in the quick block.
+- Removed version-history, "migration from v0.1", "Status", and Docker
+  smoke-harness sections — none of those help a first-time reader pick a
+  deployment shape and ship.
+
+No code or API changes.
+
 ## [0.8.0] — 2026-05-12
 
 ### Changed (BREAKING — caller-visible)

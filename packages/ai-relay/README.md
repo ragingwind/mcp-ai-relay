@@ -1,153 +1,26 @@
 # ai-relay
 
-Provider-agnostic MCP relay SDK. Embed `chat-completions` (OpenAI Chat
-Completions, OpenAI-compatible APIs, and unified gateways) — and future
-provider tools — into any [Model Context Protocol](https://modelcontextprotocol.io)
-server.
-
-The SDK ships two bins:
-
-- **`ai-relay <provider>`** — long-lived stdio MCP server keyed by a
-  provider positional (today: `openai`, which mounts
-  `chat-completions`).
-- **`ai-relay-cli <provider> <tool> [flags] [input]`** — one-shot CLI
-  invocation that prints a single tool result as JSON. The model is
-  resolved from the input JSON's `model` field, the `-m`/`--model`
-  flag, or `AI_RELAY_MODEL` (in that order).
-
-> **v0.6.0** ships only the OpenAI provider, exposed as `chat-completions`
-> (the upstream API's native name). Future provider tools — `messages`
-> for Anthropic, `responses` for OpenAI Responses, etc. — will land under
-> their own keys without breaking existing `chat-completions` consumers.
-
----
+Provider-agnostic MCP relay SDK. Embed OpenAI Chat Completions (and any OpenAI-compatible upstream — Azure, vLLM, Ollama, AI Gateway) as MCP tools.
 
 ## Install
 
 ```bash
 npm install ai-relay @modelcontextprotocol/sdk openai
-# or
-pnpm add ai-relay @modelcontextprotocol/sdk openai
 ```
 
-`@modelcontextprotocol/sdk` and `openai` are declared as **peer
-dependencies** so the consumer controls their versions.
-
-Requires **Node.js 20+** (or any runtime with `node:async_hooks`
-compatibility — Bun, Deno, Cloudflare Workers with `nodejs_compat`).
+`@modelcontextprotocol/sdk` and `openai` are peer dependencies — the consumer controls their versions. Requires **Node.js 20+** (or any runtime with `node:async_hooks` compatibility — Bun, Deno, Cloudflare Workers with `nodejs_compat`).
 
 ---
 
-## Bin
+## Quick reference
 
-This package ships two bins:
-
-- **`ai-relay <provider>`** — long-lived stdio MCP server that an MCP
-  host (Claude Desktop, Claude Code, Cursor, …) spawns as a child
-  process. The `<provider>` positional (today: `openai`) selects which
-  upstream provider is mounted; all of that provider's tools are then
-  registered on the server. Speaks the JSON-RPC MCP protocol over
-  stdin/stdout. See
-  [Claude Desktop / Claude Code / Cursor — stdio MCP server](#claude-desktop--claude-code--cursor--stdio-mcp-server)
-  below.
-- **`ai-relay-cli <provider> <tool> [flags] [input]`** — one-shot
-  invocation that prints a single tool result as JSON to stdout, then
-  exits. For scripts, CI smoke tests, and ad-hoc use.
-
-### One-shot CLI
-
-`ai-relay-cli <provider> <tool> [flags] [input]` — prints the tool
-result as JSON on stdout.
+**1. One-shot CLI** — `ai-relay-cli <provider> <tool> [flags] [input]`:
 
 ```bash
-ai-relay-cli openai chat-completions -m gpt-4o-mini "ping"
-ai-relay-cli openai chat-completions --model gpt-4o-mini -s "be terse" "explain TLS"
-ai-relay-cli openai chat-completions '{"model":"gpt-4o","messages":[{"role":"user","content":"ping"}]}'
-AI_RELAY_MODEL=gpt-4o-mini ai-relay-cli openai chat-completions "ping"
-ai-relay-cli openai chat-completions -m gpt-4o-mini --api-key sk-... "ping"
-ai-relay-cli openai chat-completions -m gpt-4o-mini --base-url https://my-azure.openai.azure.com/v1 "ping"
-ai-relay-cli openai chat-completions -m gpt-4o-mini --env ./prod.env "ping"
-echo '{"messages":[…]}' | ai-relay-cli openai chat-completions -m gpt-4o-mini
+AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions -m gpt-4o-mini "ping"
 ```
 
-`<provider>` selects the upstream (today: `openai`); `<tool>` is looked
-up within that provider's scope. Tool names follow the upstream API's
-native naming — `chat-completions` for OpenAI Chat Completions today;
-future entries (e.g. `messages` for Anthropic, `responses` for OpenAI
-Responses) will be added as additional keys.
-
-Input is either a positional argument or piped via stdin (exactly one).
-A positional starting with `{` or `[` is parsed as a JSON literal;
-anything else is treated as a plain user message and folded into a
-`messages` array (with `-s/--system` prepended when supplied). Exit
-code is `0` on success, `1` on a runtime/upstream error, `2` on a
-usage error.
-
-**Model resolution (first match wins):**
-
-1. `model` field inside the JSON input
-2. `-m` / `--model <id>` CLI flag
-3. `AI_RELAY_MODEL` environment variable
-
-If none of these is set and the input is plain text (no JSON `model`
-key to fall back on), the CLI exits 2 with `no model resolved`.
-
-| Flag | Purpose |
-|------|---------|
-| `-m, --model <id>` | Model id (e.g. `gpt-4o-mini`). Overridden by JSON `model`; overrides `AI_RELAY_MODEL`. |
-| `-s, --system <text>` | System message prepended to plain-text input. |
-| `--api-key <key>` | Overrides `AI_RELAY_API_KEY`. |
-| `--base-url <url>` | Overrides `AI_RELAY_BASE_URL`. |
-| `--max-tokens <n>` | Cap on `max_tokens`. |
-| `--timeout <ms>` | Per-request timeout. |
-| `--env <path>` | Load `AI_RELAY_*` keys from a dotenv file. |
-| `-v, --verbose` | Trace stages to stderr (also: `AI_RELAY_VERBOSE=1`). |
-| `-h, --help` | Show usage. |
-| `-V, --version` | Print SDK version. |
-
-#### Verbose tracing
-
-Pass `-v` / `--verbose`, or set `AI_RELAY_VERBOSE=1` (`true` / `yes` /
-`on` also work), to print a structured trace of each pipeline stage to
-**stderr**. The stdout JSON channel is never polluted.
-
-```bash
-ai-relay-cli openai chat-completions -v -m gpt-4o-mini "ping"   # one-shot CLI
-AI_RELAY_VERBOSE=1 ai-relay openai                              # MCP server
-```
-
-Stages emitted:
-
-- `argv`, `parsed-flags`, `env-snapshot`, `loaded-config`
-- `cli-input-raw`, `cli-input-parsed`, `cli-resolved-model` (CLI only)
-- `mcp-server-ready`, `mcp-rpc-in`, `mcp-rpc-out` (MCP only)
-- `openai-request`, `openai-response-stream-end` (or `openai-error`)
-- `result`
-
-Secrets (`AI_RELAY_API_KEY`, `AI_RELAY_AUTH_TOKEN`, `--api-key` value)
-are redacted to a length-only marker; OpenAI / MCP response bodies are
-summarised by char count + finish reason — the body text itself never
-reaches stderr.
-
-### Environment variables
-
-| Name | Required | Notes |
-|------|----------|-------|
-| `AI_RELAY_API_KEY` | ✅ (or `--api-key`) | Upstream API key. |
-| `AI_RELAY_BASE_URL` | ❌ | Override for Azure / vLLM / Ollama / AI Gateway. |
-| `AI_RELAY_MODEL` | ❌ | Default model for the CLI (when no `-m` flag and no JSON `model`). Not read by the MCP server. |
-| `AI_RELAY_MAX_OUTPUT_TOKENS` | ❌ | Default 4096. |
-| `AI_RELAY_REQUEST_TIMEOUT_MS` | ❌ | Default 60000. |
-
-CLI flags > `--env` file > process env > built-in defaults.
-
-### Claude Desktop / Claude Code / Cursor — stdio MCP server
-
-Invoke the `ai-relay` bin with the `<provider>` positional (today:
-`openai`) and it runs as a long-lived stdio MCP server that
-an MCP host can spawn directly. It accepts the configuration flags
-(`--api-key`, `--base-url`, `--max-tokens`, `--timeout`, `--env`) and
-reads `AI_RELAY_*` env vars.
+**2. stdio MCP server** — `ai-relay <provider>`, register in any MCP host:
 
 ```json
 {
@@ -161,13 +34,65 @@ reads `AI_RELAY_*` env vars.
 }
 ```
 
-Point at an OpenAI-compatible endpoint (Azure / vLLM / Ollama / AI
-Gateway) by adding `"AI_RELAY_BASE_URL"` to the `env` block, or by
-passing `--base-url <url>` in `args` (e.g.
-`"args": ["-y", "ai-relay", "openai", "--base-url", "https://my-azure.openai.azure.com/v1"]`).
+**3. SDK embed** — `registerOpenAIChat(server, config)`:
 
-Project-local `.mcp.json` works the same way — pass the absolute path
-to the installed bin (or `npx ai-relay`) plus the `openai` positional.
+```ts
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { registerOpenAIChat } from "ai-relay/openai";
+
+const server = new McpServer({ name: "my-relay", version: "0.1.0" });
+registerOpenAIChat(server, { apiKey: process.env.AI_RELAY_API_KEY! });
+await server.connect(new StdioServerTransport());
+```
+
+**4. Multi-upstream** — one server, multiple `registerOpenAIChat` calls with distinct `name` values:
+
+```ts
+registerOpenAIChat(server, { name: "chat-completions", apiKey: process.env.AI_RELAY_API_KEY! });
+registerOpenAIChat(server, {
+  name: "azure-chat-completions",
+  apiKey: process.env.AZURE_OPENAI_KEY!,
+  baseURL: "https://<resource>.openai.azure.com/openai/deployments/<deployment>",
+});
+```
+
+---
+
+## 1. One-shot CLI (`ai-relay-cli`)
+
+Prints a single tool result as JSON on stdout, exits. Input is a positional argument or piped via stdin (XOR). A positional starting with `{` or `[` is parsed as JSON; anything else becomes a plain user message. Exit codes: `0` success, `1` runtime/upstream error, `2` usage error.
+
+```bash
+ai-relay-cli openai chat-completions -m gpt-4o-mini "ping"
+ai-relay-cli openai chat-completions --model gpt-4o-mini -s "be terse" "explain TLS"
+ai-relay-cli openai chat-completions '{"model":"gpt-4o","messages":[{"role":"user","content":"ping"}]}'
+ai-relay-cli openai chat-completions -m gpt-4o-mini --base-url https://my-azure.openai.azure.com/v1 "ping"
+echo '{"messages":[…]}' | ai-relay-cli openai chat-completions -m gpt-4o-mini
+```
+
+**Model resolution** (first match wins): JSON input `model` field → `-m`/`--model` flag → `AI_RELAY_MODEL` env.
+
+| Flag | Purpose |
+|---|---|
+| `-m, --model <id>` | Model id (e.g. `gpt-4o-mini`) |
+| `-s, --system <text>` | System message prepended to plain-text input |
+| `--api-key <key>` | Override `AI_RELAY_API_KEY` |
+| `--base-url <url>` | Override `AI_RELAY_BASE_URL` |
+| `--max-tokens <n>` | Cap on `max_tokens` |
+| `--timeout <ms>` | Per-request timeout |
+| `--env <path>` | Load `AI_RELAY_*` from a dotenv file |
+| `-v, --verbose` | Trace stages to stderr (also: `AI_RELAY_VERBOSE=1`) |
+
+Verbose mode prints `argv`, `parsed-flags`, `loaded-config`, `openai-request`, `result`, etc. to stderr. Secrets are length-redacted; response body text never leaks to stderr.
+
+---
+
+## 2. stdio MCP server (`ai-relay`)
+
+Long-lived stdio MCP server. The `<provider>` positional (today: `openai`) selects which upstream is mounted; all of that provider's tools are then registered. Today: `openai` mounts `chat-completions`.
+
+Project-local `.mcp.json` with an absolute bin path:
 
 ```json
 {
@@ -181,17 +106,19 @@ to the installed bin (or `npx ai-relay`) plus the `openai` positional.
 }
 ```
 
-For HTTP/SSE MCP transport instead of stdio, deploy the reference Hono
-app in this repo (`/api/mcp` route) — see the project root README.
+`--api-key`, `--base-url`, `--max-tokens`, `--timeout`, `--env` are accepted as flags too — pass them in `args` after the provider name.
+
+For HTTP/SSE MCP transport instead of stdio, deploy the reference Hono app in this repo's [`app/`](https://github.com/ragingwind/mcp-ai-relay/tree/main/app) — see the project root README.
 
 ---
 
-## SDK
+## 3. Embed via `registerOpenAIChat`
 
-### Embed in a Hono / Node HTTP MCP route
+The quick reference above shows the stdio variant. Same function for Hono/HTTP and Cloudflare Workers.
+
+### Hono / Node HTTP route
 
 ```ts
-// src/index.ts — minimal Hono server (mirrors `app/src/index.ts`)
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { loadConfig, verifyBearer } from "ai-relay";
@@ -230,29 +157,9 @@ app.all("/api/mcp", (c) => wrapped(c.req.raw));
 serve({ fetch: app.fetch, port: Number(process.env.AI_RELAY_PORT ?? 8787) });
 ```
 
-For the Vercel/Next.js variant, see
-[`examples/vercel/README.md`](../../examples/vercel/README.md).
-
-### Embed in a stdio MCP server (Claude Desktop direct)
+### Cloudflare Workers
 
 ```ts
-// server.ts
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { registerOpenAIChat } from "ai-relay/openai";
-
-const server = new McpServer({ name: "openai-relay", version: "0.1.0" });
-registerOpenAIChat(server, {
-  apiKey: process.env.AI_RELAY_API_KEY!,
-});
-
-await server.connect(new StdioServerTransport());
-```
-
-### Embed in a Cloudflare Workers MCP
-
-```ts
-// src/index.ts
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerOpenAIChat } from "ai-relay/openai";
@@ -266,22 +173,15 @@ export class OpenAIRelay extends McpAgent {
 }
 ```
 
-`wrangler.toml` requires `compatibility_flags = ["nodejs_compat"]` so
-`AsyncLocalStorage` (used internally for upstream-error redaction) is
-available. Without it, the SDK degrades gracefully — the request still
-succeeds, but upstream 5xx body snippets won't appear in the result text.
+`wrangler.toml` needs `compatibility_flags = ["nodejs_compat"]` so `AsyncLocalStorage` is available. Without it the SDK still works; upstream 5xx body snippets just won't appear in error result text.
 
-### Multi-upstream (one server, multiple instances)
+---
 
-`registerOpenAIChat` is closure-isolated: each call captures its own
-client, ceiling, and timeout. Call it any number of times on the same
-server with distinct `name` values to expose multiple upstreams as
-distinct tools.
+## 4. Multi-upstream
+
+`registerOpenAIChat` is closure-isolated — each call captures its own client, ceiling, and timeout. Call it any number of times with distinct `name` values to expose multiple upstreams as separate tools on one server.
 
 ```ts
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerOpenAIChat } from "ai-relay/openai";
-
 const server = new McpServer({ name: "multi-relay", version: "0.1.0" });
 
 registerOpenAIChat(server, {
@@ -293,7 +193,6 @@ registerOpenAIChat(server, {
   name: "azure-chat-completions",
   apiKey: process.env.AZURE_OPENAI_KEY!,
   baseURL: "https://<resource>.openai.azure.com/openai/deployments/<deployment>",
-  description: "Azure OpenAI — internal-data tier",
 });
 
 registerOpenAIChat(server, {
@@ -304,69 +203,34 @@ registerOpenAIChat(server, {
 });
 ```
 
-`tools/list` then exposes `chat-completions`, `azure-chat-completions`,
-and `local-llm` as three distinct entries.
+`tools/list` exposes `chat-completions`, `azure-chat-completions`, and `local-llm`.
 
 ---
 
-## API reference
-
-### `registerOpenAIChat(server, config)`
+## API
 
 ```ts
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type OpenAI from "openai";
-import type { RequestScope } from "ai-relay/openai";
+import { registerOpenAIChat, makeOpenAIChatHandler, openAIChatTool } from "ai-relay/openai";
+import { verifyBearer, loadConfig } from "ai-relay";
+import { createOpenAIClient } from "ai-relay/openai";
 
-export interface OpenAIChatConfig {
+interface OpenAIChatConfig {
   name?: string;
   description?: string;
   apiKey: string;
   baseURL?: string;
-  maxOutputTokensCeiling?: number;
-  requestTimeoutMs?: number;
-  openaiClient?: OpenAI;
+  maxOutputTokensCeiling?: number;  // default 4096
+  requestTimeoutMs?: number;        // default 60000
+  openaiClient?: OpenAI;            // inject your own client
   requestScope?: RequestScope;
 }
 
-export function registerOpenAIChat(server: McpServer, config: OpenAIChatConfig): void;
+registerOpenAIChat(server: McpServer, config: OpenAIChatConfig): void;
+makeOpenAIChatHandler(config): { schema, handler, name, description };  // transport-agnostic
+verifyBearer(actual: string, expected: string): boolean;                 // constant-time
+loadConfig({ env?, file?, args? }): { providers: [...] };                // env/file/args resolution
+createOpenAIClient(config): OpenAI;                                       // lower-level factory
 ```
-
-### `makeOpenAIChatHandler(config)` / `openAIChatTool`
-
-`makeOpenAIChatHandler` returns the transport-agnostic bundle
-(`{ schema, handler, name, description }`) that `registerOpenAIChat`
-binds into MCP. The same factory is exposed as the `makeHandler`
-property of the `openAIChatTool` descriptor (importable from
-`ai-relay/openai`), which the bundled CLI uses for one-shot
-invocation. Build your own dispatcher around either when you don't
-have an `McpServer` to register against.
-
-### `verifyBearer(actual, expected)`
-
-Constant-time byte comparison — portable to Node, Bun, Deno, and
-Workers without `nodejs_compat`.
-
-### `loadConfig(source)`
-
-```ts
-import { loadConfig } from "ai-relay";
-
-const cfg = loadConfig({ env: process.env });
-```
-
-Single resolution function for every embed shape. Pass `env`, `file`
-(JSON config), and/or `args` (programmatic overrides). The relay app's
-HTTP-only schema (`AI_RELAY_AUTH_TOKEN` ≥ 32 bytes, `AI_RELAY_*`
-ceilings, `AI_RELAY_PORT`) is private to the deployed `app/` Hono
-server — embedders in other runtimes validate their own env.
-
-### `createOpenAIClient(config)`
-
-Lower-level factory that returns an `OpenAI` client wired with
-fetch-redaction and a per-client `AsyncLocalStorage` scope.
-
----
 
 ## Result shape
 
@@ -377,44 +241,23 @@ fetch-redaction and a per-client `AsyncLocalStorage` scope.
     model: string,
     usage?: { prompt_tokens, completion_tokens, total_tokens },
     finish_reason?: "stop" | "length" | "tool_calls" | "content_filter" | "function_call",
-    code?: ToolErrorCode,
+    code?: "auth" | "rate_limited" | "context_length" | "content_policy" | "upstream_error" | "bad_request",
     retryAfter?: number,
   },
   isError: boolean,
 }
 ```
 
-`ToolErrorCode` values: `"auth"`, `"rate_limited"`, `"context_length"`,
-`"content_policy"`, `"upstream_error"`, `"bad_request"`.
-
----
-
 ## Compatibility
 
 | Dependency | Version |
 |---|---|
-| Node.js | 20.x |
+| Node.js | 20+ |
 | `@modelcontextprotocol/sdk` | `^1.26` |
 | `openai` | `^6` |
 | `mcp-handler` (optional) | `^1.1` |
 
-The SDK is ESM-only (`"type": "module"`). Transitive `node:` imports
-limited to `node:async_hooks`.
-
----
-
-## Non-goals (v0.x)
-
-- Embeddings / image / audio tools.
-- OAuth 2.1 — bearer-shared-secret only.
-- Rate limiting / budget caps / observability.
-
----
-
-## Testing
-
-CLI spawn-harness coverage (real subprocess + mocked upstream) lives in
-[`tests/cli/README.md`](./tests/cli/README.md).
+ESM-only (`"type": "module"`). Only `node:` import is `node:async_hooks`.
 
 ## License
 
