@@ -6,6 +6,60 @@ the project adheres to [Semantic Versioning](https://semver.org/) once
 v1.0 ships. Pre-v1.0 minor bumps may include breaking changes — read
 this file before upgrading.
 
+## [0.9.0] — 2026-05-12
+
+### Added
+
+- `--verbose` / `AI_RELAY_VERBOSE=1` stderr trace now emits the full
+  outbound OpenAI HTTP call (`openai-http-request`: method, URL,
+  redacted Authorization header, full JSON body) and stream lifecycle
+  events (`openai-stream-start`, `openai-stream-end`, `openai-cancelled`).
+  MCP RPC tracing (`mcp-rpc-in`, `mcp-rpc-out`) now emits role + content
+  verbatim instead of the previous `{ role, chars }` summary.
+- `app/src/index.ts` (Hono server) now picks up `AI_RELAY_VERBOSE=1`
+  and threads the same logger into `registerOpenAIChat`, so Docker /
+  Cloud Run / Vercel deployments get the same trace surface as the
+  stdio bin.
+- New SDK subpath export: `ai-relay/logger` (`createVerboseLogger`,
+  `isVerboseEnv`, `redactSecret`, `dumpMessages`, …) for callers
+  embedding the relay in their own MCP server.
+
+### Changed (caller-visible)
+
+- Verbose line prefix renamed from `[verbose]` to `[ai-relay]`.
+  Pool-prefixed hosts (e.g. `[pool:foo] [verbose] …`) now read
+  `[pool:foo] [ai-relay] …` — disambiguates which process emitted
+  the line.
+- Verbose line format drops the ISO timestamp. Previous:
+  `[verbose 2026-05-12T06:20:56.807Z] mcp-rpc-in: …`; current:
+  `[ai-relay] mcp-rpc-in: …`. Capture pipelines that grep on the
+  timestamp pattern need to update.
+- SSE response bodies in `openai-http-response` are replaced with a
+  placeholder (`<sse stream — see openai-stream-* events>`); the
+  assembled completion appears in `openai-stream-end.accumulatedText`.
+  Logging the SSE body verbatim would have consumed the stream before
+  the SDK could read it.
+
+### Policy
+
+- `CLAUDE.md` §4 and `doc/ARCHITECTURE.md` §9 carve out an explicit
+  exception to the "never log prompt/response bodies" rule for the
+  `--verbose` debug stream. Secrets (`Authorization` header, env
+  values matching `*_KEY` / `*_TOKEN`, `--api-key` argv) MUST still
+  be redacted via `redactSecret()`. Operators MUST treat the verbose
+  stderr stream as sensitive — never persist it to shared logging
+  infrastructure, never include it in PR comments, never check it
+  into git.
+
+### Removed
+
+- `summariseMessages()`-style chars-only redaction is no longer
+  applied on the verbose path. The function remains exported as a
+  legacy safety net but is no longer used by the bin tracers.
+- `openai-request` and `openai-response-stream-end` stages from
+  `ai-relay-cli` (run.ts) — superseded by the new HTTP / stream
+  stages emitted from the SDK fetch wrapper and `runOnce()`.
+
 ## [0.8.1] — 2026-05-12
 
 ### Docs
