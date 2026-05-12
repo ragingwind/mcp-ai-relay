@@ -141,8 +141,8 @@ mcp-ai-relay/                              # 저장소 루트 — pnpm 워크스
 │       │   ├── index.ts                # 공개 re-export (auth)
 │       │   ├── auth.ts                 # verifyBearer (portable, node:crypto 불필요)
 │       │   ├── bin/
-│       │   │   ├── ai-relay.ts         # bin 진입점 — `ai-relay <api-type>` MCP stdio 서버
-│       │   │   ├── ai-relay-cli.ts     # bin 진입점 — `ai-relay-cli <tool> [flags] [input]` 단발 실행
+│       │   │   ├── ai-relay.ts         # bin 진입점 — `ai-relay <provider>` MCP stdio 서버
+│       │   │   ├── ai-relay-cli.ts     # bin 진입점 — `ai-relay-cli <provider> <tool> [flags] [input]` 단발 실행
 │       │   │   ├── mcp-server.ts       # startMcpServer({apiType,config}) — 순수 라이브러리 함수
 │       │   │   ├── run.ts              # 단발 CLI 오케스트레이터(ai-relay-cli에서 사용)
 │       │   │   ├── parse.ts            # parseArgv (CLI) + parseMcpArgv (MCP)
@@ -338,6 +338,7 @@ export function verifyToken(req: Request, bearerToken: string | undefined) {
 - **Observability** — OpenTelemetry traces + Pino NDJSON 로그 + (선택) Sentry
 - **Progress notifications** — `_meta.progressToken` 처리, 진행 메시지 발행
 - **Tools/function-calling pass-through** — `tool_calls` 결과를 `structuredContent`로 직렬화
+- **서버당 다중 provider** — `ai-relay <provider-a> <provider-b> ...` 로 여러 provider의 도구를 동일 MCP 서버에 등록. 도입 시 도구 이름은 `<provider>.<api>` 네임스페이스로 마이그레이션해 충돌을 방지.
 
 ---
 

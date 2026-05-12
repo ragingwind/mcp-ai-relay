@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// `ai-relay <api-type>` — start an MCP stdio server that relays calls
-// to the upstream provider keyed by `<api-type>` (today: chat-completions).
+// `ai-relay <provider>` — start an MCP stdio server that relays calls
+// to the upstream provider's tools (today: openai → chat-completions).
 
 import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -17,18 +17,18 @@ import {
 } from "./logger.js";
 import { startMcpServer } from "./mcp-server.js";
 import { type ParsedMcpInvocation, parseMcpArgv, UsageError } from "./parse.js";
-import { registry, resolveApiType } from "./registry.js";
+import { registry, resolveProvider } from "./registry.js";
 
 export { VERSION };
 
-const USAGE = `Usage: ai-relay <api-type> [flags]
+const USAGE = `Usage: ai-relay <provider> [flags]
 
-Start an MCP stdio server that relays calls to the given API. Intended to be
-spawned by an MCP host (Claude Desktop, Claude Code, Cursor, …) — do not run
-interactively.
+Start an MCP stdio server that relays calls to the given provider's tools.
+Intended to be spawned by an MCP host (Claude Desktop, Claude Code, Cursor, …)
+— do not run interactively.
 
-API types:
-  chat-completions  OpenAI Chat Completions API
+Providers:
+  ${Object.keys(registry).join(", ")}
 
 Flags:
       --api-key <key>     Upstream API key (overrides AI_RELAY_API_KEY)
@@ -45,7 +45,7 @@ Example claude_desktop_config.json:
     "mcpServers": {
       "ai-relay": {
         "command": "npx",
-        "args": ["-y", "ai-relay", "chat-completions"],
+        "args": ["-y", "ai-relay", "openai"],
         "env": { "AI_RELAY_API_KEY": "sk-..." }
       }
     }
@@ -54,10 +54,10 @@ Example claude_desktop_config.json:
 For one-shot CLI invocation (no MCP server), use \`ai-relay-cli\`.
 `;
 
-const USAGE_NO_API_TYPE = `error: <api-type> positional is required
+const USAGE_NO_PROVIDER = `error: <provider> positional is required
 
-usage: ai-relay <api-type> [flags]
-api types: ${Object.keys(registry).join(", ")}
+usage: ai-relay <provider> [flags]
+providers: ${Object.keys(registry).join(", ")}
 
 For one-shot CLI invocation, use \`ai-relay-cli\`.
 `;
@@ -95,21 +95,21 @@ export async function main(argv: readonly string[], io: AiRelayIO): Promise<numb
   });
   verbose.log("argv", redactArgv(argv));
   verbose.log("parsed-flags", {
-    apiType: parsed.apiType,
+    provider: parsed.provider,
     flags: redactMcpFlags(parsed.flags),
     verbose: parsed.verbose,
   });
   verbose.log("env-snapshot", snapshotRelayEnv(io.env));
 
-  if (parsed.apiType === undefined) {
-    io.stderr.write(USAGE_NO_API_TYPE);
+  if (parsed.provider === undefined) {
+    io.stderr.write(USAGE_NO_PROVIDER);
     return 2;
   }
 
-  const apiType = resolveApiType(parsed.apiType);
-  if (apiType === undefined) {
+  const providerEntry = resolveProvider(parsed.provider);
+  if (providerEntry === undefined) {
     io.stderr.write(
-      `unknown api-type: ${parsed.apiType}\nknown api types: ${Object.keys(registry).join(", ")}\n`,
+      `unknown provider: ${parsed.provider}\nknown providers: ${Object.keys(registry).join(", ")}\n`,
     );
     return 2;
   }
@@ -164,7 +164,8 @@ export async function main(argv: readonly string[], io: AiRelayIO): Promise<numb
   });
 
   await startMcpServer({
-    apiType,
+    provider: parsed.provider,
+    providerEntry,
     version: VERSION,
     logger: verbose,
     config: {

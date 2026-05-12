@@ -26,7 +26,7 @@ describe("A: Positive — Happy Path Scenarios", () => {
   it("H-1: positional plain text against mocked upstream → exit 0", async () => {
     mock.setResponse(() => ({ status: 200, body: defaultSseBody("hello world") }));
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini", "ping"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini", "ping"],
       env: happyEnv(),
     });
     expect(r.status).toBe(0);
@@ -39,7 +39,7 @@ describe("A: Positive — Happy Path Scenarios", () => {
   it("H-2: stdin JSON → exit 0 + result on stdout", async () => {
     mock.setResponse(() => ({ status: 200, body: defaultSseBody("hi back") }));
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini"],
       env: happyEnv(),
       input: '{"messages":[{"role":"user","content":"hi"}]}',
     });
@@ -52,7 +52,7 @@ describe("A: Positive — Happy Path Scenarios", () => {
 
   it("H-3: positional plain text desugared into messages[role=user]", async () => {
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini", "hi"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"],
       env: happyEnv(),
     });
     expect(r.status).toBe(0);
@@ -64,7 +64,7 @@ describe("A: Positive — Happy Path Scenarios", () => {
 
   it("H-4: --name flag is NOT supported → exit 2", async () => {
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini", "--name", "foo", "hi"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini", "--name", "foo", "hi"],
       env: happyEnv(),
     });
     expect(r.status).toBe(2);
@@ -73,7 +73,7 @@ describe("A: Positive — Happy Path Scenarios", () => {
 
   it("H-5: --description flag is NOT supported → exit 2", async () => {
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini", "--description", "x", "hi"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini", "--description", "x", "hi"],
       env: happyEnv(),
     });
     expect(r.status).toBe(2);
@@ -83,7 +83,7 @@ describe("A: Positive — Happy Path Scenarios", () => {
   it("H-6: AI_RELAY_MODEL env resolves model when no flag", async () => {
     mock.setResponse(() => ({ status: 200, body: defaultSseBody("ok") }));
     const r = await runCli({
-      args: ["chat-completions", "ping"],
+      args: ["openai", "chat-completions", "ping"],
       env: { ...happyEnv(), AI_RELAY_MODEL: "gpt-4o-mini" },
     });
     expect(r.status).toBe(0);
@@ -97,6 +97,7 @@ describe("A: Positive — Happy Path Scenarios", () => {
     mock.setResponse(() => ({ status: 200, body: defaultSseBody("ok") }));
     const r = await runCli({
       args: [
+        "openai",
         "chat-completions",
         "-m",
         "from-flag",
@@ -116,7 +117,7 @@ describe("C: Negative — Error / Exit Codes", () => {
       body: JSON.stringify({ error: { message: "no auth" } }),
     }));
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini", "hi"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"],
       env: happyEnv(),
     });
     expect(r.status).toBe(1);
@@ -131,7 +132,7 @@ describe("C: Negative — Error / Exit Codes", () => {
       body: JSON.stringify({ error: { message: "slow down" } }),
     }));
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini", "hi"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"],
       env: happyEnv(),
     });
     expect(r.status).toBe(1);
@@ -146,7 +147,7 @@ describe("C: Negative — Error / Exit Codes", () => {
       body: JSON.stringify({ error: { message: "boom" } }),
     }));
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini", "hi"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"],
       env: happyEnv(),
     });
     expect(r.status).toBe(1);
@@ -158,7 +159,7 @@ describe("C: Negative — Error / Exit Codes", () => {
   it("E-4: --timeout exceeded → exit 1 + code 'upstream_error'", async () => {
     mock.setResponse(() => ({ status: 200, body: "", hang: true }));
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini", "--timeout", "200", "hi"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini", "--timeout", "200", "hi"],
       env: happyEnv(),
       timeoutMs: 5_000,
     });
@@ -170,7 +171,7 @@ describe("C: Negative — Error / Exit Codes", () => {
 
   it("E-5: connection refused → exit 1 + isError + code 'upstream_error'", async () => {
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini", "hi"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"],
       env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: "http://127.0.0.1:1/v1" },
       timeoutMs: 10_000,
     });
@@ -182,7 +183,7 @@ describe("C: Negative — Error / Exit Codes", () => {
 
   it("E-6: invalid JSON on stdin (leading '{') → exit 2 + 'not valid JSON' on stderr", async () => {
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini"],
       env: happyEnv(),
       input: "{not-valid-json",
     });
@@ -192,7 +193,7 @@ describe("C: Negative — Error / Exit Codes", () => {
 
   it("E-7: messages is not an array → exit 1 + ZodError on stderr", async () => {
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini"],
       env: happyEnv(),
       input: '{"messages":"not-an-array"}',
     });
@@ -202,7 +203,7 @@ describe("C: Negative — Error / Exit Codes", () => {
 
   it("E-8: no model from any source on plain text → exit 2 + 'no model resolved'", async () => {
     const r = await runCli({
-      args: ["chat-completions", "hi"],
+      args: ["openai", "chat-completions", "hi"],
       env: happyEnv(),
     });
     expect(r.status).toBe(2);
@@ -217,18 +218,27 @@ describe("B: Argv / Env handling", () => {
     expect(r.stderr).toMatch(/usage:|--model|provider/i);
   });
 
-  it("A-2: unknown provider/tool → exit 2", async () => {
+  it("A-2: unknown provider → exit 2", async () => {
     const r = await runCli({
-      args: ["nope", "hi"],
+      args: ["nope", "chat-completions", "hi"],
       env: happyEnv(),
     });
     expect(r.status).toBe(2);
-    expect(r.stderr).toContain("unknown tool: nope");
+    expect(r.stderr).toContain("unknown provider: nope");
+  });
+
+  it("A-2b: unknown tool for known provider → exit 2", async () => {
+    const r = await runCli({
+      args: ["openai", "messages", "hi"],
+      env: happyEnv(),
+    });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("unknown tool for provider openai: messages");
   });
 
   it("A-3: openai chat without AI_RELAY_API_KEY → exit 2 mentioning apiKey", async () => {
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini", "hi"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"],
       env: {},
     });
     expect(r.status).toBe(2);
@@ -251,7 +261,7 @@ describe("B: Argv / Env handling", () => {
 
   it("A-6: env-only happy path (no flags besides -m) → exit 0", async () => {
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini", "hi"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"],
       env: happyEnv(),
     });
     expect(r.status).toBe(0);
@@ -263,7 +273,7 @@ describe("B: Argv / Env handling", () => {
 describe("D: Resilience / Lifecycle", () => {
   it("R-1: closed stdin + no positional → exit 2 within 1 s", async () => {
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini"],
       env: happyEnv(),
       timeoutMs: 1_000,
     });
@@ -275,7 +285,7 @@ describe("D: Resilience / Lifecycle", () => {
   it("R-2: SIGTERM during slow upstream → child exits within 2 s", async () => {
     mock.setResponse(() => ({ status: 200, body: "", hang: true }));
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini", "hi"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"],
       env: happyEnv(),
       killAfterMs: 200,
       killSignal: "SIGTERM",
@@ -289,7 +299,7 @@ describe("D: Resilience / Lifecycle", () => {
   it("R-3: SIGINT during slow upstream → child exits within 2 s", async () => {
     mock.setResponse(() => ({ status: 200, body: "", hang: true }));
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini", "hi"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"],
       env: happyEnv(),
       killAfterMs: 200,
       killSignal: "SIGINT",
@@ -302,7 +312,7 @@ describe("D: Resilience / Lifecycle", () => {
 
   it("R-4: stdout is JSON-only, stderr is not JSON", async () => {
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini", "hi"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"],
       env: happyEnv(),
     });
     expect(r.status).toBe(0);
@@ -324,7 +334,7 @@ describe("D: Resilience / Lifecycle", () => {
       return { status: 200, body: defaultSseBody("ok") };
     });
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini"],
       env: happyEnv(),
       inputStream: async (stdin) => {
         const chunkSize = 8 * 1024;
@@ -344,7 +354,7 @@ describe("D: Resilience / Lifecycle", () => {
   it("R-6a: failing --env path does not echo AI_RELAY_API_KEY", async () => {
     const canary = "leak-canary-XYZ";
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini", "--env", "/no/such.env", "hi"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini", "--env", "/no/such.env", "hi"],
       env: { AI_RELAY_API_KEY: canary, AI_RELAY_BASE_URL: mock.baseURL },
     });
     expect(r.status).toBe(2);
@@ -355,7 +365,7 @@ describe("D: Resilience / Lifecycle", () => {
   it("R-6b: happy path does not echo AI_RELAY_API_KEY on stderr", async () => {
     const canary = "leak-canary-HAPPY";
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini", "hi"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"],
       env: { AI_RELAY_API_KEY: canary, AI_RELAY_BASE_URL: mock.baseURL },
     });
     expect(r.status).toBe(0);
@@ -364,7 +374,7 @@ describe("D: Resilience / Lifecycle", () => {
 
   it("V-1: -v flag emits verbose stage lines on stderr, stdout is single JSON line", async () => {
     const r = await runCli({
-      args: ["chat-completions", "-v", "-m", "gpt-4o-mini", "hi"],
+      args: ["openai", "chat-completions", "-v", "-m", "gpt-4o-mini", "hi"],
       env: happyEnv(),
     });
     expect(r.status).toBe(0);
@@ -378,7 +388,7 @@ describe("D: Resilience / Lifecycle", () => {
 
   it("V-2: AI_RELAY_VERBOSE=1 env enables verbose without the flag", async () => {
     const r = await runCli({
-      args: ["chat-completions", "-m", "gpt-4o-mini", "hi"],
+      args: ["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"],
       env: { ...happyEnv(), AI_RELAY_VERBOSE: "1" },
     });
     expect(r.status).toBe(0);
@@ -389,7 +399,7 @@ describe("D: Resilience / Lifecycle", () => {
   it("V-3: -v + secret API key → secret never appears in stderr", async () => {
     const canary = "sk-leak-canary-VERBOSE";
     const r = await runCli({
-      args: ["chat-completions", "-v", "-m", "gpt-4o-mini", "--api-key", canary, "hi"],
+      args: ["openai", "chat-completions", "-v", "-m", "gpt-4o-mini", "--api-key", canary, "hi"],
       env: { AI_RELAY_BASE_URL: mock.baseURL },
     });
     expect(r.status).toBe(0);

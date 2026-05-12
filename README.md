@@ -20,8 +20,8 @@ MCP host  ──►  ai-relay  ──►  OpenAI-compatible API
 
 | Surface | Transport | Install | When |
 |---|---|---|---|
-| `npx ai-relay-cli <tool> [flags] [input]` | none (one-shot) | none | quick test, scripting, CI smoke |
-| `npx ai-relay <api-type>` | stdio MCP | none | direct registration in Claude Desktop / Claude Code / Cursor |
+| `npx ai-relay-cli <provider> <tool> [flags] [input]` | none (one-shot) | none | quick test, scripting, CI smoke |
+| `npx ai-relay <provider>` | stdio MCP | none | direct registration in Claude Desktop / Claude Code / Cursor |
 | SDK (`ai-relay`) | caller's choice (stdio / HTTP / Workers) | npm | embed in custom MCP server |
 | App (`./app`, Hono) | HTTP | `git clone` (self-host on Node) | personal or team HTTP endpoint |
 | Docker (`ghcr.io/ragingwind/ai-relay`) | HTTP | `docker run` (no build) | container deployment, multi-arch (amd64/arm64) |
@@ -31,32 +31,32 @@ MCP host  ──►  ai-relay  ──►  OpenAI-compatible API
 ## Quick start — one-shot CLI (`ai-relay-cli`)
 
 ```bash
-AI_RELAY_API_KEY=sk-... npx ai-relay-cli chat-completions -m gpt-4o-mini "ping"
+AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions -m gpt-4o-mini "ping"
 
 # Model can also come from the JSON input itself
-AI_RELAY_API_KEY=sk-... npx ai-relay-cli chat-completions \
+AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions \
   '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"ping"}]}'
 
 # …or from an env var
 AI_RELAY_API_KEY=sk-... AI_RELAY_MODEL=gpt-4o-mini \
-  npx ai-relay-cli chat-completions "ping"
+  npx ai-relay-cli openai chat-completions "ping"
 
 echo "explain TLS in 2 sentences" \
-  | AI_RELAY_API_KEY=sk-... npx ai-relay-cli chat-completions -m gpt-4o-mini -s "be terse"
+  | AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions -m gpt-4o-mini -s "be terse"
 
 # Inline key via flag (no env var):
-npx ai-relay-cli chat-completions -m gpt-4o-mini --api-key sk-... "ping"
+npx ai-relay-cli openai chat-completions -m gpt-4o-mini --api-key sk-... "ping"
 
 # Point at Azure OpenAI / vLLM / Ollama / AI Gateway (any OpenAI-compatible endpoint):
-AI_RELAY_API_KEY=sk-... npx ai-relay-cli chat-completions -m gpt-4o-mini \
+AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions -m gpt-4o-mini \
   --base-url https://my-azure.openai.azure.com/v1 \
   "ping"
 ```
 
-Invocation is `ai-relay-cli <tool> [flags] [input]`. The tool name
-follows the upstream API's native naming — `chat-completions` for OpenAI
-Chat Completions today; future entries will be `messages` for Anthropic
-and `responses` for OpenAI Responses. Input is either a positional
+Invocation is `ai-relay-cli <provider> <tool> [flags] [input]`. Today the
+only provider is `openai`, exposing `chat-completions`; future entries
+will be `anthropic` (with `messages`) and `openai` with `responses`.
+Input is either a positional
 argument or piped via stdin (exactly one — they are XOR). A plain-text
 positional becomes a `{messages:[…]}` array; a JSON literal (`{` / `[`) is
 passed verbatim.
@@ -72,7 +72,7 @@ are redacted; stdout JSON is never polluted.
 
 ---
 
-## Quick start — stdio MCP server (`ai-relay <api-type>`)
+## Quick start — stdio MCP server (`ai-relay <provider>`)
 
 For direct registration in Claude Desktop, Claude Code, Cursor, or any other
 MCP host that spawns a child process and speaks JSON-RPC over stdin/stdout:
@@ -82,16 +82,17 @@ MCP host that spawns a child process and speaks JSON-RPC over stdin/stdout:
   "mcpServers": {
     "ai-relay": {
       "command": "npx",
-      "args": ["-y", "ai-relay", "chat-completions"],
+      "args": ["-y", "ai-relay", "openai"],
       "env": { "AI_RELAY_API_KEY": "sk-..." }
     }
   }
 }
 ```
 
-Run `ai-relay <api-type>` to start the stdio MCP server (today the only
-api-type is `chat-completions`). For shell pipelines and one-shot
-invocation, use `ai-relay-cli <tool> -m <model> "…"`.
+Run `ai-relay <provider>` to start the stdio MCP server (today the only
+provider is `openai`, which exposes the `chat-completions` tool). For
+shell pipelines and one-shot invocation, use
+`ai-relay-cli <provider> <tool> -m <model> "…"`.
 
 Point at an OpenAI-compatible endpoint (Azure OpenAI / vLLM / Ollama / AI
 Gateway) by adding `"AI_RELAY_BASE_URL"` to the `env` block:

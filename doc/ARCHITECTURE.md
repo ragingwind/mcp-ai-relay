@@ -142,8 +142,8 @@ mcp-ai-relay/                              # repo root — pnpm workspace orches
 │       │   ├── index.ts                # public re-exports (auth)
 │       │   ├── auth.ts                 # verifyBearer (portable, no node:crypto)
 │       │   ├── bin/
-│       │   │   ├── ai-relay.ts         # bin entry — `ai-relay <api-type>` MCP stdio server
-│       │   │   ├── ai-relay-cli.ts     # bin entry — `ai-relay-cli <tool> [flags] [input]` one-shot
+│       │   │   ├── ai-relay.ts         # bin entry — `ai-relay <provider>` MCP stdio server
+│       │   │   ├── ai-relay-cli.ts     # bin entry — `ai-relay-cli <provider> <tool> [flags] [input]` one-shot
 │       │   │   ├── mcp-server.ts       # startMcpServer({apiType,config}) — pure library function
 │       │   │   ├── run.ts              # one-shot CLI orchestrator (used by ai-relay-cli)
 │       │   │   ├── parse.ts            # parseArgv (CLI) + parseMcpArgv (MCP)
@@ -338,6 +338,7 @@ Principle: **mock only the OpenAI HTTP boundary** (MSW). Never mock the SDK modu
 - **Observability** — OpenTelemetry traces + Pino NDJSON logs + (optional) Sentry
 - **Progress notifications** — handle `_meta.progressToken` and emit progress messages
 - **Tools/function-calling pass-through** — serialize `tool_calls` results into `structuredContent`
+- **Multi-provider per server** — `ai-relay <provider-a> <provider-b> ...` to register multiple providers' tools on a single MCP server. When introduced, tool names migrate to `<provider>.<api>` namespacing to avoid collisions.
 
 ---
 

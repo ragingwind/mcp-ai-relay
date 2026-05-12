@@ -118,7 +118,7 @@ These are NOT read by the Hono server; they only configure the one-shot CLI.
 
 | Key | Required | Notes |
 |---|---|---|
-| `AI_RELAY_MODEL` | ❌ | Default model id for `ai-relay-cli`. Falls behind `model` in JSON input and behind `-m`/`--model` flag. The MCP server (`ai-relay <api-type>`) does not read this; clients must supply `model` in `tools/call` arguments. |
+| `AI_RELAY_MODEL` | ❌ | Default model id for `ai-relay-cli`. Falls behind `model` in JSON input and behind `-m`/`--model` flag. The MCP server (`ai-relay <provider>`) does not read this; clients must supply `model` in `tools/call` arguments. |
 
 ### Script-only (consumed by `scripts/mcp-inspect.mjs` and `scripts/verify.mjs`)
 

@@ -1,15 +1,16 @@
 // MCP stdio server library function. The argv-parsing entrypoint lives
 // in `ai-relay.ts`; this module exposes a pure starter that takes a
-// resolved api-type + config and connects the stdio transport.
+// resolved provider + config and connects the stdio transport.
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { OpenAIChatConfig } from "../openai/index.js";
 import type { VerboseLogger } from "./logger.js";
-import { type ApiType, registry } from "./registry.js";
+import type { ProviderEntry } from "./registry.js";
 
 export interface StartMcpServerOptions {
-  apiType: ApiType;
+  provider: string;
+  providerEntry: ProviderEntry;
   config: OpenAIChatConfig;
   version: string;
   logger?: VerboseLogger;
@@ -17,14 +18,14 @@ export interface StartMcpServerOptions {
 
 export async function startMcpServer(opts: StartMcpServerOptions): Promise<void> {
   const server = new McpServer({ name: "ai-relay", version: opts.version });
-  registry[opts.apiType].registerMcp(server, opts.config);
+  opts.providerEntry.registerOnServer(server, opts.config);
 
   const logger = opts.logger;
   const transport = new StdioServerTransport();
 
   if (logger?.enabled) {
     logger.log("mcp-server-ready", {
-      apiType: opts.apiType,
+      provider: opts.provider,
       version: opts.version,
     });
     instrumentTransport(transport, logger);

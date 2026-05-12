@@ -1,6 +1,6 @@
 // argv → ParsedInvocation. Pure module with no I/O.
 //
-// Surface: `ai-relay-cli <tool> [flags] [input]`
+// Surface: `ai-relay-cli <provider> <tool> [flags] [input]`
 //
 // Long flags: --system -s, --model -m, --api-key, --base-url,
 //             --max-tokens, --timeout, --env, --verbose -v,
@@ -29,6 +29,7 @@ export interface ParsedInvocation {
   help: boolean;
   version: boolean;
   verbose: boolean;
+  provider: string;
   tool: string;
   flags: ParsedFlags;
   positional?: string;
@@ -65,6 +66,7 @@ export function parseArgv(argv: readonly string[]): ParsedInvocation {
     help: false,
     version: false,
     verbose: false,
+    provider: "",
     tool: "",
     flags: {},
   };
@@ -169,21 +171,23 @@ export function parseArgv(argv: readonly string[]): ParsedInvocation {
     return out;
   }
 
-  if (positionals.length < 1) {
-    throw new UsageError("usage: ai-relay-cli <tool> [flags] [input]");
+  if (positionals.length < 2) {
+    throw new UsageError("usage: ai-relay-cli <provider> <tool> [flags] [input]");
   }
 
-  const tool = positionals[0];
-  if (tool === undefined) {
-    throw new UsageError("usage: ai-relay-cli <tool> [flags] [input]");
+  const provider = positionals[0];
+  const tool = positionals[1];
+  if (provider === undefined || tool === undefined) {
+    throw new UsageError("usage: ai-relay-cli <provider> <tool> [flags] [input]");
   }
+  out.provider = provider;
   out.tool = tool;
 
-  if (positionals.length > 2) {
+  if (positionals.length > 3) {
     throw new UsageError("at most one positional input is accepted after <tool>");
   }
-  if (positionals.length === 2) {
-    const pos = positionals[1];
+  if (positionals.length === 3) {
+    const pos = positionals[2];
     if (pos !== undefined) out.positional = pos;
   }
 
@@ -192,7 +196,7 @@ export function parseArgv(argv: readonly string[]): ParsedInvocation {
 
 // argv → ParsedMcpInvocation. Pure module with no I/O.
 //
-// Surface: `ai-relay <api-type> [flags]`
+// Surface: `ai-relay <provider> [flags]`
 // Flags: --api-key, --base-url, --max-tokens, --timeout, --env,
 //        --verbose -v, --help -h, --version -V.
 
@@ -208,7 +212,7 @@ export interface ParsedMcpInvocation {
   help: boolean;
   version: boolean;
   verbose: boolean;
-  apiType?: string;
+  provider?: string;
   flags: ParsedMcpFlags;
 }
 
@@ -304,9 +308,9 @@ export function parseMcpArgv(argv: readonly string[]): ParsedMcpInvocation {
     return out;
   }
   if (positionals.length > 1) {
-    throw new UsageError("usage: ai-relay <api-type> [flags]");
+    throw new UsageError("usage: ai-relay <provider> [flags]");
   }
   const first = positionals[0];
-  if (first !== undefined) out.apiType = first;
+  if (first !== undefined) out.provider = first;
   return out;
 }

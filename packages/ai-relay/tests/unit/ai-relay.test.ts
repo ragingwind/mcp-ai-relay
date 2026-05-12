@@ -1,4 +1,4 @@
-// Pre-startup unit tests for `ai-relay <api-type>` — covers argv parsing,
+// Pre-startup unit tests for `ai-relay <provider>` — covers argv parsing,
 // registry lookup, --help / --version, and config-error short circuits
 // before the stdio transport is ever constructed. The transport itself
 // is exercised by tests/integration/bin-tarball.test.ts.
@@ -39,15 +39,15 @@ describe("ai-relay — argv short-circuits", () => {
     const cap = makeIO();
     const code = await main(["--help"], cap.io);
     expect(code).toBe(0);
-    expect(cap.stdout.value).toContain("Usage: ai-relay <api-type>");
-    expect(cap.stdout.value).toContain("chat-completions");
+    expect(cap.stdout.value).toContain("Usage: ai-relay <provider>");
+    expect(cap.stdout.value).toContain("openai");
   });
 
   it("P2: -h prints usage on stdout, exit 0", async () => {
     const cap = makeIO();
     const code = await main(["-h"], cap.io);
     expect(code).toBe(0);
-    expect(cap.stdout.value).toContain("Usage: ai-relay <api-type>");
+    expect(cap.stdout.value).toContain("Usage: ai-relay <provider>");
   });
 
   it("P3: --version prints SDK version on stdout, exit 0", async () => {
@@ -70,21 +70,21 @@ describe("ai-relay — argv short-circuits", () => {
 });
 
 describe("ai-relay — usage / registry errors", () => {
-  it("D1: bare invocation (no api-type) → exit 2 + usage on stderr", async () => {
+  it("D1: bare invocation (no provider) → exit 2 + usage on stderr", async () => {
     const cap = makeIO();
     const code = await main([], cap.io);
     expect(code).toBe(2);
-    expect(cap.stderr.value).toContain("<api-type>");
-    expect(cap.stderr.value).toContain("usage: ai-relay <api-type>");
+    expect(cap.stderr.value).toContain("<provider>");
+    expect(cap.stderr.value).toContain("usage: ai-relay <provider>");
     expect(cap.stdout.value).toBe("");
   });
 
-  it("D2: unknown api-type → exit 2 + 'unknown api-type' on stderr", async () => {
+  it("D2: unknown provider → exit 2 + 'unknown provider' on stderr", async () => {
     const cap = makeIO({ AI_RELAY_API_KEY: "k" });
-    const code = await main(["messages"], cap.io);
+    const code = await main(["anthropic"], cap.io);
     expect(code).toBe(2);
-    expect(cap.stderr.value).toContain("unknown api-type: messages");
-    expect(cap.stderr.value).toContain("chat-completions");
+    expect(cap.stderr.value).toContain("unknown provider: anthropic");
+    expect(cap.stderr.value).toContain("openai");
   });
 
   it("D3: unknown long flag → exit 2 with stderr message", async () => {
@@ -103,14 +103,14 @@ describe("ai-relay — usage / registry errors", () => {
 
   it("D5: more than one positional rejected", async () => {
     const cap = makeIO();
-    const code = await main(["chat-completions", "extra"], cap.io);
+    const code = await main(["openai", "extra"], cap.io);
     expect(code).toBe(2);
-    expect(cap.stderr.value).toContain("usage: ai-relay <api-type>");
+    expect(cap.stderr.value).toContain("usage: ai-relay <provider>");
   });
 
   it("D6: --max-tokens with non-integer rejected (before registry lookup)", async () => {
     const cap = makeIO({ AI_RELAY_API_KEY: "k" });
-    const code = await main(["chat-completions", "--max-tokens", "abc"], cap.io);
+    const code = await main(["openai", "--max-tokens", "abc"], cap.io);
     expect(code).toBe(2);
     expect(cap.stderr.value).toContain("--max-tokens must be a positive integer");
   });
@@ -119,14 +119,14 @@ describe("ai-relay — usage / registry errors", () => {
 describe("ai-relay — config / env-file errors", () => {
   it("D1: missing AI_RELAY_API_KEY → exit 2 before stdio transport starts", async () => {
     const cap = makeIO({});
-    const code = await main(["chat-completions"], cap.io);
+    const code = await main(["openai"], cap.io);
     expect(code).toBe(2);
     expect(cap.stderr.value.toLowerCase()).toContain("apikey");
   });
 
   it("D2: missing --env file → exit 2 with file-read message", async () => {
     const cap = makeIO({ AI_RELAY_API_KEY: "k" });
-    const code = await main(["chat-completions", "--env", "/no/such/file.env"], cap.io);
+    const code = await main(["openai", "--env", "/no/such/file.env"], cap.io);
     expect(code).toBe(2);
     expect(cap.stderr.value).toContain("cannot read --env file");
   });

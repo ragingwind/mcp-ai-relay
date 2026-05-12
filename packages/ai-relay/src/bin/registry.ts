@@ -3,36 +3,35 @@ import {
   type OpenAIChatConfig,
   type OpenAIChatHandlerBundle,
   openAIChatTool,
-  registerOpenAIChat,
+  registerOpenAIProvider,
   type ToolDescriptor,
 } from "../openai/index.js";
 
 export type AnyTool = ToolDescriptor<OpenAIChatConfig, OpenAIChatHandlerBundle>;
 
-export interface RegistryEntry {
-  /** CLI one-shot handler bundle (used by `ai-relay-cli`). */
-  cli: AnyTool;
-  /** Register this tool on an `McpServer` (used by `ai-relay`). */
-  registerMcp: (server: McpServer, config: OpenAIChatConfig) => void;
+export interface ProviderEntry {
+  /** Mount all of this provider's API tools on an `McpServer`. */
+  registerOnServer: (server: McpServer, config: OpenAIChatConfig) => void;
+  /** CLI one-shot tool descriptors keyed by tool name. */
+  tools: Record<string, AnyTool>;
 }
 
-// Each key is the api-type exposed at the CLI / MCP surface and follows the
-// upstream provider's native API naming. Future entries: `messages` for
-// Anthropic Messages, `responses` for OpenAI Responses, etc.
 export const registry = {
-  "chat-completions": {
-    cli: openAIChatTool,
-    registerMcp: registerOpenAIChat,
+  openai: {
+    registerOnServer: registerOpenAIProvider,
+    tools: {
+      "chat-completions": openAIChatTool,
+    },
   },
-} as const satisfies Record<string, RegistryEntry>;
+} as const satisfies Record<string, ProviderEntry>;
 
-export type ApiType = keyof typeof registry;
+export type Provider = keyof typeof registry;
 
-export function resolveApiType(name: string): ApiType | undefined {
-  return name in registry ? (name as ApiType) : undefined;
+export function resolveProvider(name: string): ProviderEntry | undefined {
+  return (registry as Record<string, ProviderEntry>)[name];
 }
 
-export function resolveTool(tool: string): AnyTool | undefined {
-  const entry = (registry as Record<string, RegistryEntry>)[tool];
-  return entry?.cli;
+export function resolveProviderTool(provider: string, tool: string): AnyTool | undefined {
+  const entry = (registry as Record<string, ProviderEntry>)[provider];
+  return entry?.tools[tool];
 }
