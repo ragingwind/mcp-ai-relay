@@ -38,7 +38,7 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
       - name: Multi-arch build (B-3)
         env:
           DOCKER_SMOKE_MULTIARCH: '1'
