@@ -1,6 +1,6 @@
 {
   "name": "ai-relay",
-  "version": "0.4.1",
+  "version": "0.6.0",
   "description": "Provider-agnostic MCP relay SDK — embed Chat Completions and (future) Anthropic Messages, Gemini, and unified-gateway tools in any MCP server.",
   "license": "MIT",
   "author": "Jimmy Moon <ragingwind@gmail.com>",
@@ -26,8 +26,8 @@
     }
   },
   "bin": {
-    "ai-relay": "./dist/bin/cli.js",
-    "ai-relay-mcp": "./dist/bin/mcp.js"
+    "ai-relay": "./dist/bin/ai-relay.js",
+    "ai-relay-cli": "./dist/bin/ai-relay-cli.js"
   },
   "files": [
     "dist",
@@ -35,7 +35,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node -e \"const fs=require('node:fs');fs.chmodSync('dist/bin/cli.js',0o755);fs.chmodSync('dist/bin/mcp.js',0o755);\"",
+    "build": "tsc -p tsconfig.build.json && node -e \"const fs=require('node:fs');fs.chmodSync('dist/bin/ai-relay.js',0o755);fs.chmodSync('dist/bin/ai-relay-cli.js',0o755);\"",
     "build:watch": "tsc -p tsconfig.build.json --watch",
     "test": "vitest run --passWithNoTests",
     "test:bin": "vitest run tests/integration/bin-tarball.test.ts",

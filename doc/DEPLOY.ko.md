@@ -264,7 +264,7 @@ docker inspect --format '{{.State.Health.Status}}' <container>
 pnpm inspect --url=http://localhost:8787/api/mcp --method=tools/list
 ```
 
-도구 1개 `openai_chat` 기대. PR 전 전체 절차(C1–C6)는
+도구 1개 `chat-completions` 기대. PR 전 전체 절차(C1–C6)는
 [`QA-MCP-INSPECTOR.ko.md`](./QA-MCP-INSPECTOR.ko.md) 참고.
 
 ### 4.4 비밀이 이미지에 박혀 있지 않은지 확인

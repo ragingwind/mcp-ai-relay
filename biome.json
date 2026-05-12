@@ -8,7 +8,10 @@
       "packages/*/tests/**",
       "tests/**",
       "examples/*/server.ts",
-      "examples/*/src/**"
+      "examples/*/src/**",
+      "!**/.claude",
+      "!**/node_modules",
+      "!**/dist"
     ],
     "ignoreUnknown": true
   },

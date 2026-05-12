@@ -12,7 +12,7 @@
 //      Unauthenticated requests get 401 + `WWW-Authenticate: Bearer ...`
 //      automatically.
 //   3. `createMcpHandler((server) => registerOpenAIChat(server, ...))` —
-//      registers the `openai_chat` tool on each request boundary.
+//      registers the `chat-completions` tool on each request boundary.
 //
 // `app` is exported so integration tests can call `app.fetch(request)`
 // without booting an actual HTTP listener. The `import.meta.url` guard

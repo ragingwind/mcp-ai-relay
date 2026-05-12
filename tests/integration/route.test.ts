@@ -4,7 +4,7 @@
 // What "integration" means here (per plan OQ-3 / CLAUDE.md §7): the Hono
 // `app` is invoked end-to-end via `app.fetch(request)` with real Web
 // `Request` and `Response` instances, exercising mcp-handler + withMcpAuth
-// + zod + the openai_chat tool wiring as one stack. Only the OpenAI HTTP
+// + zod + the chat-completions tool wiring as one stack. Only the OpenAI HTTP
 // boundary is mocked (MSW). We never mock `mcp-handler` itself — that
 // would defeat the purpose.
 //
@@ -90,7 +90,7 @@ function makeCallRequest(
       jsonrpc: "2.0",
       id: 1,
       method: "tools/call",
-      params: { name: "openai_chat", arguments: args },
+      params: { name: "chat-completions", arguments: args },
     }),
   };
   if (opts.signal) init.signal = opts.signal;
@@ -212,14 +212,14 @@ describe("route /api/mcp — bearer auth", () => {
 // =========================================================================
 
 describe("route /api/mcp — tools/list", () => {
-  // B4: returns exactly one tool, name "openai_chat"
-  it("P1: exposes a single tool named openai_chat", async () => {
+  // B4: returns exactly one tool, name "chat-completions"
+  it("P1: exposes a single tool named chat-completions", async () => {
     const res = await app.fetch(makeListRequest());
     expect(res.status).toBe(200);
     const envelope = await readJsonRpcResponse(res);
     const tools = (envelope.result?.tools ?? []) as Array<{ name: string }>;
     expect(tools).toHaveLength(1);
-    expect(tools[0]?.name).toBe("openai_chat");
+    expect(tools[0]?.name).toBe("chat-completions");
   });
 
   // B5: tools/list response includes the input schema.

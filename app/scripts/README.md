@@ -57,7 +57,7 @@ non-zero exit code.
 | R-4 | `GET /healthz` returns body containing `ok`. | |
 | R-5 | `POST /api/mcp` (no bearer) returns 401. | Sends MCP `initialize` JSON-RPC. |
 | R-6 | `POST /api/mcp` (with bearer) returns body containing `"protocolVersion"`. | Same `initialize` request. |
-| R-7 | `tools/call` for `openai_chat` returns the mock canned reply (`smoke-canned-reply`). | |
+| R-7 | `tools/call` for `chat-completions` returns the mock canned reply (`smoke-canned-reply`). | |
 | R-8 | `docker stop --time=10` returns within 7 s and exit code is 0 or 143. | 143 = 128 + SIGTERM(15). |
 | R-9 | `docker run --rm <image>` with no env vars exits non-zero AND mentions `AI_RELAY_API_KEY` or `AI_RELAY_AUTH_TOKEN`. | Validates the env-validation error path. |
 

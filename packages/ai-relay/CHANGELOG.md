@@ -6,6 +6,97 @@ the project adheres to [Semantic Versioning](https://semver.org/) once
 v1.0 ships. Pre-v1.0 minor bumps may include breaking changes — read
 this file before upgrading.
 
+## [0.6.0] — 2026-05-12
+
+### Changed (BREAKING — caller-visible)
+
+- **Bin split into two binaries.** The single `ai-relay` dispatcher (which
+  switched modes based on whether a positional was present) is gone. Now:
+  - `ai-relay <api-type>` — MCP stdio server. The `<api-type>` positional
+    (today `chat-completions`) is **required**; bare `ai-relay` exits with
+    code 2 and a usage message. Unknown api-type also exits 2.
+  - `ai-relay-cli <tool> <model> [flags] [input]` — one-shot CLI. The
+    previous shell-side invocation (`ai-relay chat-completions gpt-4o-mini …`)
+    moves here unchanged.
+
+  MCP host configuration:
+  ```diff
+   "mcpServers": {
+     "ai-relay": {
+       "command": "npx",
+  -    "args": ["-y", "ai-relay"],
+  +    "args": ["-y", "ai-relay", "chat-completions"],
+       "env": { "AI_RELAY_API_KEY": "sk-..." }
+     }
+   }
+  ```
+
+  Shell invocation:
+  ```diff
+  -ai-relay chat-completions gpt-4o-mini "ping"
+  +ai-relay-cli chat-completions gpt-4o-mini "ping"
+  ```
+
+- **`cliRegistry` → `registry`.** The registry now holds
+  `{ cli, registerMcp }` pairs per api-type so both bins share a single
+  source of truth. `resolveTool(name)` still returns the CLI tool
+  descriptor for one-shot use; new `resolveApiType(name)` returns the
+  api-type key for MCP registration.
+
+### Migration
+
+| Before (0.5.x) | After (0.6.0) |
+|---|---|
+| `npx ai-relay` (MCP) | `npx ai-relay chat-completions` |
+| `ai-relay chat-completions gpt-4o-mini "hi"` | `ai-relay-cli chat-completions gpt-4o-mini "hi"` |
+| MCP host `"args": ["-y", "ai-relay"]` | MCP host `"args": ["-y", "ai-relay", "chat-completions"]` |
+| `import { cliRegistry } from "ai-relay/…"` (internal) | `import { registry } from "ai-relay/…"` |
+
+## [0.5.0] — 2026-05-12
+
+### Changed (BREAKING — caller-visible)
+
+- **Single bin `ai-relay` for both modes.** The standalone `ai-relay-mcp`
+  binary is removed. Run `ai-relay` (no positional argument) to start
+  the stdio MCP server; pass `<tool> <model> [input]` for the one-shot
+  CLI. The MCP host configuration changes accordingly:
+  ```diff
+   "mcpServers": {
+     "ai-relay": {
+       "command": "npx",
+  -    "args": ["-y", "--package=ai-relay", "ai-relay-mcp"],
+  +    "args": ["-y", "ai-relay"],
+       "env": { "AI_RELAY_API_KEY": "sk-..." }
+     }
+   }
+  ```
+- **CLI invocation order changed to `ai-relay <tool> <model> [input]`.**
+  The `provider` positional and the `-m/--model` flag are removed; the
+  tool name (first positional) now identifies which upstream API is
+  invoked, and the model id is the second positional.
+  ```diff
+  -ai-relay openai chat -m gpt-4o-mini "ping"
+  +ai-relay chat-completions gpt-4o-mini "ping"
+  ```
+- **Default MCP tool name `openai_chat` → `chat-completions`.** The
+  tool name now follows the upstream API's native naming. Future
+  provider tools will use the same convention — `messages` for
+  Anthropic Messages, `responses` for OpenAI Responses, etc. Callers
+  who explicitly registered with `name: "openai_chat"` keep that name;
+  callers relying on the default must update `tools/call name`.
+- **CLI tool registry is flat.** `cliRegistry.openai.chat` is now
+  `cliRegistry["chat-completions"]`. `resolveTool(provider, tool)` is
+  now `resolveTool(tool)`.
+
+### Migration
+
+| Before (≤ 0.4.x) | After (0.5.0) |
+|---|---|
+| `npx --package=ai-relay ai-relay-mcp` | `npx ai-relay` |
+| `ai-relay openai chat -m gpt-4o-mini "hi"` | `ai-relay chat-completions gpt-4o-mini "hi"` |
+| `tools/call { name: "openai_chat", … }` | `tools/call { name: "chat-completions", … }` |
+| `resolveTool("openai", "chat")` | `resolveTool("chat-completions")` |
+
 ## [0.4.1] — 2026-05-12
 
 ### Fixed

@@ -13,7 +13,7 @@ describe("ai-relay public surface", () => {
     expect(typeof mod.makeOpenAIChatHandler).toBe("function");
     expect(typeof mod.openAIChatTool).toBe("object");
     expect(mod.openAIChatTool.provider).toBe("openai");
-    expect(mod.openAIChatTool.name).toBe("chat");
+    expect(mod.openAIChatTool.name).toBe("chat-completions");
   });
 
   it("P3: loadConfig from root produces a usable RelayConfig", async () => {

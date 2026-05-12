@@ -35,7 +35,7 @@ OpenAI를 호출해 응답을 그대로 호스트에 돌려줍니다.
 │                      │ ─────────────► │  /api/[transport]/route.ts  │ ─────────────► │  completions      │
 │                      │                │   ├─ withMcpAuth(bearer)    │                 │                   │
 │                      │ ◄───────────── │   ├─ mcp-handler            │ ◄───────────── │                   │
-│                      │  CallToolResult│   │   └─ openai_chat    │  delta chunks   │                   │
+│                      │  CallToolResult│   │   └─ chat-completions    │  delta chunks   │                   │
 └──────────────────────┘                │   └─ accumulate stream      │                 └───────────────────┘
                                         │       → single text content │
                                         └─────────────────────────────┘
@@ -53,7 +53,7 @@ OpenAI를 호출해 응답을 그대로 호스트에 돌려줍니다.
    JSON-RPC 메시지를 `POST /api/mcp`로 전송.
 2. `withMcpAuth`가 헤더 토큰을 환경변수 `RELAY_AUTH_TOKEN`과 timing-safe로
    비교.
-3. `mcp-handler`가 JSON-RPC를 파싱하고 `openai_chat` 도구 핸들러 호출.
+3. `mcp-handler`가 JSON-RPC를 파싱하고 `chat-completions` 도구 핸들러 호출.
 4. 도구 핸들러는 zod로 입력 검증 → 서버 정책 `max_tokens` ceiling 적용 →
    `openai` SDK의 `chat.completions.create({ stream: true, ... })` 호출
    (`AbortController` 부착).
@@ -92,7 +92,7 @@ OpenAI를 호출해 응답을 그대로 호스트에 돌려줍니다.
 
 ## 4. MCP 도구 정의
 
-### `openai_chat`
+### `chat-completions`
 
 OpenAI Chat Completions를 한 번 호출하고 누적된 텍스트를 반환합니다.
 

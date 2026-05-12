@@ -1,54 +1,45 @@
-// Argv parser tests (B6 + B7).
+// Argv parser tests for `ai-relay-cli <tool> <model> [flags] [input]`.
 
 import { describe, expect, it } from "vitest";
 import { parseArgv, UsageError } from "../../src/bin/parse.js";
 
 describe("parseArgv — basic shape", () => {
-  it("P1: <provider> <tool> -m <model> <input> → ParsedInvocation", () => {
-    const out = parseArgv(["openai", "chat", "-m", "gpt-4o-mini", "hi"]);
-    expect(out.provider).toBe("openai");
-    expect(out.tool).toBe("chat");
-    expect(out.flags.model).toBe("gpt-4o-mini");
+  it("P1: <tool> <model> <input> → ParsedInvocation", () => {
+    const out = parseArgv(["chat-completions", "gpt-4o-mini", "hi"]);
+    expect(out.tool).toBe("chat-completions");
+    expect(out.model).toBe("gpt-4o-mini");
     expect(out.positional).toBe("hi");
     expect(out.help).toBe(false);
     expect(out.version).toBe(false);
   });
 
-  it("P2: --key=value and --key value are equivalent", () => {
-    const a = parseArgv(["openai", "chat", "--model=gpt-4o", "hi"]);
-    const b = parseArgv(["openai", "chat", "--model", "gpt-4o", "hi"]);
-    expect(a.flags.model).toBe("gpt-4o");
-    expect(b.flags.model).toBe("gpt-4o");
+  it("P2: <tool> <model> with no input is valid (stdin will be read by runner)", () => {
+    const out = parseArgv(["chat-completions", "gpt-4o-mini"]);
+    expect(out.tool).toBe("chat-completions");
+    expect(out.model).toBe("gpt-4o-mini");
+    expect(out.positional).toBeUndefined();
   });
 
-  it("P3: -m short form is equivalent to --model", () => {
-    const out = parseArgv(["openai", "chat", "-m", "gpt-4o-mini", "hi"]);
-    expect(out.flags.model).toBe("gpt-4o-mini");
-  });
-
-  it("P4: --system value preserved verbatim and supports multi-word", () => {
-    const out = parseArgv([
-      "openai",
-      "chat",
-      "-m",
-      "gpt-4o-mini",
-      "-s",
-      "be terse and concise",
-      "hi",
-    ]);
+  it("P3: --system value preserved verbatim and supports multi-word", () => {
+    const out = parseArgv(["chat-completions", "gpt-4o-mini", "-s", "be terse and concise", "hi"]);
     expect(out.flags.system).toBe("be terse and concise");
   });
 
-  it("P5: long --system also accepted", () => {
-    const out = parseArgv(["openai", "chat", "-m", "gpt-4o-mini", "--system", "be terse", "hi"]);
+  it("P4: long --system also accepted", () => {
+    const out = parseArgv(["chat-completions", "gpt-4o-mini", "--system", "be terse", "hi"]);
     expect(out.flags.system).toBe("be terse");
+  });
+
+  it("P5: --key=value and --key value are equivalent", () => {
+    const a = parseArgv(["chat-completions", "gpt-4o-mini", "--system=be terse", "hi"]);
+    const b = parseArgv(["chat-completions", "gpt-4o-mini", "--system", "be terse", "hi"]);
+    expect(a.flags.system).toBe("be terse");
+    expect(b.flags.system).toBe("be terse");
   });
 
   it("P6: numeric flags (--max-tokens, --timeout) parse to integers", () => {
     const out = parseArgv([
-      "openai",
-      "chat",
-      "-m",
+      "chat-completions",
       "gpt-4o-mini",
       "--max-tokens",
       "1024",
@@ -61,60 +52,86 @@ describe("parseArgv — basic shape", () => {
   });
 
   it("P7: --env path captured", () => {
-    const out = parseArgv(["openai", "chat", "-m", "x", "--env", "./prod.env", "hi"]);
+    const out = parseArgv(["chat-completions", "gpt-4o-mini", "--env", "./prod.env", "hi"]);
     expect(out.flags.env).toBe("./prod.env");
+  });
+
+  it("P8: --api-key and --base-url captured", () => {
+    const out = parseArgv([
+      "chat-completions",
+      "gpt-4o-mini",
+      "--api-key",
+      "sk-secret",
+      "--base-url",
+      "https://example.test/v1",
+      "hi",
+    ]);
+    expect(out.flags["api-key"]).toBe("sk-secret");
+    expect(out.flags["base-url"]).toBe("https://example.test/v1");
   });
 });
 
 describe("parseArgv — help/version short-circuit", () => {
-  it("P1: -h short-circuits without requiring -m", () => {
+  it("P1: -h short-circuits without requiring positionals", () => {
     expect(parseArgv(["-h"]).help).toBe(true);
     expect(parseArgv(["--help"]).help).toBe(true);
   });
 
-  it("P2: -V short-circuits without requiring -m", () => {
+  it("P2: -V short-circuits without requiring positionals", () => {
     expect(parseArgv(["-V"]).version).toBe(true);
     expect(parseArgv(["--version"]).version).toBe(true);
   });
 });
 
 describe("parseArgv — error paths", () => {
-  it("D1: missing -m → UsageError(--model is required)", () => {
-    expect(() => parseArgv(["openai", "chat", "hi"])).toThrow(UsageError);
-    expect(() => parseArgv(["openai", "chat", "hi"])).toThrow(/--model is required/);
+  it("D1: missing model positional → usage error", () => {
+    expect(() => parseArgv(["chat-completions"])).toThrow(UsageError);
+    expect(() => parseArgv(["chat-completions"])).toThrow(/usage: ai-relay-cli/);
   });
 
-  it("D2: missing positional pair → usage error", () => {
-    expect(() => parseArgv(["openai"])).toThrow(/usage: ai-relay/);
-  });
-
-  it("D3: unknown long flag → UsageError", () => {
-    expect(() => parseArgv(["openai", "chat", "--bogus", "x"])).toThrow(/unknown flag: --bogus/);
-  });
-
-  it("D4: unknown short flag → UsageError", () => {
-    expect(() => parseArgv(["openai", "chat", "-x"])).toThrow(/unknown flag: -x/);
-  });
-
-  it("D5: --max-tokens with non-integer value rejected", () => {
-    expect(() => parseArgv(["openai", "chat", "-m", "x", "--max-tokens", "abc", "hi"])).toThrow(
-      /--max-tokens must be a positive integer/,
+  it("D2: -m flag is no longer accepted (replaced by positional model)", () => {
+    expect(() => parseArgv(["chat-completions", "-m", "gpt-4o-mini", "hi"])).toThrow(
+      /unknown flag: -m/,
     );
   });
 
-  it("D6: --max-tokens with zero rejected", () => {
-    expect(() => parseArgv(["openai", "chat", "-m", "x", "--max-tokens", "0", "hi"])).toThrow(
+  it("D3: --model flag is no longer accepted", () => {
+    expect(() => parseArgv(["chat-completions", "--model", "gpt-4o-mini", "hi"])).toThrow(
+      /unknown flag: --model/,
+    );
+  });
+
+  it("D4: unknown long flag → UsageError", () => {
+    expect(() => parseArgv(["chat-completions", "gpt-4o-mini", "--bogus", "x"])).toThrow(
+      /unknown flag: --bogus/,
+    );
+  });
+
+  it("D5: unknown short flag → UsageError", () => {
+    expect(() => parseArgv(["chat-completions", "gpt-4o-mini", "-x"])).toThrow(/unknown flag: -x/);
+  });
+
+  it("D6: --max-tokens with non-integer value rejected", () => {
+    expect(() =>
+      parseArgv(["chat-completions", "gpt-4o-mini", "--max-tokens", "abc", "hi"]),
+    ).toThrow(/--max-tokens must be a positive integer/);
+  });
+
+  it("D7: --max-tokens with zero rejected", () => {
+    expect(() => parseArgv(["chat-completions", "gpt-4o-mini", "--max-tokens", "0", "hi"])).toThrow(
       /must be a positive integer/,
     );
   });
 
-  it("D7: more than one positional input rejected", () => {
-    expect(() => parseArgv(["openai", "chat", "-m", "x", "a", "b"])).toThrow(
+  it("D8: more than one positional input rejected", () => {
+    expect(() => parseArgv(["chat-completions", "gpt-4o-mini", "a", "b"])).toThrow(
       /at most one positional input/,
     );
   });
 
-  it("D8: flag without value at end of argv rejected", () => {
-    expect(() => parseArgv(["openai", "chat", "-m"])).toThrow(/-m requires a value/);
+  it("D9: flag without value at end of argv rejected", () => {
+    expect(() => parseArgv(["chat-completions", "gpt-4o-mini", "--api-key"])).toThrow(
+      /--api-key requires a value/,
+    );
   });
 });

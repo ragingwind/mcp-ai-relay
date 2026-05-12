@@ -14,7 +14,7 @@ working in this repository. **It overrides the global rules at `~/.claude/CLAUDE
 
 A relay server that exposes OpenAI Chat Completions as an MCP (Model Context Protocol) tool —
 shipped as a Hono HTTP server packaged as a multi-arch Docker image
-(`ghcr.io/ragingwind/ai-relay`), Bearer authentication, single tool `openai_chat` in v1.
+(`ghcr.io/ragingwind/ai-relay`), Bearer authentication, single tool `chat-completions` in v1.
 
 Full architecture: [`doc/ARCHITECTURE.md`](./doc/ARCHITECTURE.md)
 
@@ -119,7 +119,7 @@ These are NOT read by the server. They only set defaults for the verification sc
 | Key | Used by | Default | Override |
 |---|---|---|---|
 | `MCP_URL`      | `verify`, `inspect` | `http://localhost:8787/api/mcp` | `--url=` |
-| `MCP_TOOL`     | `inspect` | `openai_chat` | `--tool=` |
+| `MCP_TOOL`     | `inspect` | `chat-completions` | `--tool=` |
 | `MCP_MODEL`    | `inspect` | `gpt-4o-mini` | `--model=` |
 | `MCP_MESSAGE`  | `inspect` | `ping` | `--message=` |
 | `VERIFY_MODEL` | `verify`  | `gpt-4o-mini` | (env only) |

@@ -271,10 +271,10 @@ else
 fi
 
 # ===========================================================================
-# R-7: tools/call openai_chat -> mock canned reply present
+# R-7: tools/call chat-completions -> mock canned reply present
 # ===========================================================================
-echo "--- R-7: tools/call openai_chat -> canned reply ---"
-call_body='{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"openai_chat","arguments":{"model":"gpt-4o-mini","messages":[{"role":"user","content":"ping"}]}}}'
+echo "--- R-7: tools/call chat-completions -> canned reply ---"
+call_body='{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"chat-completions","arguments":{"model":"gpt-4o-mini","messages":[{"role":"user","content":"ping"}]}}}'
 # Pass Mcp-Session-Id only when the server returned one (stateful mode).
 # mcp-handler runs stateless by default — no header to forward.
 if [ -n "$SESSION_ID" ]; then

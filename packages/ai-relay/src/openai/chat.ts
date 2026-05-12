@@ -23,7 +23,7 @@ import OpenAI from "openai";
 import { z } from "zod";
 import { type CreatedOpenAIClient, createOpenAIClient, type RequestScope } from "./client.js";
 
-const DEFAULT_NAME = "openai_chat";
+const DEFAULT_NAME = "chat-completions";
 const DEFAULT_DESCRIPTION =
   "Invoke OpenAI Chat Completions and return the accumulated assistant message.";
 const DEFAULT_CEILING = 4096;
@@ -32,7 +32,7 @@ const DEFAULT_TIMEOUT_MS = 60_000;
 // --- config ---------------------------------------------------------------
 
 export interface OpenAIChatConfig {
-  /** Registered MCP tool name. Default `"openai_chat"`. Must be unique
+  /** Registered MCP tool name. Default `"chat-completions"`. Must be unique
    *  within an MCP server when multiple instances are registered. */
   name?: string;
   /** Description override. Default is the SDK's built-in summary. */
@@ -178,7 +178,7 @@ export function mapOpenAIError(err: unknown, requestScope?: RequestScope): Mappe
 export interface OpenAIChatHandlerBundle {
   schema: OpenAIChatSchema;
   handler: OpenAIChatHandler;
-  /** Resolved tool name (`config.name ?? "openai_chat"`). */
+  /** Resolved tool name (`config.name ?? "chat-completions"`). */
   name: string;
   /** Resolved description. */
   description: string;
@@ -228,7 +228,7 @@ export interface ToolDescriptor<C = unknown, B = unknown> {
 
 export const openAIChatTool: ToolDescriptor<OpenAIChatConfig, OpenAIChatHandlerBundle> = {
   provider: "openai",
-  name: "chat",
+  name: "chat-completions",
   makeHandler: makeOpenAIChatHandler,
   desugar: (plain, opts) => {
     const messages: Array<{ role: "system" | "user"; content: string }> = [];

@@ -5,13 +5,13 @@
 //
 //   --url=<URL>      MCP_URL              http://localhost:8787/api/mcp
 //   --token=<TOK>    AI_RELAY_AUTH_TOKEN  (required)
-//   --tool=<NAME>    MCP_TOOL             openai_chat
+//   --tool=<NAME>    MCP_TOOL             chat-completions
 //   --model=<NAME>   MCP_MODEL            gpt-4o-mini
 //   --message=<TXT>  MCP_MESSAGE          ping
 //   --method=<RPC>                        tools/call   (also: tools/list)
 //
 // Examples:
-//   pnpm inspect                                  # tools/call → openai_chat
+//   pnpm inspect                                  # tools/call → chat-completions
 //   pnpm inspect --method=tools/list
 //   pnpm inspect --url=http://localhost:3001/api/mcp --model=gpt-4o
 //   pnpm inspect --tool=other_tool --message="..."
@@ -32,7 +32,7 @@ const flags = Object.fromEntries(
 const URL_BASE =
   flags.url ?? process.env.MCP_URL ?? "http://localhost:8787/api/mcp";
 const TOKEN = flags.token ?? process.env.AI_RELAY_AUTH_TOKEN;
-const TOOL = flags.tool ?? process.env.MCP_TOOL ?? "openai_chat";
+const TOOL = flags.tool ?? process.env.MCP_TOOL ?? "chat-completions";
 const MODEL = flags.model ?? process.env.MCP_MODEL ?? "gpt-4o-mini";
 const MESSAGE = flags.message ?? process.env.MCP_MESSAGE ?? "ping";
 const METHOD = flags.method ?? "tools/call";

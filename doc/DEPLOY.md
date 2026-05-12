@@ -188,7 +188,7 @@ catalog and tunable env vars (image tag, size budget, multi-arch opt-in).
       ```bash
       pnpm inspect --url=http://localhost:8787/api/mcp --method=tools/list
       ```
-      Expect a single tool named `openai_chat`. For the full pre-PR
+      Expect a single tool named `chat-completions`. For the full pre-PR
       procedure (C1–C6) see [`QA-MCP-INSPECTOR.md`](./QA-MCP-INSPECTOR.md).
 - [ ] OpenAI dashboard → **Usage** shows the call recorded against the
       prod project (proves the right key is wired).

@@ -18,7 +18,7 @@ This is the **C7 (multi-registration) scenario** referenced in
   spending and access policy stay isolated. A leak in one bearer key
   does not grant access to the others — they live behind the same MCP
   bearer token but route to distinct upstream credentials.
-- Hot-swap experiments: register a `local_llm` alongside `openai_chat`
+- Hot-swap experiments: register a `local_llm` alongside `chat-completions`
   so the host can A/B prompts against both without changing endpoints.
 
 ## Run from this monorepo
@@ -49,10 +49,10 @@ AI_RELAY_API_KEY=sk-... LOCAL_LLM_BASE_URL=http://localhost:11434/v1 \
 ```
 
 In the Inspector's **Tools** tab, you should see two distinct entries
-(`openai_chat` and `local_llm`) — `tools/list` returns them both.
+(`chat-completions` and `local_llm`) — `tools/list` returns them both.
 Each `tools/call` routes to the upstream captured at registration
 time. To prove isolation, switch the `LOCAL_LLM_BASE_URL` mid-test to
-something that always 503s and verify the `openai_chat` tool keeps
+something that always 503s and verify the `chat-completions` tool keeps
 working independently.
 
 ## Verification
@@ -66,7 +66,7 @@ pnpm --filter @example/multi-upstream smoke
 It boots two inline mock OpenAI HTTP servers on distinct ephemeral ports
 (sentinel `from-upstream-A` and `from-upstream-B`), spawns `server.ts`
 wired to mock A via `AI_RELAY_BASE_URL` and to mock B via
-`LOCAL_LLM_BASE_URL`, and asserts that `tools/call openai_chat` and
+`LOCAL_LLM_BASE_URL`, and asserts that `tools/call chat-completions` and
 `tools/call local_llm` each round-trip the correct sentinel. Ends with
 `=== PASS ===`.
 
@@ -74,8 +74,8 @@ wired to mock A via `AI_RELAY_BASE_URL` and to mock B via
 
 | Var | Effect |
 |---|---|
-| `AI_RELAY_API_KEY` | Registers `openai_chat` against OpenAI proper |
-| `AI_RELAY_BASE_URL` | Optional base URL override for `openai_chat` |
+| `AI_RELAY_API_KEY` | Registers `chat-completions` against OpenAI proper |
+| `AI_RELAY_BASE_URL` | Optional base URL override for `chat-completions` |
 | `AZURE_OPENAI_KEY` + `AZURE_AI_RELAY_BASE_URL` | Registers `azure_chat` |
 | `LOCAL_LLM_BASE_URL` | Registers `local_llm` (default ceiling 8192) |
 | `LOCAL_LLM_KEY` | Optional auth for the local LLM endpoint |

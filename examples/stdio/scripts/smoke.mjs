@@ -196,15 +196,15 @@ async function main() {
   // S-3: tools/list
   const listResp = await driver.request("tools/list", {}, 2);
   const toolNames = (listResp.result?.tools ?? []).map((t) => t.name);
-  if (!toolNames.includes("openai_chat")) {
-    fail("S-3", `tools/list missing openai_chat (got ${toolNames.join(",")})`);
+  if (!toolNames.includes("chat-completions")) {
+    fail("S-3", `tools/list missing chat-completions (got ${toolNames.join(",")})`);
   }
 
-  // S-4: tools/call openai_chat
+  // S-4: tools/call chat-completions
   const callResp = await driver.request(
     "tools/call",
     {
-      name: "openai_chat",
+      name: "chat-completions",
       arguments: {
         model: "gpt-4o-mini",
         messages: [{ role: "user", content: "ping" }],

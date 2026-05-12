@@ -28,8 +28,8 @@ $ pnpm test
 For non-trivial code changes, run the Inspector procedure and tick each scenario
 that passed. For docs-only or CI-config-only PRs, mark **N/A — non-runtime change**.
 
-- [ ] C1 — `tools/list` exposes a single `completion_chat` tool with input schema
-- [ ] C2 — `completion_chat` happy path returns text + usage metadata
+- [ ] C1 — `tools/list` exposes a single `chat-completions` tool with input schema
+- [ ] C2 — `chat-completions` happy path returns text + usage metadata
 - [ ] C4 — `max_tokens` clamp succeeds without error
 - [ ] C5 — Wrong bearer returns 401 + `WWW-Authenticate: Bearer`
 - [ ] C6 — Cancellation aborts the upstream call

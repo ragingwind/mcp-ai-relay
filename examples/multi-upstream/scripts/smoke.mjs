@@ -124,7 +124,7 @@ async function main() {
   const portB = await listen(mockB);
   const baseA = `http://127.0.0.1:${portA}/v1`;
   const baseB = `http://127.0.0.1:${portB}/v1`;
-  console.error(`[smoke] mock A (openai_chat): ${baseA}`);
+  console.error(`[smoke] mock A (chat-completions): ${baseA}`);
   console.error(`[smoke] mock B (local_llm):   ${baseB}`);
 
   const exampleDir = new URL("..", import.meta.url).pathname;
@@ -192,25 +192,25 @@ async function main() {
     fail("M-1", `stderr missing 'registered 2 tool(s).'; got: ${stderrText.slice(0, 300)}`);
   }
 
-  // M-2: tools/list returns openai_chat + local_llm
+  // M-2: tools/list returns chat-completions + local_llm
   const listResp = await driver.request("tools/list", {}, 2);
   const toolNames = (listResp.result?.tools ?? []).map((t) => t.name);
-  if (!toolNames.includes("openai_chat") || !toolNames.includes("local_llm")) {
-    fail("M-2", `expected openai_chat + local_llm, got ${toolNames.join(",")}`);
+  if (!toolNames.includes("chat-completions") || !toolNames.includes("local_llm")) {
+    fail("M-2", `expected chat-completions + local_llm, got ${toolNames.join(",")}`);
   }
 
-  // M-3: tools/call openai_chat returns SENTINEL_A
+  // M-3: tools/call chat-completions returns SENTINEL_A
   const callA = await driver.request(
     "tools/call",
     {
-      name: "openai_chat",
+      name: "chat-completions",
       arguments: { model: "gpt-4o-mini", messages: [{ role: "user", content: "ping" }] },
     },
     3,
   );
   const textA = (callA.result?.content ?? []).map((c) => c.text ?? "").join("");
   if (!textA.includes(SENTINEL_A)) {
-    fail("M-3", `openai_chat content missing ${SENTINEL_A}; got: ${textA.slice(0, 200)}`);
+    fail("M-3", `chat-completions content missing ${SENTINEL_A}; got: ${textA.slice(0, 200)}`);
   }
 
   // M-4: tools/call local_llm returns SENTINEL_B

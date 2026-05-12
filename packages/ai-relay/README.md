@@ -1,20 +1,21 @@
 # ai-relay
 
-Provider-agnostic MCP relay SDK. Embed `openai_chat` (OpenAI Chat
+Provider-agnostic MCP relay SDK. Embed `chat-completions` (OpenAI Chat
 Completions, OpenAI-compatible APIs, and unified gateways) — and future
 provider tools — into any [Model Context Protocol](https://modelcontextprotocol.io)
 server.
 
-The SDK also ships a one-shot CLI (`ai-relay <provider> <tool>`) that
-invokes the same tool descriptors used by the SDK registrars — handy
-for shell pipelines and quick experimentation. The
-[mcp-ai-relay](https://github.com/ragingwind/mcp-ai-relay) repository
-ships a Vercel/Next.js HTTP MCP server built on this package; see its
-README for deployment paths.
+The SDK ships two bins:
 
-> **v0.2.0** ships only the OpenAI provider. Future provider subpaths
-> (`./anthropic`, `./gemini`, `./ai-gateway`) will land under their own
-> directories without breaking existing `./openai` consumers.
+- **`ai-relay <api-type>`** — long-lived stdio MCP server keyed by an
+  api-type positional (today: `chat-completions`).
+- **`ai-relay-cli <tool> <model> [flags] [input]`** — one-shot CLI
+  invocation that prints a single tool result as JSON.
+
+> **v0.6.0** ships only the OpenAI provider, exposed as `chat-completions`
+> (the upstream API's native name). Future provider tools — `messages`
+> for Anthropic, `responses` for OpenAI Responses, etc. — will land under
+> their own keys without breaking existing `chat-completions` consumers.
 
 ---
 
@@ -34,44 +35,50 @@ compatibility — Bun, Deno, Cloudflare Workers with `nodejs_compat`).
 
 ---
 
-## CLIs
+## Bin
 
 This package ships two bins:
 
-- **`ai-relay`** — one-shot invocation that prints a single tool result
-  as JSON to stdout, then exits. For scripts, CI smoke tests, and ad-hoc
-  use.
-- **`ai-relay-mcp`** — long-lived stdio MCP server that an MCP host
-  (Claude Desktop, Claude Code, Cursor, …) spawns as a child process.
-  Speaks the JSON-RPC MCP protocol over stdin/stdout. See
+- **`ai-relay <api-type>`** — long-lived stdio MCP server that an MCP
+  host (Claude Desktop, Claude Code, Cursor, …) spawns as a child
+  process. The `<api-type>` positional (today: `chat-completions`)
+  selects which upstream API is registered. Speaks the JSON-RPC MCP
+  protocol over stdin/stdout. See
   [Claude Desktop / Claude Code / Cursor — stdio MCP server](#claude-desktop--claude-code--cursor--stdio-mcp-server)
   below.
+- **`ai-relay-cli <tool> <model> [flags] [input]`** — one-shot
+  invocation that prints a single tool result as JSON to stdout, then
+  exits. For scripts, CI smoke tests, and ad-hoc use.
 
-### One-shot CLI — `ai-relay`
+### One-shot CLI
 
-`ai-relay <provider> <tool> -m <model> [flags] [input]` — prints the
-tool result as JSON on stdout.
+`ai-relay-cli <tool> <model> [flags] [input]` — prints the tool result
+as JSON on stdout.
 
 ```bash
-ai-relay openai chat -m gpt-4o-mini "ping"
-ai-relay openai chat -m gpt-4o-mini -s "be terse" "explain TLS"
-ai-relay openai chat -m gpt-4o-mini '{"messages":[{"role":"user","content":"ping"}]}'
-ai-relay openai chat -m gpt-4o-mini --api-key sk-... "ping"
-ai-relay openai chat -m gpt-4o-mini --base-url https://my-azure.openai.azure.com/v1 "ping"
-ai-relay openai chat -m gpt-4o-mini --env ./prod.env "ping"
-echo '{"messages":[…]}' | ai-relay openai chat -m gpt-4o-mini
+ai-relay-cli chat-completions gpt-4o-mini "ping"
+ai-relay-cli chat-completions gpt-4o-mini -s "be terse" "explain TLS"
+ai-relay-cli chat-completions gpt-4o-mini '{"messages":[{"role":"user","content":"ping"}]}'
+ai-relay-cli chat-completions gpt-4o-mini --api-key sk-... "ping"
+ai-relay-cli chat-completions gpt-4o-mini --base-url https://my-azure.openai.azure.com/v1 "ping"
+ai-relay-cli chat-completions gpt-4o-mini --env ./prod.env "ping"
+echo '{"messages":[…]}' | ai-relay-cli chat-completions gpt-4o-mini
 ```
 
-`-m/--model` is required. Input is either a positional argument or
-piped via stdin (exactly one). A positional starting with `{` or `[`
-is parsed as a JSON literal; anything else is treated as a plain user
-message and folded into a `messages` array (with `-s/--system`
-prepended when supplied). Exit code is `0` on success, `1` on a
-runtime/upstream error, `2` on a usage error.
+Tool and model are both required positionals. The tool name follows the
+upstream API's native naming — `chat-completions` for OpenAI Chat
+Completions today; future entries (e.g. `messages` for Anthropic,
+`responses` for OpenAI Responses) will be added as additional keys.
+
+Input is either a positional argument or piped via stdin (exactly one).
+A positional starting with `{` or `[` is parsed as a JSON literal;
+anything else is treated as a plain user message and folded into a
+`messages` array (with `-s/--system` prepended when supplied). Exit
+code is `0` on success, `1` on a runtime/upstream error, `2` on a
+usage error.
 
 | Flag | Purpose |
 |------|---------|
-| `-m, --model <id>` | Required. Model id (e.g. `gpt-4o-mini`). |
 | `-s, --system <text>` | System message prepended to plain-text input. |
 | `--api-key <key>` | Overrides `AI_RELAY_API_KEY`. |
 | `--base-url <url>` | Overrides `AI_RELAY_BASE_URL`. |
@@ -94,19 +101,18 @@ CLI flags > `--env` file > process env > built-in defaults.
 
 ### Claude Desktop / Claude Code / Cursor — stdio MCP server
 
-`ai-relay` (the one-shot bin) is intentionally not an MCP server. Use the
-second bin shipped in this package — `ai-relay-mcp` — when you need a
-long-lived stdio MCP server that an MCP host can spawn directly. It
-accepts the same configuration flags (`--api-key`, `--base-url`,
-`--max-tokens`, `--timeout`, `--env`) and reads the same `AI_RELAY_*`
-env vars.
+Invoke the `ai-relay` bin with the `<api-type>` positional (today:
+`chat-completions`) and it runs as a long-lived stdio MCP server that
+an MCP host can spawn directly. It accepts the configuration flags
+(`--api-key`, `--base-url`, `--max-tokens`, `--timeout`, `--env`) and
+reads `AI_RELAY_*` env vars.
 
 ```json
 {
   "mcpServers": {
     "ai-relay": {
       "command": "npx",
-      "args": ["-y", "--package=ai-relay", "ai-relay-mcp"],
+      "args": ["-y", "ai-relay", "chat-completions"],
       "env": { "AI_RELAY_API_KEY": "sk-..." }
     }
   }
@@ -115,7 +121,24 @@ env vars.
 
 Point at an OpenAI-compatible endpoint (Azure / vLLM / Ollama / AI
 Gateway) by adding `"AI_RELAY_BASE_URL"` to the `env` block, or by
-passing `--base-url <url>` in `args`.
+passing `--base-url <url>` in `args` (e.g.
+`"args": ["-y", "ai-relay", "chat-completions", "--base-url", "https://my-azure.openai.azure.com/v1"]`).
+
+Project-local `.mcp.json` works the same way — pass the absolute path
+to the installed bin (or `npx ai-relay`) plus the `chat-completions`
+positional.
+
+```json
+{
+  "mcpServers": {
+    "ai-relay": {
+      "command": "node",
+      "args": ["./node_modules/ai-relay/dist/bin/ai-relay.js", "chat-completions"],
+      "env": { "AI_RELAY_API_KEY": "sk-..." }
+    }
+  }
+}
+```
 
 For HTTP/SSE MCP transport instead of stdio, deploy the reference Hono
 app in this repo (`/api/mcp` route) — see the project root README.
@@ -221,27 +244,27 @@ import { registerOpenAIChat } from "ai-relay/openai";
 const server = new McpServer({ name: "multi-relay", version: "0.1.0" });
 
 registerOpenAIChat(server, {
-  name: "openai_chat",
+  name: "chat-completions",
   apiKey: process.env.AI_RELAY_API_KEY!,
 });
 
 registerOpenAIChat(server, {
-  name: "azure_chat",
+  name: "azure-chat-completions",
   apiKey: process.env.AZURE_OPENAI_KEY!,
   baseURL: "https://<resource>.openai.azure.com/openai/deployments/<deployment>",
   description: "Azure OpenAI — internal-data tier",
 });
 
 registerOpenAIChat(server, {
-  name: "local_llm",
+  name: "local-llm",
   apiKey: "not-needed",
   baseURL: "http://localhost:11434/v1",
   maxOutputTokensCeiling: 8192,
 });
 ```
 
-`tools/list` then exposes `openai_chat`, `azure_chat`, and `local_llm`
-as three distinct entries.
+`tools/list` then exposes `chat-completions`, `azure-chat-completions`,
+and `local-llm` as three distinct entries.
 
 ---
 

@@ -1,8 +1,8 @@
 // Integration test for the published-tarball install path of the
-// `ai-relay` bin. Packs the SDK, installs it into a temp dir, and
-// runs the bin against a local HTTP server that mimics the OpenAI
-// Chat Completions endpoint (MSW cannot intercept requests issued
-// from a spawned child process).
+// `ai-relay` and `ai-relay-cli` bins. Packs the SDK, installs it into
+// a temp dir, and runs the bins against a local HTTP server that
+// mimics the OpenAI Chat Completions endpoint (MSW cannot intercept
+// requests issued from a spawned child process).
 
 import { execFileSync, type SpawnOptions, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -102,6 +102,7 @@ interface SpawnResult {
 }
 
 async function runBin(
+  bin: string,
   args: readonly string[],
   opts: { env?: Record<string, string | undefined>; input?: string } = {},
 ): Promise<SpawnResult> {
@@ -110,7 +111,7 @@ async function runBin(
       env: { ...process.env, ...opts.env } as NodeJS.ProcessEnv,
       stdio: ["pipe", "pipe", "pipe"],
     };
-    const child = spawn(binPath, [...args], spawnOpts);
+    const child = spawn(bin, [...args], spawnOpts);
     let stdout = "";
     let stderr = "";
     child.stdout?.on("data", (c: Buffer) => {
@@ -130,8 +131,8 @@ async function runBin(
 }
 
 let scratchDir: string | null = null;
-let binPath: string;
 let mcpBinPath: string;
+let cliBinPath: string;
 let mock: MockServer;
 
 beforeAll(async () => {
@@ -173,13 +174,19 @@ beforeAll(async () => {
     stdio: "pipe",
     env: packEnv,
   });
-  binPath = join(scratchDir, "node_modules", ".bin", "ai-relay");
-  if (!existsSync(binPath)) {
-    throw new Error(`bin not present at ${binPath} after install`);
-  }
-  mcpBinPath = join(scratchDir, "node_modules", ".bin", "ai-relay-mcp");
+  mcpBinPath = join(scratchDir, "node_modules", ".bin", "ai-relay");
+  cliBinPath = join(scratchDir, "node_modules", ".bin", "ai-relay-cli");
   if (!existsSync(mcpBinPath)) {
-    throw new Error(`mcp bin not present at ${mcpBinPath} after install`);
+    throw new Error(`ai-relay bin not present at ${mcpBinPath} after install`);
+  }
+  if (!existsSync(cliBinPath)) {
+    throw new Error(`ai-relay-cli bin not present at ${cliBinPath} after install`);
+  }
+  // The pre-v0.5.0 `ai-relay-mcp` bin must not be installed alongside the
+  // new split bins.
+  const legacyMcpBin = join(scratchDir, "node_modules", ".bin", "ai-relay-mcp");
+  if (existsSync(legacyMcpBin)) {
+    throw new Error(`legacy ai-relay-mcp bin should have been removed, found at ${legacyMcpBin}`);
   }
   rmSync(tarball);
 
@@ -191,12 +198,12 @@ afterAll(async () => {
   if (scratchDir) rmSync(scratchDir, { recursive: true, force: true });
 });
 
-describe("ai-relay bin — installed tarball", () => {
+describe("ai-relay-cli bin — installed tarball, one-shot CLI mode", () => {
   it("S1: positional plain text → exit 0 + JSON on stdout", async () => {
     mock.requests.length = 0;
     mock.setResponse(() => ({ status: 200, body: defaultSseBody("hello world") }));
 
-    const r = await runBin(["openai", "chat", "-m", "gpt-4o-mini", "ping"], {
+    const r = await runBin(cliBinPath, ["chat-completions", "gpt-4o-mini", "ping"], {
       env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
     });
     expect(r.status).toBe(0);
@@ -206,15 +213,15 @@ describe("ai-relay bin — installed tarball", () => {
     expect(out.structuredContent.model).toBe("gpt-4o-mini");
   });
 
-  it("S2: missing -m → exit 2; no upstream call", async () => {
+  it("S2: missing model positional → exit 2; no upstream call", async () => {
     mock.requests.length = 0;
     mock.setResponse(() => ({ status: 200, body: defaultSseBody("ok") }));
 
-    const r = await runBin(["openai", "chat", "ping"], {
+    const r = await runBin(cliBinPath, ["chat-completions"], {
       env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
     });
     expect(r.status).toBe(2);
-    expect(r.stderr).toContain("--model is required");
+    expect(r.stderr).toMatch(/usage: ai-relay-cli/);
     expect(mock.requests).toHaveLength(0);
   });
 
@@ -222,7 +229,7 @@ describe("ai-relay bin — installed tarball", () => {
     mock.requests.length = 0;
     mock.setResponse(() => ({ status: 200, body: defaultSseBody("ok") }));
 
-    const r = await runBin(["openai", "chat", "-m", "gpt-4o-mini"], {
+    const r = await runBin(cliBinPath, ["chat-completions", "gpt-4o-mini"], {
       env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
       input: '{"messages":[{"role":"user","content":"ping"}]}',
     });
@@ -240,15 +247,17 @@ describe("ai-relay bin — installed tarball", () => {
     const envFile = join(scratchDir, "local.env");
     writeFileSync(envFile, `AI_RELAY_API_KEY=filekey\nAI_RELAY_BASE_URL=${mock.baseURL}\n`);
 
-    const r = await runBin(["openai", "chat", "-m", "gpt-4o-mini", "--env", envFile, "hi"], {
-      env: { AI_RELAY_API_KEY: "systemkey" },
-    });
+    const r = await runBin(
+      cliBinPath,
+      ["chat-completions", "gpt-4o-mini", "--env", envFile, "hi"],
+      { env: { AI_RELAY_API_KEY: "systemkey" } },
+    );
     expect(r.status).toBe(0);
     expect(mock.requests[0]?.authorization).toBe("Bearer filekey");
   });
 
   it("S5: --version prints SDK version", async () => {
-    const r = await runBin(["--version"]);
+    const r = await runBin(cliBinPath, ["--version"]);
     expect(r.status).toBe(0);
     expect(r.stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
   });
@@ -351,12 +360,9 @@ async function runMcpSession(
     child.on("error", reject);
     child.on("close", (code) => resolveProm({ status: code, responses, stderr }));
 
-    // Send all messages line-delimited.
     for (const req of requests) {
       child.stdin?.write(`${JSON.stringify(req)}\n`);
     }
-    // If we expect a startup failure (no responses), close stdin immediately
-    // so the child can exit. Otherwise wait until expected responses arrive.
     if (opts.expectStartupFailure || expectedResponses === 0) closeStdinSoon();
   });
 }
@@ -376,9 +382,10 @@ const initializedNotification = {
   method: "notifications/initialized",
 };
 
-describe("ai-relay-mcp bin — installed tarball, stdio JSON-RPC", () => {
-  it("P1: initialize handshake returns protocolVersion + serverInfo", async () => {
+describe("ai-relay bin — installed tarball, MCP stdio mode (chat-completions positional)", () => {
+  it("A1: initialize handshake returns protocolVersion + serverInfo", async () => {
     const r = await runMcpSession([initRequest, initializedNotification], {
+      args: ["chat-completions"],
       env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
     });
     expect(r.status).toBe(0);
@@ -393,10 +400,13 @@ describe("ai-relay-mcp bin — installed tarball, stdio JSON-RPC", () => {
     expect(initRes?.capabilities?.tools).toBeDefined();
   });
 
-  it("P2: tools/list returns openai_chat with input schema", async () => {
+  it("A2: tools/list returns chat-completions with input schema", async () => {
     const r = await runMcpSession(
       [initRequest, initializedNotification, { jsonrpc: "2.0", id: 2, method: "tools/list" }],
-      { env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL } },
+      {
+        args: ["chat-completions"],
+        env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
+      },
     );
     expect(r.status).toBe(0);
     expect(r.responses).toHaveLength(2);
@@ -404,13 +414,13 @@ describe("ai-relay-mcp bin — installed tarball, stdio JSON-RPC", () => {
       tools?: Array<{ name: string; inputSchema?: { required?: string[] } }>;
     };
     expect(listRes?.tools).toHaveLength(1);
-    expect(listRes?.tools?.[0]?.name).toBe("openai_chat");
+    expect(listRes?.tools?.[0]?.name).toBe("chat-completions");
     expect(listRes?.tools?.[0]?.inputSchema?.required).toEqual(
       expect.arrayContaining(["model", "messages"]),
     );
   });
 
-  it("P3: tools/call openai_chat forwards messages and returns assistant text", async () => {
+  it("B1: tools/call chat-completions forwards messages and returns assistant text", async () => {
     mock.requests.length = 0;
     mock.setResponse(() => ({ status: 200, body: defaultSseBody("pong") }));
 
@@ -423,7 +433,7 @@ describe("ai-relay-mcp bin — installed tarball, stdio JSON-RPC", () => {
           id: 2,
           method: "tools/call",
           params: {
-            name: "openai_chat",
+            name: "chat-completions",
             arguments: {
               model: "gpt-4o-mini",
               messages: [{ role: "user", content: "ping" }],
@@ -431,7 +441,10 @@ describe("ai-relay-mcp bin — installed tarball, stdio JSON-RPC", () => {
           },
         },
       ],
-      { env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL } },
+      {
+        args: ["chat-completions"],
+        env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
+      },
     );
     expect(r.status).toBe(0);
     expect(mock.requests).toHaveLength(1);
@@ -450,9 +463,35 @@ describe("ai-relay-mcp bin — installed tarball, stdio JSON-RPC", () => {
     expect(callRes?.structuredContent?.model).toBe("gpt-4o-mini");
   });
 
+  it("C1: bare invocation (no api-type) → exit 2 + usage on stderr; no upstream call", async () => {
+    mock.requests.length = 0;
+    const r = await runMcpSession([], {
+      args: [],
+      expectStartupFailure: true,
+      env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
+    });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("<api-type>");
+    expect(r.stderr).toContain("usage: ai-relay <api-type>");
+    expect(mock.requests).toHaveLength(0);
+  });
+
+  it("C2: unknown api-type → exit 2; no upstream call", async () => {
+    mock.requests.length = 0;
+    const r = await runMcpSession([], {
+      args: ["messages"],
+      expectStartupFailure: true,
+      env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
+    });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("unknown api-type: messages");
+    expect(mock.requests).toHaveLength(0);
+  });
+
   it("D1: missing AI_RELAY_API_KEY → exits 2 with stderr message; no upstream call", async () => {
     mock.requests.length = 0;
     const r = await runMcpSession([initRequest], {
+      args: ["chat-completions"],
       env: { AI_RELAY_API_KEY: undefined, AI_RELAY_BASE_URL: mock.baseURL },
       expectStartupFailure: true,
     });
@@ -461,14 +500,14 @@ describe("ai-relay-mcp bin — installed tarball, stdio JSON-RPC", () => {
     expect(mock.requests).toHaveLength(0);
   });
 
-  it("N1: --version prints SDK version", async () => {
+  it("N1: --version prints SDK version (no MCP server started)", async () => {
     const r = await runMcpSession([], { args: ["--version"] });
     expect(r.status).toBe(0);
   });
 
   it("D2: unknown flag exits 2", async () => {
     const r = await runMcpSession([], {
-      args: ["--bogus"],
+      args: ["chat-completions", "--bogus"],
       expectStartupFailure: true,
     });
     expect(r.status).toBe(2);

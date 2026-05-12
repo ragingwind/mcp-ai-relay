@@ -36,9 +36,9 @@ describe("openAIChatTool.desugar — plain-text → input JSON", () => {
 });
 
 describe("openAIChatTool — descriptor metadata", () => {
-  it("P1: descriptor has provider 'openai' and name 'chat'", () => {
+  it("P1: descriptor has provider 'openai' and name 'chat-completions'", () => {
     expect(openAIChatTool.provider).toBe("openai");
-    expect(openAIChatTool.name).toBe("chat");
+    expect(openAIChatTool.name).toBe("chat-completions");
   });
 
   it("P2: makeHandler is a function", () => {

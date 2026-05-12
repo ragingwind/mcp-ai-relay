@@ -1,8 +1,8 @@
 // argv → ParsedInvocation. Pure module with no I/O.
 //
-// Surface: `ai-relay <provider> <tool> [flags] [positional]`
+// Surface: `ai-relay-cli <tool> <model> [flags] [input]`
 //
-// Long flags: --model -m, --system -s, --api-key, --base-url,
+// Long flags: --system -s, --api-key, --base-url,
 //             --max-tokens, --timeout, --env,
 //             --help -h, --version -V.
 //
@@ -16,7 +16,6 @@ export class UsageError extends Error {
 }
 
 export interface ParsedFlags {
-  model?: string;
   system?: string;
   "api-key"?: string;
   "base-url"?: string;
@@ -28,24 +27,15 @@ export interface ParsedFlags {
 export interface ParsedInvocation {
   help: boolean;
   version: boolean;
-  provider: string;
   tool: string;
+  model: string;
   flags: ParsedFlags;
   positional?: string;
 }
 
-const VALUE_FLAGS = new Set([
-  "model",
-  "system",
-  "api-key",
-  "base-url",
-  "max-tokens",
-  "timeout",
-  "env",
-]);
+const VALUE_FLAGS = new Set(["system", "api-key", "base-url", "max-tokens", "timeout", "env"]);
 const NUMERIC_FLAGS = new Set(["max-tokens", "timeout"]);
 const SHORT_TO_LONG: Record<string, string> = {
-  m: "model",
   s: "system",
   h: "help",
   V: "version",
@@ -63,8 +53,8 @@ export function parseArgv(argv: readonly string[]): ParsedInvocation {
   const out: ParsedInvocation = {
     help: false,
     version: false,
-    provider: "",
     tool: "",
+    model: "",
     flags: {},
   };
   const positionals: string[] = [];
@@ -161,27 +151,135 @@ export function parseArgv(argv: readonly string[]): ParsedInvocation {
   }
 
   if (positionals.length < 2) {
-    throw new UsageError("usage: ai-relay <provider> <tool> [flags] [input]");
+    throw new UsageError("usage: ai-relay-cli <tool> <model> [flags] [input]");
   }
 
-  const provider = positionals[0];
-  const tool = positionals[1];
-  if (provider === undefined || tool === undefined) {
-    throw new UsageError("usage: ai-relay <provider> <tool> [flags] [input]");
+  const tool = positionals[0];
+  const model = positionals[1];
+  if (tool === undefined || model === undefined) {
+    throw new UsageError("usage: ai-relay-cli <tool> <model> [flags] [input]");
   }
-  out.provider = provider;
   out.tool = tool;
+  out.model = model;
 
   if (positionals.length > 3) {
-    throw new UsageError("at most one positional input is accepted after <provider> <tool>");
+    throw new UsageError("at most one positional input is accepted after <tool> <model>");
   }
   if (positionals.length === 3) {
     const pos = positionals[2];
     if (pos !== undefined) out.positional = pos;
   }
 
-  if (!out.flags.model) {
-    throw new UsageError("--model is required");
+  return out;
+}
+
+// argv → ParsedMcpInvocation. Pure module with no I/O.
+//
+// Surface: `ai-relay <api-type> [flags]`
+// Flags: --api-key, --base-url, --max-tokens, --timeout, --env,
+//        --help -h, --version -V.
+
+export interface ParsedMcpFlags {
+  "api-key"?: string;
+  "base-url"?: string;
+  "max-tokens"?: number;
+  timeout?: number;
+  env?: string;
+}
+
+export interface ParsedMcpInvocation {
+  help: boolean;
+  version: boolean;
+  apiType?: string;
+  flags: ParsedMcpFlags;
+}
+
+const MCP_VALUE_FLAGS = new Set(["api-key", "base-url", "max-tokens", "timeout", "env"]);
+const MCP_NUMERIC_FLAGS = new Set(["max-tokens", "timeout"]);
+
+export function parseMcpArgv(argv: readonly string[]): ParsedMcpInvocation {
+  const out: ParsedMcpInvocation = {
+    help: false,
+    version: false,
+    flags: {},
+  };
+  const positionals: string[] = [];
+
+  for (let i = 0; i < argv.length; i++) {
+    const tok = argv[i];
+    if (tok === undefined) continue;
+
+    if (tok === "--") {
+      for (let j = i + 1; j < argv.length; j++) {
+        const v = argv[j];
+        if (v !== undefined) positionals.push(v);
+      }
+      break;
+    }
+
+    if (tok.startsWith("--")) {
+      const body = tok.slice(2);
+      const eq = body.indexOf("=");
+      const key = eq === -1 ? body : body.slice(0, eq);
+      const inlineValue = eq === -1 ? undefined : body.slice(eq + 1);
+
+      if (key === "help") {
+        out.help = true;
+        continue;
+      }
+      if (key === "version") {
+        out.version = true;
+        continue;
+      }
+      if (!MCP_VALUE_FLAGS.has(key)) {
+        throw new UsageError(`unknown flag: --${key}`);
+      }
+      let value: string;
+      if (inlineValue !== undefined) {
+        value = inlineValue;
+      } else {
+        const next = argv[i + 1];
+        if (next === undefined) {
+          throw new UsageError(`--${key} requires a value`);
+        }
+        value = next;
+        i += 1;
+      }
+      if (MCP_NUMERIC_FLAGS.has(key)) {
+        (out.flags as Record<string, unknown>)[key] = parseNumber(key, value);
+      } else {
+        (out.flags as Record<string, unknown>)[key] = value;
+      }
+      continue;
+    }
+
+    if (tok.startsWith("-") && tok !== "-") {
+      const body = tok.slice(1);
+      if (body === "h") {
+        out.help = true;
+        continue;
+      }
+      if (body === "V") {
+        out.version = true;
+        continue;
+      }
+      throw new UsageError(`unknown flag: -${body}`);
+    }
+
+    positionals.push(tok);
   }
+
+  if (out.help || out.version) {
+    return out;
+  }
+
+  if (positionals.length === 0) {
+    return out;
+  }
+  if (positionals.length > 1) {
+    throw new UsageError("usage: ai-relay <api-type> [flags]");
+  }
+  const first = positionals[0];
+  if (first !== undefined) out.apiType = first;
   return out;
 }

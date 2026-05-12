@@ -5,16 +5,18 @@ import { readFile } from "node:fs/promises";
 import type { Readable } from "node:stream";
 import { loadConfig } from "../config.js";
 import type { OpenAIChatConfig, OpenAIChatHandlerBundle } from "../openai/index.js";
+import { VERSION } from "../version.js";
 import { parseEnvFile } from "./env-file.js";
 import { type ParsedInvocation, parseArgv, UsageError } from "./parse.js";
 import { type AnyTool, resolveTool } from "./registry.js";
 
-export const VERSION = "0.4.1";
+export { VERSION };
 
-const USAGE = `Usage: ai-relay <provider> <tool> -m <model> [flags] [input]
+const USAGE = `Usage: ai-relay-cli <tool> <model> [flags] [input]
 
-Required:
-  -m, --model <model>     Model id (e.g. gpt-4o-mini)
+Positional:
+  <tool>                  Tool name (e.g. chat-completions)
+  <model>                 Model id (e.g. gpt-4o-mini)
 
 Inputs (exactly one of):
   positional <input>      JSON literal or plain text
@@ -31,12 +33,14 @@ Flags:
   -V, --version           Print SDK version
 
 Examples:
-  ai-relay openai chat -m gpt-4o-mini "ping"
-  ai-relay openai chat -m gpt-4o-mini -s "be terse" "explain TLS"
-  ai-relay openai chat -m gpt-4o-mini '{"messages":[{"role":"user","content":"ping"}]}'
-  ai-relay openai chat -m gpt-4o-mini --api-key sk-... "ping"
-  ai-relay openai chat -m gpt-4o-mini --base-url https://my-azure.openai.azure.com/v1 "ping"
-  echo '{"messages":[…]}' | ai-relay openai chat -m gpt-4o-mini
+  ai-relay-cli chat-completions gpt-4o-mini "ping"
+  ai-relay-cli chat-completions gpt-4o-mini -s "be terse" "explain TLS"
+  ai-relay-cli chat-completions gpt-4o-mini '{"messages":[{"role":"user","content":"ping"}]}'
+  ai-relay-cli chat-completions gpt-4o-mini --api-key sk-... "ping"
+  ai-relay-cli chat-completions gpt-4o-mini --base-url https://my-azure.openai.azure.com/v1 "ping"
+  echo '{"messages":[…]}' | ai-relay-cli chat-completions gpt-4o-mini
+
+Tip: \`ai-relay <api-type>\` (without -cli) starts the MCP stdio server.
 `;
 
 export interface RunIO {
@@ -66,9 +70,9 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
     return 0;
   }
 
-  const tool = resolveTool(parsed.provider, parsed.tool);
+  const tool = resolveTool(parsed.tool);
   if (!tool) {
-    io.stderr.write(`unknown ${parsed.provider}/${parsed.tool}\n`);
+    io.stderr.write(`unknown tool: ${parsed.tool}\n`);
     return 2;
   }
 
@@ -87,7 +91,7 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
     return 2;
   }
   if (rawInput === undefined) {
-    io.stderr.write(`${parsed.provider} ${parsed.tool} requires input (positional or stdin)\n`);
+    io.stderr.write(`${parsed.tool} requires input (positional or stdin)\n`);
     return 2;
   }
 
@@ -95,7 +99,7 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
   try {
     inputObj = coerceInput(rawInput, tool, {
       ...(parsed.flags.system !== undefined ? { system: parsed.flags.system } : {}),
-      ...(parsed.flags.model !== undefined ? { model: parsed.flags.model } : {}),
+      model: parsed.model,
     });
   } catch (e) {
     io.stderr.write(`${(e as Error).message}\n`);
@@ -104,7 +108,7 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
 
   const merged: Record<string, unknown> = {
     ...inputObj,
-    ...(parsed.flags.model !== undefined ? { model: parsed.flags.model } : {}),
+    model: parsed.model,
     ...(parsed.flags["max-tokens"] !== undefined ? { max_tokens: parsed.flags["max-tokens"] } : {}),
   };
 
@@ -184,9 +188,7 @@ function coerceInput(
       throw new UsageError("input is not valid JSON");
     }
     if (Array.isArray(parsed)) {
-      throw new UsageError(
-        `input JSON for ${tool.provider}/${tool.name} must be an object, not an array`,
-      );
+      throw new UsageError(`input JSON for ${tool.name} must be an object, not an array`);
     }
     if (parsed === null || typeof parsed !== "object") {
       throw new UsageError("input JSON must be an object");
@@ -194,9 +196,7 @@ function coerceInput(
     return parsed as Record<string, unknown>;
   }
   if (!tool.desugar) {
-    throw new UsageError(
-      `tool ${tool.provider} ${tool.name} does not accept plain text input; pass JSON`,
-    );
+    throw new UsageError(`tool ${tool.name} does not accept plain text input; pass JSON`);
   }
   return tool.desugar(raw, opts);
 }

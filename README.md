@@ -20,41 +20,45 @@ MCP host  ──►  ai-relay  ──►  OpenAI-compatible API
 
 | Surface | Transport | Install | When |
 |---|---|---|---|
-| `npx ai-relay` | none (one-shot) | none | quick test, scripting, CI smoke |
-| `npx --package=ai-relay ai-relay-mcp` | stdio MCP | none | direct registration in Claude Desktop / Claude Code / Cursor |
+| `npx ai-relay-cli <tool> <model> "…"` | none (one-shot) | none | quick test, scripting, CI smoke |
+| `npx ai-relay <api-type>` | stdio MCP | none | direct registration in Claude Desktop / Claude Code / Cursor |
 | SDK (`ai-relay`) | caller's choice (stdio / HTTP / Workers) | npm | embed in custom MCP server |
 | App (`./app`, Hono) | HTTP | `git clone` (self-host on Node) | personal or team HTTP endpoint |
 | Docker (`ghcr.io/ragingwind/ai-relay`) | HTTP | `docker run` (no build) | container deployment, multi-arch (amd64/arm64) |
 
 ---
 
-## Quick start — one-shot CLI
+## Quick start — one-shot CLI (`ai-relay-cli`)
 
 ```bash
-AI_RELAY_API_KEY=sk-... npx ai-relay openai chat -m gpt-4o-mini "ping"
+AI_RELAY_API_KEY=sk-... npx ai-relay-cli chat-completions gpt-4o-mini "ping"
 
-AI_RELAY_API_KEY=sk-... npx ai-relay openai chat -m gpt-4o-mini \
+AI_RELAY_API_KEY=sk-... npx ai-relay-cli chat-completions gpt-4o-mini \
   '{"messages":[{"role":"user","content":"ping"}]}'
 
 echo "explain TLS in 2 sentences" \
-  | AI_RELAY_API_KEY=sk-... npx ai-relay openai chat -m gpt-4o-mini -s "be terse"
+  | AI_RELAY_API_KEY=sk-... npx ai-relay-cli chat-completions gpt-4o-mini -s "be terse"
 
 # Inline key via flag (no env var):
-npx ai-relay openai chat --api-key sk-... -m gpt-4o-mini "ping"
+npx ai-relay-cli chat-completions gpt-4o-mini --api-key sk-... "ping"
 
 # Point at Azure OpenAI / vLLM / Ollama / AI Gateway (any OpenAI-compatible endpoint):
-AI_RELAY_API_KEY=sk-... npx ai-relay openai chat \
+AI_RELAY_API_KEY=sk-... npx ai-relay-cli chat-completions gpt-4o-mini \
   --base-url https://my-azure.openai.azure.com/v1 \
-  -m gpt-4o-mini "ping"
+  "ping"
 ```
 
-`-m/--model` is mandatory. Input is either a positional argument or piped via
-stdin (exactly one — they are XOR). A plain-text positional becomes a
-`{messages:[…]}` array; a JSON literal (`{` / `[`) is passed verbatim.
+Invocation is `ai-relay-cli <tool> <model> [flags] [input]`. The tool name
+follows the upstream API's native naming — `chat-completions` for OpenAI
+Chat Completions today; future entries will be `messages` for Anthropic
+and `responses` for OpenAI Responses. Input is either a positional
+argument or piped via stdin (exactly one — they are XOR). A plain-text
+positional becomes a `{messages:[…]}` array; a JSON literal (`{` / `[`) is
+passed verbatim.
 
 ---
 
-## Quick start — stdio MCP server (`ai-relay-mcp`)
+## Quick start — stdio MCP server (`ai-relay <api-type>`)
 
 For direct registration in Claude Desktop, Claude Code, Cursor, or any other
 MCP host that spawns a child process and speaks JSON-RPC over stdin/stdout:
@@ -64,12 +68,16 @@ MCP host that spawns a child process and speaks JSON-RPC over stdin/stdout:
   "mcpServers": {
     "ai-relay": {
       "command": "npx",
-      "args": ["-y", "--package=ai-relay", "ai-relay-mcp"],
+      "args": ["-y", "ai-relay", "chat-completions"],
       "env": { "AI_RELAY_API_KEY": "sk-..." }
     }
   }
 }
 ```
+
+Run `ai-relay <api-type>` to start the stdio MCP server (today the only
+api-type is `chat-completions`). For shell pipelines and one-shot
+invocation, use `ai-relay-cli <tool> <model> "…"`.
 
 Point at an OpenAI-compatible endpoint (Azure OpenAI / vLLM / Ollama / AI
 Gateway) by adding `"AI_RELAY_BASE_URL"` to the `env` block:
@@ -81,9 +89,9 @@ Gateway) by adding `"AI_RELAY_BASE_URL"` to the `env` block:
 }
 ```
 
-`ai-relay-mcp` accepts the same flags as the one-shot CLI for ad-hoc
-overrides (`--api-key`, `--base-url`, `--max-tokens`, `--timeout`,
-`--env <path>`). Run `npx --package=ai-relay ai-relay-mcp --help` for the full list.
+The MCP server accepts ad-hoc overrides as flags (`--api-key`,
+`--base-url`, `--max-tokens`, `--timeout`, `--env <path>`). Run
+`npx ai-relay --help` for the full list.
 
 ---
 
@@ -163,8 +171,8 @@ Full runnable versions live in [`examples/stdio/`](./examples/stdio/),
 |---|---|---|
 | `mcp-ai-relay` (bin) | `ai-relay` | [#56](https://github.com/ragingwind/mcp-ai-relay/issues/56) |
 | `mcp-ai-relay --openai-completion` (stdio) | `ai-relay openai chat -m … "…"` | [#56](https://github.com/ragingwind/mcp-ai-relay/issues/56) |
-| `--tool-name <id>` | (removed; default tool name is `openai_chat`) | [#55](https://github.com/ragingwind/mcp-ai-relay/issues/55) + [#56](https://github.com/ragingwind/mcp-ai-relay/issues/56) |
-| `completion_chat` (default tool name) | `openai_chat` | [#55](https://github.com/ragingwind/mcp-ai-relay/issues/55) |
+| `--tool-name <id>` | (removed; default tool name is `chat-completions`) | [#55](https://github.com/ragingwind/mcp-ai-relay/issues/55) + [#56](https://github.com/ragingwind/mcp-ai-relay/issues/56) |
+| `completion_chat` / `openai_chat` (former default tool names) | `chat-completions` | [#55](https://github.com/ragingwind/mcp-ai-relay/issues/55) |
 | `OPENAI_API_KEY` | `AI_RELAY_API_KEY` | [#56](https://github.com/ragingwind/mcp-ai-relay/issues/56) |
 | `OPENAI_BASE_URL` | `AI_RELAY_BASE_URL` | [#56](https://github.com/ragingwind/mcp-ai-relay/issues/56) |
 | `MAX_OUTPUT_TOKENS_CEILING` | `AI_RELAY_MAX_OUTPUT_TOKENS` | [#56](https://github.com/ragingwind/mcp-ai-relay/issues/56) |
@@ -176,7 +184,7 @@ Full runnable versions live in [`examples/stdio/`](./examples/stdio/),
 
 ## Status
 
-**v0.2.0** (npm SDK) / **v1 relay app** — single tool `openai_chat`,
+**v0.5.0** (npm SDK) / **v1 relay app** — single tool `chat-completions`,
 bearer token authentication, Streamable HTTP transport. The v2 backlog
 (Responses API, OAuth 2.1, rate limiting, budget caps, observability) is
 tracked in

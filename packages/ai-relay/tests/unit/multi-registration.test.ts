@@ -47,7 +47,7 @@ describe("registerOpenAIChat — multi-registration on one McpServer", () => {
   it("P1: registers three tools with distinct names without throwing", () => {
     const server = new McpServer({ name: "multi-relay-test", version: "0.0.1" });
     expect(() => {
-      registerOpenAIChat(server, { name: "openai_chat", apiKey: "key-openai" });
+      registerOpenAIChat(server, { name: "chat-completions-primary", apiKey: "key-openai" });
       registerOpenAIChat(server, {
         name: "azure_chat",
         apiKey: "key-azure",
@@ -86,7 +86,7 @@ describe("makeOpenAIChatHandler — closure isolation across handlers", () => {
       }),
     );
 
-    const a = makeOpenAIChatHandler({ name: "openai_chat", apiKey: "key-openai" });
+    const a = makeOpenAIChatHandler({ name: "chat-completions-primary", apiKey: "key-openai" });
     const b = makeOpenAIChatHandler({
       name: "azure_chat",
       apiKey: "key-azure",

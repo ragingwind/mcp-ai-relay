@@ -582,7 +582,7 @@ describe("openai chat — error mapping (auth, rate_limited, context_length, con
 describe("openai chat — handler bundle surface", () => {
   it("P1: bundle exposes name, description, schema, handler", () => {
     const bundle = makeHandler();
-    expect(bundle.name).toBe("openai_chat");
+    expect(bundle.name).toBe("chat-completions");
     expect(typeof bundle.description).toBe("string");
     expect(bundle.description.length).toBeGreaterThan(0);
     const parsed = bundle.schema.safeParse({ model: VALID_MODEL, messages: VALID_MESSAGES });
