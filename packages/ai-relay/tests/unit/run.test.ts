@@ -105,11 +105,18 @@ describe("run — usage errors short-circuit", () => {
     expect(cap.stderr.value).toMatch(/usage: ai-relay-cli/);
   });
 
-  it("D2: unknown tool → exit 2", async () => {
+  it("D2: unknown provider → exit 2", async () => {
     const cap = makeIO();
-    const code = await run(["nope", "hi"], cap.io);
+    const code = await run(["nope", "chat-completions", "hi"], cap.io);
     expect(code).toBe(2);
-    expect(cap.stderr.value).toContain("unknown tool: nope");
+    expect(cap.stderr.value).toContain("unknown provider: nope");
+  });
+
+  it("D2b: unknown tool for known provider → exit 2", async () => {
+    const cap = makeIO();
+    const code = await run(["openai", "messages", "hi"], cap.io);
+    expect(code).toBe(2);
+    expect(cap.stderr.value).toContain("unknown tool for provider openai: messages");
   });
 
   it("D3: -h prints usage on stdout, exit 0", async () => {
@@ -130,7 +137,7 @@ describe("run — usage errors short-circuit", () => {
 describe("run — input handling", () => {
   it("D1: stdin + positional both present → exit 2 with conflict message", async () => {
     const cap = makeIO({ stdin: '{"messages":[]}' });
-    const code = await run(["chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
+    const code = await run(["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(2);
     expect(cap.stderr.value).toContain("received both stdin and positional input");
   });
@@ -144,7 +151,7 @@ describe("run — input handling", () => {
       }),
     );
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
-    const code = await run(["chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
+    const code = await run(["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(0);
     expect(captured?.messages).toEqual([{ role: "user", content: "hi" }]);
     const out = JSON.parse(cap.stdout.value.trim());
@@ -165,7 +172,7 @@ describe("run — input handling", () => {
       stdin: '{"messages":[{"role":"user","content":"ping"}]}',
       env: { AI_RELAY_API_KEY: "k" },
     });
-    const code = await run(["chat-completions", "-m", "gpt-4o-mini"], cap.io);
+    const code = await run(["openai", "chat-completions", "-m", "gpt-4o-mini"], cap.io);
     expect(code).toBe(0);
     expect(captured?.messages).toEqual([{ role: "user", content: "ping" }]);
     expect(captured?.model).toBe("gpt-4o-mini");
@@ -182,6 +189,7 @@ describe("run — input handling", () => {
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
     const code = await run(
       [
+        "openai",
         "chat-completions",
         "-m",
         "gpt-4o-mini",
@@ -195,7 +203,7 @@ describe("run — input handling", () => {
 
   it("D2: empty stdin pipe → exit 2 with empty-stdin message (not generic 'requires input')", async () => {
     const cap = makeIO({ stdin: "", env: { AI_RELAY_API_KEY: "k" } });
-    const code = await run(["chat-completions", "-m", "gpt-4o-mini"], cap.io);
+    const code = await run(["openai", "chat-completions", "-m", "gpt-4o-mini"], cap.io);
     expect(code).toBe(2);
     expect(cap.stderr.value).toContain("empty stdin");
     expect(cap.stderr.value).not.toContain("requires input");
@@ -203,7 +211,7 @@ describe("run — input handling", () => {
 
   it("D3: positional JSON array → exit 2 with array-rejection message naming the tool", async () => {
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
-    const code = await run(["chat-completions", "-m", "gpt-4o-mini", "[1,2,3]"], cap.io);
+    const code = await run(["openai", "chat-completions", "-m", "gpt-4o-mini", "[1,2,3]"], cap.io);
     expect(code).toBe(2);
     expect(cap.stderr.value).toContain(
       "input JSON for chat-completions must be an object, not an array",
@@ -220,7 +228,7 @@ describe("run — input handling", () => {
     );
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
     const code = await run(
-      ["chat-completions", "-m", "gpt-4o-mini", "-s", "be terse", "hi"],
+      ["openai", "chat-completions", "-m", "gpt-4o-mini", "-s", "be terse", "hi"],
       cap.io,
     );
     expect(code).toBe(0);
@@ -241,7 +249,7 @@ describe("run — model resolution precedence", () => {
       }),
     );
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
-    const code = await run(["chat-completions", "-m", "from-flag", "hi"], cap.io);
+    const code = await run(["openai", "chat-completions", "-m", "from-flag", "hi"], cap.io);
     expect(code).toBe(0);
     expect(captured?.model).toBe("from-flag");
   });
@@ -255,7 +263,7 @@ describe("run — model resolution precedence", () => {
       }),
     );
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k", AI_RELAY_MODEL: "from-env" } });
-    const code = await run(["chat-completions", "hi"], cap.io);
+    const code = await run(["openai", "chat-completions", "hi"], cap.io);
     expect(code).toBe(0);
     expect(captured?.model).toBe("from-env");
   });
@@ -269,7 +277,7 @@ describe("run — model resolution precedence", () => {
       }),
     );
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k", AI_RELAY_MODEL: "from-env" } });
-    const code = await run(["chat-completions", "-m", "from-flag", "hi"], cap.io);
+    const code = await run(["openai", "chat-completions", "-m", "from-flag", "hi"], cap.io);
     expect(code).toBe(0);
     expect(captured?.model).toBe("from-flag");
   });
@@ -285,6 +293,7 @@ describe("run — model resolution precedence", () => {
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k", AI_RELAY_MODEL: "from-env" } });
     const code = await run(
       [
+        "openai",
         "chat-completions",
         "-m",
         "from-flag",
@@ -305,14 +314,17 @@ describe("run — model resolution precedence", () => {
       }),
     );
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
-    const code = await run(["chat-completions", "--model", "from-long-flag", "hi"], cap.io);
+    const code = await run(
+      ["openai", "chat-completions", "--model", "from-long-flag", "hi"],
+      cap.io,
+    );
     expect(code).toBe(0);
     expect(captured?.model).toBe("from-long-flag");
   });
 
   it("D1: no model from any source on plain text input → exit 2 with helpful message", async () => {
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
-    const code = await run(["chat-completions", "hi"], cap.io);
+    const code = await run(["openai", "chat-completions", "hi"], cap.io);
     expect(code).toBe(2);
     expect(cap.stderr.value).toContain("no model resolved");
     expect(cap.stderr.value).toMatch(/-m\/--model/);
@@ -322,7 +334,7 @@ describe("run — model resolution precedence", () => {
   it("D2: no model on JSON input falls through to schema rejection (ZodError)", async () => {
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
     await expect(
-      run(["chat-completions", '{"messages":[{"role":"user","content":"hi"}]}'], cap.io),
+      run(["openai", "chat-completions", '{"messages":[{"role":"user","content":"hi"}]}'], cap.io),
     ).rejects.toThrow(/model/i);
   });
 });
@@ -344,7 +356,17 @@ describe("run — env precedence", () => {
     writeFileSync(envFile, "AI_RELAY_API_KEY=fromfile\n");
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "fromenv" } });
     const code = await run(
-      ["chat-completions", "-m", "gpt-4o-mini", "--api-key", "fromflag", "--env", envFile, "hi"],
+      [
+        "openai",
+        "chat-completions",
+        "-m",
+        "gpt-4o-mini",
+        "--api-key",
+        "fromflag",
+        "--env",
+        envFile,
+        "hi",
+      ],
       cap.io,
     );
     expect(code).toBe(0);
@@ -362,7 +384,7 @@ describe("run — env precedence", () => {
     writeFileSync(envFile, "AI_RELAY_API_KEY=fromfile\n");
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "fromenv" } });
     const code = await run(
-      ["chat-completions", "-m", "gpt-4o-mini", "--env", envFile, "hi"],
+      ["openai", "chat-completions", "-m", "gpt-4o-mini", "--env", envFile, "hi"],
       cap.io,
     );
     expect(code).toBe(0);
@@ -378,14 +400,14 @@ describe("run — env precedence", () => {
       }),
     );
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "fromenv" } });
-    const code = await run(["chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
+    const code = await run(["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(0);
     expect(auth).toBe("Bearer fromenv");
   });
 
   it("D1: no key from any source → exit 2 with config error", async () => {
     const cap = makeIO();
-    const code = await run(["chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
+    const code = await run(["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(2);
     expect(cap.stderr.value).toContain("apiKey");
   });
@@ -397,6 +419,7 @@ describe("run — secret redaction", () => {
     const cap = makeIO({ env: {} });
     const code = await run(
       [
+        "openai",
         "chat-completions",
         "-m",
         "gpt-4o-mini",
@@ -416,7 +439,7 @@ describe("run — secret redaction", () => {
     const sentinel = "leak-marker-env-file";
     const cap = makeIO({ env: { AI_RELAY_API_KEY: sentinel } });
     const code = await run(
-      ["chat-completions", "-m", "gpt-4o-mini", "--env", "/no/such/file.env", "hi"],
+      ["openai", "chat-completions", "-m", "gpt-4o-mini", "--env", "/no/such/file.env", "hi"],
       cap.io,
     );
     expect(code).toBe(2);
@@ -435,7 +458,7 @@ describe("run — flag-driven config", () => {
     );
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
     const code = await run(
-      ["chat-completions", "-m", "gpt-4o-mini", "--max-tokens", "256", "hi"],
+      ["openai", "chat-completions", "-m", "gpt-4o-mini", "--max-tokens", "256", "hi"],
       cap.io,
     );
     expect(code).toBe(0);
@@ -452,7 +475,15 @@ describe("run — flag-driven config", () => {
     );
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
     const code = await run(
-      ["chat-completions", "-m", "gpt-4o-mini", "--base-url", "https://relay.example.com/v1", "hi"],
+      [
+        "openai",
+        "chat-completions",
+        "-m",
+        "gpt-4o-mini",
+        "--base-url",
+        "https://relay.example.com/v1",
+        "hi",
+      ],
       cap.io,
     );
     expect(code).toBe(0);
@@ -464,7 +495,7 @@ describe("run — verbose stderr", () => {
   it("P1: -v flag emits verbose stage lines to stderr, stdout stays single JSON line", async () => {
     server.use(http.post(ENDPOINT, () => happyResponse("ok")));
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
-    const code = await run(["chat-completions", "-v", "-m", "gpt-4o-mini", "hi"], cap.io);
+    const code = await run(["openai", "chat-completions", "-v", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(0);
     // stdout stays exactly one JSON line (no verbose pollution)
     expect(cap.stdout.value.trim().split("\n")).toHaveLength(1);
@@ -492,7 +523,7 @@ describe("run — verbose stderr", () => {
   it("P2: AI_RELAY_VERBOSE=1 env enables verbose without the -v flag", async () => {
     server.use(http.post(ENDPOINT, () => happyResponse("ok")));
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k", AI_RELAY_VERBOSE: "1" } });
-    const code = await run(["chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
+    const code = await run(["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(0);
     expect(cap.stderr.value).toContain("] argv:");
     expect(cap.stderr.value).toContain("] openai-request:");
@@ -501,7 +532,7 @@ describe("run — verbose stderr", () => {
   it("P3: no -v and no AI_RELAY_VERBOSE → no verbose lines on stderr", async () => {
     server.use(http.post(ENDPOINT, () => happyResponse("ok")));
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
-    const code = await run(["chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
+    const code = await run(["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(0);
     expect(cap.stderr.value).toBe("");
   });
@@ -511,7 +542,7 @@ describe("run — verbose stderr", () => {
     const sentinel = "sk-leak-canary-7777";
     const cap = makeIO({ env: {} });
     const code = await run(
-      ["chat-completions", "-v", "-m", "gpt-4o-mini", "--api-key", sentinel, "hi"],
+      ["openai", "chat-completions", "-v", "-m", "gpt-4o-mini", "--api-key", sentinel, "hi"],
       cap.io,
     );
     expect(code).toBe(0);
@@ -523,7 +554,7 @@ describe("run — verbose stderr", () => {
     server.use(http.post(ENDPOINT, () => happyResponse("ok")));
     const sentinel = "sk-env-leak-canary-8888";
     const cap = makeIO({ env: { AI_RELAY_API_KEY: sentinel } });
-    const code = await run(["chat-completions", "-v", "-m", "gpt-4o-mini", "hi"], cap.io);
+    const code = await run(["openai", "chat-completions", "-v", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(0);
     expect(cap.stderr.value).not.toContain(sentinel);
   });
@@ -532,7 +563,7 @@ describe("run — verbose stderr", () => {
     const upstreamMarker = "upstream-body-leak-marker-3333";
     server.use(http.post(ENDPOINT, () => happyResponse(upstreamMarker)));
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
-    const code = await run(["chat-completions", "-v", "-m", "gpt-4o-mini", "hi"], cap.io);
+    const code = await run(["openai", "chat-completions", "-v", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(0);
     expect(cap.stderr.value).not.toContain(upstreamMarker);
     // stdout still carries the body (this is the JSON channel)
@@ -546,7 +577,7 @@ describe("run — verbose stderr", () => {
       ),
     );
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
-    const code = await run(["chat-completions", "-v", "-m", "gpt-4o-mini", "hi"], cap.io);
+    const code = await run(["openai", "chat-completions", "-v", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(1);
     expect(cap.stderr.value).toContain("] openai-error:");
   });
@@ -556,7 +587,7 @@ describe("run — exit-code mapping", () => {
   it("P1: success → exit 0 + JSON on stdout", async () => {
     server.use(http.post(ENDPOINT, () => happyResponse("done")));
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
-    const code = await run(["chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
+    const code = await run(["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(0);
     expect(cap.stdout.value.trim().length).toBeGreaterThan(0);
   });
@@ -568,7 +599,7 @@ describe("run — exit-code mapping", () => {
       ),
     );
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
-    const code = await run(["chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
+    const code = await run(["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(1);
     const out = JSON.parse(cap.stdout.value.trim());
     expect(out.isError).toBe(true);
@@ -578,7 +609,7 @@ describe("run — exit-code mapping", () => {
   it("P2: TTY stdout is pretty-printed (multi-line)", async () => {
     server.use(http.post(ENDPOINT, () => happyResponse()));
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" }, isTTY: true });
-    const code = await run(["chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
+    const code = await run(["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(0);
     expect(cap.stdout.value.split("\n").length).toBeGreaterThan(2);
   });
@@ -586,7 +617,7 @@ describe("run — exit-code mapping", () => {
   it("P3: piped stdout is single-line JSON", async () => {
     server.use(http.post(ENDPOINT, () => happyResponse()));
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" }, isTTY: false });
-    const code = await run(["chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
+    const code = await run(["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(0);
     expect(cap.stdout.value.trim().split("\n")).toHaveLength(1);
   });

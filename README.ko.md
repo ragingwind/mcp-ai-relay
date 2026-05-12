@@ -19,8 +19,8 @@ MCP host  ──►  ai-relay  ──►  OpenAI-compatible API
 
 | 표면 | 전송 | 설치 | 사용 시점 |
 |---|---|---|---|
-| `npx ai-relay-cli <tool> [flags] [input]` | 없음 (단발) | 없음 | 빠른 테스트, 스크립팅, CI 스모크 |
-| `npx ai-relay <api-type>` | stdio MCP | 없음 | Claude Desktop / Claude Code / Cursor 직접 등록 |
+| `npx ai-relay-cli <provider> <tool> [flags] [input]` | 없음 (단발) | 없음 | 빠른 테스트, 스크립팅, CI 스모크 |
+| `npx ai-relay <provider>` | stdio MCP | 없음 | Claude Desktop / Claude Code / Cursor 직접 등록 |
 | SDK (`ai-relay`) | 호출자 선택 (stdio / HTTP / Workers) | npm | 커스텀 MCP 서버에 임베드 |
 | App (`./app`, Hono) | HTTP | `git clone` (Node에 셀프 호스트) | 개인 또는 팀 HTTP 엔드포인트 |
 | Docker (`ghcr.io/ragingwind/ai-relay`) | HTTP | `docker run` (빌드 없음) | 컨테이너 배포, 멀티 아키텍처 (amd64/arm64) |
@@ -30,32 +30,32 @@ MCP host  ──►  ai-relay  ──►  OpenAI-compatible API
 ## 빠른 시작 — 단발 CLI (`ai-relay-cli`)
 
 ```bash
-AI_RELAY_API_KEY=sk-... npx ai-relay-cli chat-completions -m gpt-4o-mini "ping"
+AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions -m gpt-4o-mini "ping"
 
 # 모델을 JSON 입력에 포함시켜도 됩니다
-AI_RELAY_API_KEY=sk-... npx ai-relay-cli chat-completions \
+AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions \
   '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"ping"}]}'
 
 # …또는 환경변수로
 AI_RELAY_API_KEY=sk-... AI_RELAY_MODEL=gpt-4o-mini \
-  npx ai-relay-cli chat-completions "ping"
+  npx ai-relay-cli openai chat-completions "ping"
 
 echo "explain TLS in 2 sentences" \
-  | AI_RELAY_API_KEY=sk-... npx ai-relay-cli chat-completions -m gpt-4o-mini -s "be terse"
+  | AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions -m gpt-4o-mini -s "be terse"
 
 # 환경변수 없이 플래그로 API 키 직접 전달:
-npx ai-relay-cli chat-completions -m gpt-4o-mini --api-key sk-... "ping"
+npx ai-relay-cli openai chat-completions -m gpt-4o-mini --api-key sk-... "ping"
 
 # Azure OpenAI / vLLM / Ollama / AI Gateway 등 OpenAI 호환 엔드포인트 지정:
-AI_RELAY_API_KEY=sk-... npx ai-relay-cli chat-completions -m gpt-4o-mini \
+AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions -m gpt-4o-mini \
   --base-url https://my-azure.openai.azure.com/v1 \
   "ping"
 ```
 
-호출 형식은 `ai-relay-cli <tool> [flags] [input]`입니다. tool 이름은
-공급자 API의 native 명명을 따릅니다 — 현재 OpenAI Chat Completions은
-`chat-completions`이고, 향후 Anthropic은 `messages`, OpenAI Responses는
-`responses`로 추가됩니다. 입력은 위치 인자이거나 stdin으로 파이프되며
+호출 형식은 `ai-relay-cli <provider> <tool> [flags] [input]`입니다.
+현재 provider는 `openai` 하나이며 `chat-completions` 도구를 노출합니다.
+향후 `anthropic`(`messages`), 추가 OpenAI `responses` 등이 레지스트리에
+편입될 예정입니다. 입력은 위치 인자이거나 stdin으로 파이프되며
 (정확히 하나 — XOR 관계). 평문 위치 인자는 `{messages:[…]}` 배열이 되고,
 JSON 리터럴 (`{` / `[`)은 그대로 전달됩니다.
 
@@ -70,7 +70,7 @@ JSON 리터럴 (`{` / `[`)은 그대로 전달됩니다.
 
 ---
 
-## 빠른 시작 — stdio MCP 서버 (`ai-relay <api-type>`)
+## 빠른 시작 — stdio MCP 서버 (`ai-relay <provider>`)
 
 Claude Desktop, Claude Code, Cursor 등 자식 프로세스를 spawn해 stdin/stdout으로
 JSON-RPC를 주고받는 MCP 호스트에 직접 등록할 때 사용합니다.
@@ -80,16 +80,17 @@ JSON-RPC를 주고받는 MCP 호스트에 직접 등록할 때 사용합니다.
   "mcpServers": {
     "ai-relay": {
       "command": "npx",
-      "args": ["-y", "ai-relay", "chat-completions"],
+      "args": ["-y", "ai-relay", "openai"],
       "env": { "AI_RELAY_API_KEY": "sk-..." }
     }
   }
 }
 ```
 
-`ai-relay <api-type>` 형태로 실행해 stdio MCP 서버 모드로 동작합니다
-(현재 지원되는 api-type은 `chat-completions` 하나). 단발 셸 호출에는
-`ai-relay-cli <tool> -m <model> "…"`를 사용합니다.
+`ai-relay <provider>` 형태로 실행해 stdio MCP 서버 모드로 동작합니다
+(현재 지원되는 provider는 `openai` 하나이며 `chat-completions` 도구를
+노출). 단발 셸 호출에는 `ai-relay-cli <provider> <tool> -m <model> "…"`를
+사용합니다.
 
 Azure OpenAI / vLLM / Ollama / AI Gateway 같은 OpenAI 호환 엔드포인트를
 가리키려면 `env` 블록에 `"AI_RELAY_BASE_URL"`을 추가:

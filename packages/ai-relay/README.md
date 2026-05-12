@@ -7,12 +7,13 @@ server.
 
 The SDK ships two bins:
 
-- **`ai-relay <api-type>`** — long-lived stdio MCP server keyed by an
-  api-type positional (today: `chat-completions`).
-- **`ai-relay-cli <tool> [flags] [input]`** — one-shot CLI invocation
-  that prints a single tool result as JSON. The model is resolved from
-  the input JSON's `model` field, the `-m`/`--model` flag, or
-  `AI_RELAY_MODEL` (in that order).
+- **`ai-relay <provider>`** — long-lived stdio MCP server keyed by a
+  provider positional (today: `openai`, which mounts
+  `chat-completions`).
+- **`ai-relay-cli <provider> <tool> [flags] [input]`** — one-shot CLI
+  invocation that prints a single tool result as JSON. The model is
+  resolved from the input JSON's `model` field, the `-m`/`--model`
+  flag, or `AI_RELAY_MODEL` (in that order).
 
 > **v0.6.0** ships only the OpenAI provider, exposed as `chat-completions`
 > (the upstream API's native name). Future provider tools — `messages`
@@ -41,37 +42,39 @@ compatibility — Bun, Deno, Cloudflare Workers with `nodejs_compat`).
 
 This package ships two bins:
 
-- **`ai-relay <api-type>`** — long-lived stdio MCP server that an MCP
+- **`ai-relay <provider>`** — long-lived stdio MCP server that an MCP
   host (Claude Desktop, Claude Code, Cursor, …) spawns as a child
-  process. The `<api-type>` positional (today: `chat-completions`)
-  selects which upstream API is registered. Speaks the JSON-RPC MCP
-  protocol over stdin/stdout. See
+  process. The `<provider>` positional (today: `openai`) selects which
+  upstream provider is mounted; all of that provider's tools are then
+  registered on the server. Speaks the JSON-RPC MCP protocol over
+  stdin/stdout. See
   [Claude Desktop / Claude Code / Cursor — stdio MCP server](#claude-desktop--claude-code--cursor--stdio-mcp-server)
   below.
-- **`ai-relay-cli <tool> [flags] [input]`** — one-shot
+- **`ai-relay-cli <provider> <tool> [flags] [input]`** — one-shot
   invocation that prints a single tool result as JSON to stdout, then
   exits. For scripts, CI smoke tests, and ad-hoc use.
 
 ### One-shot CLI
 
-`ai-relay-cli <tool> [flags] [input]` — prints the tool result
-as JSON on stdout.
+`ai-relay-cli <provider> <tool> [flags] [input]` — prints the tool
+result as JSON on stdout.
 
 ```bash
-ai-relay-cli chat-completions -m gpt-4o-mini "ping"
-ai-relay-cli chat-completions --model gpt-4o-mini -s "be terse" "explain TLS"
-ai-relay-cli chat-completions '{"model":"gpt-4o","messages":[{"role":"user","content":"ping"}]}'
-AI_RELAY_MODEL=gpt-4o-mini ai-relay-cli chat-completions "ping"
-ai-relay-cli chat-completions -m gpt-4o-mini --api-key sk-... "ping"
-ai-relay-cli chat-completions -m gpt-4o-mini --base-url https://my-azure.openai.azure.com/v1 "ping"
-ai-relay-cli chat-completions -m gpt-4o-mini --env ./prod.env "ping"
-echo '{"messages":[…]}' | ai-relay-cli chat-completions -m gpt-4o-mini
+ai-relay-cli openai chat-completions -m gpt-4o-mini "ping"
+ai-relay-cli openai chat-completions --model gpt-4o-mini -s "be terse" "explain TLS"
+ai-relay-cli openai chat-completions '{"model":"gpt-4o","messages":[{"role":"user","content":"ping"}]}'
+AI_RELAY_MODEL=gpt-4o-mini ai-relay-cli openai chat-completions "ping"
+ai-relay-cli openai chat-completions -m gpt-4o-mini --api-key sk-... "ping"
+ai-relay-cli openai chat-completions -m gpt-4o-mini --base-url https://my-azure.openai.azure.com/v1 "ping"
+ai-relay-cli openai chat-completions -m gpt-4o-mini --env ./prod.env "ping"
+echo '{"messages":[…]}' | ai-relay-cli openai chat-completions -m gpt-4o-mini
 ```
 
-Only the tool name is a required positional; it follows the upstream
-API's native naming — `chat-completions` for OpenAI Chat Completions
-today; future entries (e.g. `messages` for Anthropic, `responses` for
-OpenAI Responses) will be added as additional keys.
+`<provider>` selects the upstream (today: `openai`); `<tool>` is looked
+up within that provider's scope. Tool names follow the upstream API's
+native naming — `chat-completions` for OpenAI Chat Completions today;
+future entries (e.g. `messages` for Anthropic, `responses` for OpenAI
+Responses) will be added as additional keys.
 
 Input is either a positional argument or piped via stdin (exactly one).
 A positional starting with `{` or `[` is parsed as a JSON literal;
@@ -109,8 +112,8 @@ Pass `-v` / `--verbose`, or set `AI_RELAY_VERBOSE=1` (`true` / `yes` /
 **stderr**. The stdout JSON channel is never polluted.
 
 ```bash
-ai-relay-cli chat-completions -v -m gpt-4o-mini "ping"   # one-shot CLI
-AI_RELAY_VERBOSE=1 ai-relay chat-completions             # MCP server
+ai-relay-cli openai chat-completions -v -m gpt-4o-mini "ping"   # one-shot CLI
+AI_RELAY_VERBOSE=1 ai-relay openai                              # MCP server
 ```
 
 Stages emitted:
@@ -140,8 +143,8 @@ CLI flags > `--env` file > process env > built-in defaults.
 
 ### Claude Desktop / Claude Code / Cursor — stdio MCP server
 
-Invoke the `ai-relay` bin with the `<api-type>` positional (today:
-`chat-completions`) and it runs as a long-lived stdio MCP server that
+Invoke the `ai-relay` bin with the `<provider>` positional (today:
+`openai`) and it runs as a long-lived stdio MCP server that
 an MCP host can spawn directly. It accepts the configuration flags
 (`--api-key`, `--base-url`, `--max-tokens`, `--timeout`, `--env`) and
 reads `AI_RELAY_*` env vars.
@@ -151,7 +154,7 @@ reads `AI_RELAY_*` env vars.
   "mcpServers": {
     "ai-relay": {
       "command": "npx",
-      "args": ["-y", "ai-relay", "chat-completions"],
+      "args": ["-y", "ai-relay", "openai"],
       "env": { "AI_RELAY_API_KEY": "sk-..." }
     }
   }
@@ -161,18 +164,17 @@ reads `AI_RELAY_*` env vars.
 Point at an OpenAI-compatible endpoint (Azure / vLLM / Ollama / AI
 Gateway) by adding `"AI_RELAY_BASE_URL"` to the `env` block, or by
 passing `--base-url <url>` in `args` (e.g.
-`"args": ["-y", "ai-relay", "chat-completions", "--base-url", "https://my-azure.openai.azure.com/v1"]`).
+`"args": ["-y", "ai-relay", "openai", "--base-url", "https://my-azure.openai.azure.com/v1"]`).
 
 Project-local `.mcp.json` works the same way — pass the absolute path
-to the installed bin (or `npx ai-relay`) plus the `chat-completions`
-positional.
+to the installed bin (or `npx ai-relay`) plus the `openai` positional.
 
 ```json
 {
   "mcpServers": {
     "ai-relay": {
       "command": "node",
-      "args": ["./node_modules/ai-relay/dist/bin/ai-relay.js", "chat-completions"],
+      "args": ["./node_modules/ai-relay/dist/bin/ai-relay.js", "openai"],
       "env": { "AI_RELAY_API_KEY": "sk-..." }
     }
   }

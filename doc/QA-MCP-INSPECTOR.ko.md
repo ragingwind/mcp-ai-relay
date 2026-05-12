@@ -94,10 +94,10 @@ OpenAI 요청/JSON-RPC 트래픽을 들여다봐야 할 때는 bin에 `-v` / `--
 Inspector가 읽는 stdout JSON-RPC 채널은 깨끗하게 유지됩니다.
 
 ```bash
-ai-relay-cli chat-completions -v -m gpt-4o-mini "ping"
+ai-relay-cli openai chat-completions -v -m gpt-4o-mini "ping"
 
 AI_RELAY_VERBOSE=1 npx @modelcontextprotocol/inspector --cli \
-  node packages/ai-relay/dist/bin/ai-relay.js chat-completions \
+  node packages/ai-relay/dist/bin/ai-relay.js openai \
   --method tools/list
 ```
 

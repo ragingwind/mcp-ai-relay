@@ -3,6 +3,9 @@
 // Compatible with any OpenAI Chat Completions-shaped API: OpenAI proper,
 // Azure OpenAI, vLLM, Ollama, OpenRouter, Vercel AI Gateway (OpenAI mode).
 
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { type OpenAIChatConfig, registerOpenAIChat } from "./chat.js";
+
 export type {
   OpenAIChatConfig,
   OpenAIChatHandler,
@@ -27,3 +30,7 @@ export type {
   RequestScope,
 } from "./client.js";
 export { createOpenAIClient } from "./client.js";
+
+export function registerOpenAIProvider(server: McpServer, config: OpenAIChatConfig): void {
+  registerOpenAIChat(server, config);
+}

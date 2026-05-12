@@ -16,14 +16,17 @@ import {
   summariseMessages,
 } from "./logger.js";
 import { type ParsedInvocation, parseArgv, UsageError } from "./parse.js";
-import { type AnyTool, resolveTool } from "./registry.js";
+import { type AnyTool, registry, resolveProvider, resolveProviderTool } from "./registry.js";
 
 export { VERSION };
 
-const USAGE = `Usage: ai-relay-cli <tool> [flags] [input]
+const USAGE = `Usage: ai-relay-cli <provider> <tool> [flags] [input]
 
-Positional:
-  <tool>                  Tool name (e.g. chat-completions)
+Positionals:
+  <provider>              Upstream provider (e.g. openai)
+  <tool>                  Tool name within the provider (e.g. chat-completions)
+
+Providers: ${Object.keys(registry).join(", ")}
 
 Inputs (exactly one of):
   positional <input>      JSON literal or plain text
@@ -47,15 +50,15 @@ Flags:
   -V, --version           Print SDK version
 
 Examples:
-  ai-relay-cli chat-completions -m gpt-4o-mini "ping"
-  ai-relay-cli chat-completions --model gpt-4o-mini -s "be terse" "explain TLS"
-  ai-relay-cli chat-completions '{"model":"gpt-4o","messages":[{"role":"user","content":"ping"}]}'
-  AI_RELAY_MODEL=gpt-4o-mini ai-relay-cli chat-completions "ping"
-  ai-relay-cli chat-completions -m gpt-4o-mini --api-key sk-... "ping"
-  ai-relay-cli chat-completions -m gpt-4o-mini --base-url https://my-azure.openai.azure.com/v1 "ping"
-  echo '{"messages":[…]}' | ai-relay-cli chat-completions -m gpt-4o-mini
+  ai-relay-cli openai chat-completions -m gpt-4o-mini "ping"
+  ai-relay-cli openai chat-completions --model gpt-4o-mini -s "be terse" "explain TLS"
+  ai-relay-cli openai chat-completions '{"model":"gpt-4o","messages":[{"role":"user","content":"ping"}]}'
+  AI_RELAY_MODEL=gpt-4o-mini ai-relay-cli openai chat-completions "ping"
+  ai-relay-cli openai chat-completions -m gpt-4o-mini --api-key sk-... "ping"
+  ai-relay-cli openai chat-completions -m gpt-4o-mini --base-url https://my-azure.openai.azure.com/v1 "ping"
+  echo '{"messages":[…]}' | ai-relay-cli openai chat-completions -m gpt-4o-mini
 
-Tip: \`ai-relay <api-type>\` (without -cli) starts the MCP stdio server.
+Tip: \`ai-relay <provider>\` (without -cli) starts the MCP stdio server.
 `;
 
 export interface RunIO {
@@ -91,6 +94,7 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
   });
   verbose.log("argv", redactArgv(argv));
   verbose.log("parsed-flags", {
+    provider: parsed.provider,
     tool: parsed.tool,
     positional: parsed.positional === undefined ? "(none)" : `(${parsed.positional.length} chars)`,
     flags: redactParsedFlags(parsed.flags),
@@ -98,9 +102,18 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
   });
   verbose.log("env-snapshot", snapshotRelayEnv(io.env));
 
-  const tool = resolveTool(parsed.tool);
+  const providerEntry = resolveProvider(parsed.provider);
+  if (!providerEntry) {
+    io.stderr.write(
+      `unknown provider: ${parsed.provider}\nknown providers: ${Object.keys(registry).join(", ")}\n`,
+    );
+    return 2;
+  }
+  const tool = resolveProviderTool(parsed.provider, parsed.tool);
   if (!tool) {
-    io.stderr.write(`unknown tool: ${parsed.tool}\n`);
+    io.stderr.write(
+      `unknown tool for provider ${parsed.provider}: ${parsed.tool}\nknown tools: ${Object.keys(providerEntry.tools).join(", ")}\n`,
+    );
     return 2;
   }
 
