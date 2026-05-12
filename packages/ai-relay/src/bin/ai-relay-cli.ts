@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// `ai-relay-cli <tool> <model> [flags] [input]` — one-shot CLI relay.
+// `ai-relay-cli <tool> [flags] [input]` — one-shot CLI relay.
 // Prints a single tool result as JSON to stdout, then exits.
 
 import { run } from "./run.js";

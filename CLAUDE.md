@@ -112,6 +112,14 @@ Full tree: [`doc/ARCHITECTURE.md` §5](./doc/ARCHITECTURE.md#5-directory-structu
 | `AI_RELAY_REQUEST_TIMEOUT_MS` | ❌ | Plain, default `60000` |
 | `AI_RELAY_PORT` | ❌ | Plain, default `8787`; valid range 1..65535 |
 
+### CLI-only (consumed by `ai-relay-cli` bin in `packages/ai-relay/src/bin/run.ts`)
+
+These are NOT read by the Hono server; they only configure the one-shot CLI.
+
+| Key | Required | Notes |
+|---|---|---|
+| `AI_RELAY_MODEL` | ❌ | Default model id for `ai-relay-cli`. Falls behind `model` in JSON input and behind `-m`/`--model` flag. The MCP server (`ai-relay <api-type>`) does not read this; clients must supply `model` in `tools/call` arguments. |
+
 ### Script-only (consumed by `scripts/mcp-inspect.mjs` and `scripts/verify.mjs`)
 
 These are NOT read by the server. They only set defaults for the verification scripts; flags always win.

@@ -9,8 +9,10 @@ The SDK ships two bins:
 
 - **`ai-relay <api-type>`** — long-lived stdio MCP server keyed by an
   api-type positional (today: `chat-completions`).
-- **`ai-relay-cli <tool> <model> [flags] [input]`** — one-shot CLI
-  invocation that prints a single tool result as JSON.
+- **`ai-relay-cli <tool> [flags] [input]`** — one-shot CLI invocation
+  that prints a single tool result as JSON. The model is resolved from
+  the input JSON's `model` field, the `-m`/`--model` flag, or
+  `AI_RELAY_MODEL` (in that order).
 
 > **v0.6.0** ships only the OpenAI provider, exposed as `chat-completions`
 > (the upstream API's native name). Future provider tools — `messages`
@@ -46,29 +48,30 @@ This package ships two bins:
   protocol over stdin/stdout. See
   [Claude Desktop / Claude Code / Cursor — stdio MCP server](#claude-desktop--claude-code--cursor--stdio-mcp-server)
   below.
-- **`ai-relay-cli <tool> <model> [flags] [input]`** — one-shot
+- **`ai-relay-cli <tool> [flags] [input]`** — one-shot
   invocation that prints a single tool result as JSON to stdout, then
   exits. For scripts, CI smoke tests, and ad-hoc use.
 
 ### One-shot CLI
 
-`ai-relay-cli <tool> <model> [flags] [input]` — prints the tool result
+`ai-relay-cli <tool> [flags] [input]` — prints the tool result
 as JSON on stdout.
 
 ```bash
-ai-relay-cli chat-completions gpt-4o-mini "ping"
-ai-relay-cli chat-completions gpt-4o-mini -s "be terse" "explain TLS"
-ai-relay-cli chat-completions gpt-4o-mini '{"messages":[{"role":"user","content":"ping"}]}'
-ai-relay-cli chat-completions gpt-4o-mini --api-key sk-... "ping"
-ai-relay-cli chat-completions gpt-4o-mini --base-url https://my-azure.openai.azure.com/v1 "ping"
-ai-relay-cli chat-completions gpt-4o-mini --env ./prod.env "ping"
-echo '{"messages":[…]}' | ai-relay-cli chat-completions gpt-4o-mini
+ai-relay-cli chat-completions -m gpt-4o-mini "ping"
+ai-relay-cli chat-completions --model gpt-4o-mini -s "be terse" "explain TLS"
+ai-relay-cli chat-completions '{"model":"gpt-4o","messages":[{"role":"user","content":"ping"}]}'
+AI_RELAY_MODEL=gpt-4o-mini ai-relay-cli chat-completions "ping"
+ai-relay-cli chat-completions -m gpt-4o-mini --api-key sk-... "ping"
+ai-relay-cli chat-completions -m gpt-4o-mini --base-url https://my-azure.openai.azure.com/v1 "ping"
+ai-relay-cli chat-completions -m gpt-4o-mini --env ./prod.env "ping"
+echo '{"messages":[…]}' | ai-relay-cli chat-completions -m gpt-4o-mini
 ```
 
-Tool and model are both required positionals. The tool name follows the
-upstream API's native naming — `chat-completions` for OpenAI Chat
-Completions today; future entries (e.g. `messages` for Anthropic,
-`responses` for OpenAI Responses) will be added as additional keys.
+Only the tool name is a required positional; it follows the upstream
+API's native naming — `chat-completions` for OpenAI Chat Completions
+today; future entries (e.g. `messages` for Anthropic, `responses` for
+OpenAI Responses) will be added as additional keys.
 
 Input is either a positional argument or piped via stdin (exactly one).
 A positional starting with `{` or `[` is parsed as a JSON literal;
@@ -77,8 +80,18 @@ anything else is treated as a plain user message and folded into a
 code is `0` on success, `1` on a runtime/upstream error, `2` on a
 usage error.
 
+**Model resolution (first match wins):**
+
+1. `model` field inside the JSON input
+2. `-m` / `--model <id>` CLI flag
+3. `AI_RELAY_MODEL` environment variable
+
+If none of these is set and the input is plain text (no JSON `model`
+key to fall back on), the CLI exits 2 with `no model resolved`.
+
 | Flag | Purpose |
 |------|---------|
+| `-m, --model <id>` | Model id (e.g. `gpt-4o-mini`). Overridden by JSON `model`; overrides `AI_RELAY_MODEL`. |
 | `-s, --system <text>` | System message prepended to plain-text input. |
 | `--api-key <key>` | Overrides `AI_RELAY_API_KEY`. |
 | `--base-url <url>` | Overrides `AI_RELAY_BASE_URL`. |
@@ -94,6 +107,7 @@ usage error.
 |------|----------|-------|
 | `AI_RELAY_API_KEY` | ✅ (or `--api-key`) | Upstream API key. |
 | `AI_RELAY_BASE_URL` | ❌ | Override for Azure / vLLM / Ollama / AI Gateway. |
+| `AI_RELAY_MODEL` | ❌ | Default model for the CLI (when no `-m` flag and no JSON `model`). Not read by the MCP server. |
 | `AI_RELAY_MAX_OUTPUT_TOKENS` | ❌ | Default 4096. |
 | `AI_RELAY_REQUEST_TIMEOUT_MS` | ❌ | Default 60000. |
 

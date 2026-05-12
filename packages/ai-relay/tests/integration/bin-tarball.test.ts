@@ -199,11 +199,11 @@ afterAll(async () => {
 });
 
 describe("ai-relay-cli bin — installed tarball, one-shot CLI mode", () => {
-  it("S1: positional plain text → exit 0 + JSON on stdout", async () => {
+  it("S1: positional plain text with -m flag → exit 0 + JSON on stdout", async () => {
     mock.requests.length = 0;
     mock.setResponse(() => ({ status: 200, body: defaultSseBody("hello world") }));
 
-    const r = await runBin(cliBinPath, ["chat-completions", "gpt-4o-mini", "ping"], {
+    const r = await runBin(cliBinPath, ["chat-completions", "-m", "gpt-4o-mini", "ping"], {
       env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
     });
     expect(r.status).toBe(0);
@@ -213,23 +213,23 @@ describe("ai-relay-cli bin — installed tarball, one-shot CLI mode", () => {
     expect(out.structuredContent.model).toBe("gpt-4o-mini");
   });
 
-  it("S2: missing model positional → exit 2; no upstream call", async () => {
+  it("S2: plain text without any model source → exit 2; no upstream call", async () => {
     mock.requests.length = 0;
     mock.setResponse(() => ({ status: 200, body: defaultSseBody("ok") }));
 
-    const r = await runBin(cliBinPath, ["chat-completions"], {
+    const r = await runBin(cliBinPath, ["chat-completions", "ping"], {
       env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
     });
     expect(r.status).toBe(2);
-    expect(r.stderr).toMatch(/usage: ai-relay-cli/);
+    expect(r.stderr).toContain("no model resolved");
     expect(mock.requests).toHaveLength(0);
   });
 
-  it("S3: stdin JSON path → upstream sees the parsed messages", async () => {
+  it("S3: stdin JSON path with -m → upstream sees the parsed messages", async () => {
     mock.requests.length = 0;
     mock.setResponse(() => ({ status: 200, body: defaultSseBody("ok") }));
 
-    const r = await runBin(cliBinPath, ["chat-completions", "gpt-4o-mini"], {
+    const r = await runBin(cliBinPath, ["chat-completions", "-m", "gpt-4o-mini"], {
       env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
       input: '{"messages":[{"role":"user","content":"ping"}]}',
     });
@@ -249,7 +249,7 @@ describe("ai-relay-cli bin — installed tarball, one-shot CLI mode", () => {
 
     const r = await runBin(
       cliBinPath,
-      ["chat-completions", "gpt-4o-mini", "--env", envFile, "hi"],
+      ["chat-completions", "-m", "gpt-4o-mini", "--env", envFile, "hi"],
       { env: { AI_RELAY_API_KEY: "systemkey" } },
     );
     expect(r.status).toBe(0);
@@ -262,11 +262,30 @@ describe("ai-relay-cli bin — installed tarball, one-shot CLI mode", () => {
     expect(r.stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
-  it("T-1: full one-shot round-trip — positional, stdin JSON, plain text", async () => {
+  it("S6: AI_RELAY_MODEL env resolves model without -m flag", async () => {
+    mock.requests.length = 0;
+    mock.setResponse(() => ({ status: 200, body: defaultSseBody("ok") }));
+
+    const r = await runBin(cliBinPath, ["chat-completions", "ping"], {
+      env: {
+        AI_RELAY_API_KEY: "test-k",
+        AI_RELAY_BASE_URL: mock.baseURL,
+        AI_RELAY_MODEL: "gpt-4o-mini",
+      },
+    });
+    expect(r.status).toBe(0);
+    expect(mock.requests).toHaveLength(1);
+    expect(mock.requests[0]?.body).toMatchObject({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: "ping" }],
+    });
+  });
+
+  it("T-1: full one-shot round-trip — flag, stdin JSON, env-resolved model", async () => {
     mock.requests.length = 0;
     mock.setResponse(() => ({ status: 200, body: defaultSseBody("hello world") }));
 
-    const r1 = await runBin(cliBinPath, ["chat-completions", "gpt-4o-mini", "ping"], {
+    const r1 = await runBin(cliBinPath, ["chat-completions", "-m", "gpt-4o-mini", "ping"], {
       env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
     });
     expect(r1.status).toBe(0);
@@ -276,7 +295,7 @@ describe("ai-relay-cli bin — installed tarball, one-shot CLI mode", () => {
 
     mock.requests.length = 0;
     mock.setResponse(() => ({ status: 200, body: defaultSseBody("ok") }));
-    const r2 = await runBin(cliBinPath, ["chat-completions", "gpt-4o-mini"], {
+    const r2 = await runBin(cliBinPath, ["chat-completions", "-m", "gpt-4o-mini"], {
       env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
       input: '{"messages":[{"role":"user","content":"hi"}]}',
     });
@@ -286,11 +305,16 @@ describe("ai-relay-cli bin — installed tarball, one-shot CLI mode", () => {
     });
 
     mock.requests.length = 0;
-    const r3 = await runBin(cliBinPath, ["chat-completions", "gpt-4o-mini", "plain-text-input"], {
-      env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
+    const r3 = await runBin(cliBinPath, ["chat-completions", "plain-text-input"], {
+      env: {
+        AI_RELAY_API_KEY: "test-k",
+        AI_RELAY_BASE_URL: mock.baseURL,
+        AI_RELAY_MODEL: "gpt-4o-mini",
+      },
     });
     expect(r3.status).toBe(0);
     expect(mock.requests[0]?.body).toMatchObject({
+      model: "gpt-4o-mini",
       messages: [{ role: "user", content: "plain-text-input" }],
     });
   });

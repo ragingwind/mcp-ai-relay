@@ -1,8 +1,8 @@
 // argv → ParsedInvocation. Pure module with no I/O.
 //
-// Surface: `ai-relay-cli <tool> <model> [flags] [input]`
+// Surface: `ai-relay-cli <tool> [flags] [input]`
 //
-// Long flags: --system -s, --api-key, --base-url,
+// Long flags: --system -s, --model -m, --api-key, --base-url,
 //             --max-tokens, --timeout, --env,
 //             --help -h, --version -V.
 //
@@ -17,6 +17,7 @@ export class UsageError extends Error {
 
 export interface ParsedFlags {
   system?: string;
+  model?: string;
   "api-key"?: string;
   "base-url"?: string;
   "max-tokens"?: number;
@@ -28,15 +29,23 @@ export interface ParsedInvocation {
   help: boolean;
   version: boolean;
   tool: string;
-  model: string;
   flags: ParsedFlags;
   positional?: string;
 }
 
-const VALUE_FLAGS = new Set(["system", "api-key", "base-url", "max-tokens", "timeout", "env"]);
+const VALUE_FLAGS = new Set([
+  "system",
+  "model",
+  "api-key",
+  "base-url",
+  "max-tokens",
+  "timeout",
+  "env",
+]);
 const NUMERIC_FLAGS = new Set(["max-tokens", "timeout"]);
 const SHORT_TO_LONG: Record<string, string> = {
   s: "system",
+  m: "model",
   h: "help",
   V: "version",
 };
@@ -54,7 +63,6 @@ export function parseArgv(argv: readonly string[]): ParsedInvocation {
     help: false,
     version: false,
     tool: "",
-    model: "",
     flags: {},
   };
   const positionals: string[] = [];
@@ -150,23 +158,21 @@ export function parseArgv(argv: readonly string[]): ParsedInvocation {
     return out;
   }
 
-  if (positionals.length < 2) {
-    throw new UsageError("usage: ai-relay-cli <tool> <model> [flags] [input]");
+  if (positionals.length < 1) {
+    throw new UsageError("usage: ai-relay-cli <tool> [flags] [input]");
   }
 
   const tool = positionals[0];
-  const model = positionals[1];
-  if (tool === undefined || model === undefined) {
-    throw new UsageError("usage: ai-relay-cli <tool> <model> [flags] [input]");
+  if (tool === undefined) {
+    throw new UsageError("usage: ai-relay-cli <tool> [flags] [input]");
   }
   out.tool = tool;
-  out.model = model;
 
-  if (positionals.length > 3) {
-    throw new UsageError("at most one positional input is accepted after <tool> <model>");
+  if (positionals.length > 2) {
+    throw new UsageError("at most one positional input is accepted after <tool>");
   }
-  if (positionals.length === 3) {
-    const pos = positionals[2];
+  if (positionals.length === 2) {
+    const pos = positionals[1];
     if (pos !== undefined) out.positional = pos;
   }
 

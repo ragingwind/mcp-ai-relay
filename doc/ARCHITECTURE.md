@@ -143,7 +143,7 @@ mcp-ai-relay/                              # repo root — pnpm workspace orches
 │       │   ├── auth.ts                 # verifyBearer (portable, no node:crypto)
 │       │   ├── bin/
 │       │   │   ├── ai-relay.ts         # bin entry — `ai-relay <api-type>` MCP stdio server
-│       │   │   ├── ai-relay-cli.ts     # bin entry — `ai-relay-cli <tool> <model> [input]` one-shot
+│       │   │   ├── ai-relay-cli.ts     # bin entry — `ai-relay-cli <tool> [flags] [input]` one-shot
 │       │   │   ├── mcp-server.ts       # startMcpServer({apiType,config}) — pure library function
 │       │   │   ├── run.ts              # one-shot CLI orchestrator (used by ai-relay-cli)
 │       │   │   ├── parse.ts            # parseArgv (CLI) + parseMcpArgv (MCP)

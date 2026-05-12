@@ -12,17 +12,22 @@ import { type AnyTool, resolveTool } from "./registry.js";
 
 export { VERSION };
 
-const USAGE = `Usage: ai-relay-cli <tool> <model> [flags] [input]
+const USAGE = `Usage: ai-relay-cli <tool> [flags] [input]
 
 Positional:
   <tool>                  Tool name (e.g. chat-completions)
-  <model>                 Model id (e.g. gpt-4o-mini)
 
 Inputs (exactly one of):
   positional <input>      JSON literal or plain text
   stdin (when piped)      JSON literal or plain text
 
+Model resolution (first match wins):
+  1. \`model\` key inside JSON input
+  2. -m / --model <id>
+  3. AI_RELAY_MODEL env var
+
 Flags:
+  -m, --model <id>        Model id (e.g. gpt-4o-mini)
   -s, --system <text>     System message prepended to plain-text input
       --api-key <key>     Upstream API key (overrides AI_RELAY_API_KEY)
       --base-url <url>    Upstream base URL (overrides AI_RELAY_BASE_URL)
@@ -33,12 +38,13 @@ Flags:
   -V, --version           Print SDK version
 
 Examples:
-  ai-relay-cli chat-completions gpt-4o-mini "ping"
-  ai-relay-cli chat-completions gpt-4o-mini -s "be terse" "explain TLS"
-  ai-relay-cli chat-completions gpt-4o-mini '{"messages":[{"role":"user","content":"ping"}]}'
-  ai-relay-cli chat-completions gpt-4o-mini --api-key sk-... "ping"
-  ai-relay-cli chat-completions gpt-4o-mini --base-url https://my-azure.openai.azure.com/v1 "ping"
-  echo '{"messages":[…]}' | ai-relay-cli chat-completions gpt-4o-mini
+  ai-relay-cli chat-completions -m gpt-4o-mini "ping"
+  ai-relay-cli chat-completions --model gpt-4o-mini -s "be terse" "explain TLS"
+  ai-relay-cli chat-completions '{"model":"gpt-4o","messages":[{"role":"user","content":"ping"}]}'
+  AI_RELAY_MODEL=gpt-4o-mini ai-relay-cli chat-completions "ping"
+  ai-relay-cli chat-completions -m gpt-4o-mini --api-key sk-... "ping"
+  ai-relay-cli chat-completions -m gpt-4o-mini --base-url https://my-azure.openai.azure.com/v1 "ping"
+  echo '{"messages":[…]}' | ai-relay-cli chat-completions -m gpt-4o-mini
 
 Tip: \`ai-relay <api-type>\` (without -cli) starts the MCP stdio server.
 `;
@@ -95,20 +101,39 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
     return 2;
   }
 
+  const fallbackModel = parsed.flags.model ?? io.env.AI_RELAY_MODEL;
+
   let inputObj: Record<string, unknown>;
   try {
     inputObj = coerceInput(rawInput, tool, {
       ...(parsed.flags.system !== undefined ? { system: parsed.flags.system } : {}),
-      model: parsed.model,
+      ...(fallbackModel !== undefined ? { model: fallbackModel } : {}),
     });
   } catch (e) {
     io.stderr.write(`${(e as Error).message}\n`);
     return 2;
   }
 
+  // Resolve model: input JSON > flag > env. If the input already carries
+  // `model`, it wins; otherwise inject the fallback so the schema accepts.
+  const resolvedModel =
+    typeof inputObj.model === "string" && inputObj.model.length > 0
+      ? inputObj.model
+      : fallbackModel;
+
+  // Plain-text desugar without a resolved model means there's no way for
+  // the tool to know what to call upstream. JSON input is allowed to slip
+  // through here — zod will reject it with a clearer "model required" error.
+  if (resolvedModel === undefined && !isJsonInput(rawInput)) {
+    io.stderr.write(
+      "no model resolved: pass -m/--model, set AI_RELAY_MODEL, or include 'model' in JSON input\n",
+    );
+    return 2;
+  }
+
   const merged: Record<string, unknown> = {
     ...inputObj,
-    model: parsed.model,
+    ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
     ...(parsed.flags["max-tokens"] !== undefined ? { max_tokens: parsed.flags["max-tokens"] } : {}),
   };
 
@@ -171,6 +196,12 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
   const output = io.isTTY ? JSON.stringify(result, null, 2) : JSON.stringify(result);
   io.stdout.write(`${output}\n`);
   return result.isError ? 1 : 0;
+}
+
+function isJsonInput(raw: string): boolean {
+  const trimmed = raw.trimStart();
+  const first = trimmed[0];
+  return first === "{" || first === "[";
 }
 
 function coerceInput(

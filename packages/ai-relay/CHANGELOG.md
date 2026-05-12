@@ -15,9 +15,9 @@ this file before upgrading.
   - `ai-relay <api-type>` — MCP stdio server. The `<api-type>` positional
     (today `chat-completions`) is **required**; bare `ai-relay` exits with
     code 2 and a usage message. Unknown api-type also exits 2.
-  - `ai-relay-cli <tool> <model> [flags] [input]` — one-shot CLI. The
-    previous shell-side invocation (`ai-relay chat-completions gpt-4o-mini …`)
-    moves here unchanged.
+  - `ai-relay-cli <tool> [flags] [input]` — one-shot CLI. The previous
+    `<model>` positional has been replaced by an optional `-m`/`--model`
+    flag (see below).
 
   MCP host configuration:
   ```diff
@@ -34,8 +34,23 @@ this file before upgrading.
   Shell invocation:
   ```diff
   -ai-relay chat-completions gpt-4o-mini "ping"
-  +ai-relay-cli chat-completions gpt-4o-mini "ping"
+  +ai-relay-cli chat-completions -m gpt-4o-mini "ping"
   ```
+
+- **`<model>` positional removed; replaced by flag + env.** `ai-relay-cli`
+  no longer requires the model as a second positional argument. The model
+  is resolved in this order (first match wins):
+  1. `model` field inside the JSON input
+  2. `-m` / `--model <id>` CLI flag
+  3. `AI_RELAY_MODEL` environment variable
+
+  Plain-text input with no model from any of the three sources exits 2
+  with `no model resolved`. JSON input without a model is forwarded to
+  the schema, which rejects it with a `model is required` error.
+
+- **New env var `AI_RELAY_MODEL`.** CLI-only default model id, used when
+  no `-m`/`--model` flag is passed and the JSON input does not carry
+  `model`. The MCP server (`ai-relay <api-type>`) does not read this.
 
 - **`cliRegistry` → `registry`.** The registry now holds
   `{ cli, registerMcp }` pairs per api-type so both bins share a single
@@ -48,7 +63,7 @@ this file before upgrading.
 | Before (0.5.x) | After (0.6.0) |
 |---|---|
 | `npx ai-relay` (MCP) | `npx ai-relay chat-completions` |
-| `ai-relay chat-completions gpt-4o-mini "hi"` | `ai-relay-cli chat-completions gpt-4o-mini "hi"` |
+| `ai-relay chat-completions gpt-4o-mini "hi"` | `ai-relay-cli chat-completions -m gpt-4o-mini "hi"` |
 | MCP host `"args": ["-y", "ai-relay"]` | MCP host `"args": ["-y", "ai-relay", "chat-completions"]` |
 | `import { cliRegistry } from "ai-relay/…"` (internal) | `import { registry } from "ai-relay/…"` |
 
