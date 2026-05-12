@@ -10,7 +10,7 @@
     "smoke": "bash scripts/smoke.sh"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.26",
+    "@modelcontextprotocol/sdk": "^1.29",
     "ai-relay": "workspace:*",
     "agents": ">=0.0.50 <0.1.0",
     "openai": "^6"
