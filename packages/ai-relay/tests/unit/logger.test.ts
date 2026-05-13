@@ -101,13 +101,13 @@ describe("snapshotRelayEnv", () => {
       AI_RELAY_API_KEY: "sk-secret-12345",
       AI_RELAY_AUTH_TOKEN: "auth-secret-678",
       AI_RELAY_BASE_URL: "https://example.test/v1",
-      AI_RELAY_MAX_OUTPUT_TOKENS: "4096",
+      AI_RELAY_MAX_TOKENS: "4096",
     });
     expect(snap).toEqual({
       AI_RELAY_API_KEY: "***redacted(15chars)***",
       AI_RELAY_AUTH_TOKEN: "***redacted(15chars)***",
       AI_RELAY_BASE_URL: "https://example.test/v1",
-      AI_RELAY_MAX_OUTPUT_TOKENS: "4096",
+      AI_RELAY_MAX_TOKENS: "4096",
     });
     expect("PATH" in snap).toBe(false);
   });

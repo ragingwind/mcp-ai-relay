@@ -4,20 +4,11 @@
 // `registerOpenAIChat` calls internally. Each test creates its own handler
 // so there is no module-level shared state to reset.
 //
-// Test infrastructure:
-//   • MSW (`setupServer`) intercepts POST https://api.openai.com/v1/chat/completions
-//     so the openai SDK code path is exercised end-to-end without a real
-//     network request. The SDK module itself is NEVER mocked.
-//   • SSE responses are emitted as `text/event-stream` ReadableStreams so the
-//     SDK's async-iterator path runs exactly as it would against OpenAI proper.
-//   • MSW listens BEFORE any handler is constructed (via `setupServer().listen()`
-//     in `beforeAll`). The OpenAI SDK captures `globalThis.fetch` at
-//     constructor time, so MSW's patch must already be installed when each
-//     handler factory runs.
-//
-// Secret-leakage guard: `assertNoSecretLeak(result)` asserts neither the
-// configured API key nor a known relay token sentinel appears in the
-// returned object.
+// As of v0.10.0, the caller-facing tool inputSchema accepts only
+// `{ messages }`. Model and sampling fields (model / temperature /
+// max_tokens / top_p / stop) live on the server config and are injected
+// into every upstream call. Sampling fields baked into the server config
+// are advertised in the tool description.
 
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
@@ -29,26 +20,26 @@ import {
   type OpenAIChatResult,
 } from "../../src/openai/chat.js";
 
-// --- shared MSW server lifecycle -----------------------------------------
-
 const server = setupServer();
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
-// --- helpers --------------------------------------------------------------
-
 const ENDPOINT = "https://api.openai.com/v1/chat/completions";
 
 const TEST_API_KEY = "test-openai-api-key";
-const TEST_RELAY_TOKEN_SENTINEL = "x".repeat(32); // not actually flowed through chat.ts; used as a leak canary
+const TEST_RELAY_TOKEN_SENTINEL = "x".repeat(32);
 
 const VALID_MODEL = "gpt-4o-mini";
 const VALID_MESSAGES = [{ role: "user" as const, content: "say hi" }];
 
 function makeHandler(overrides: Partial<OpenAIChatConfig> = {}): OpenAIChatHandlerBundle {
-  return makeOpenAIChatHandler({ apiKey: TEST_API_KEY, ...overrides });
+  return makeOpenAIChatHandler({
+    apiKey: TEST_API_KEY,
+    model: VALID_MODEL,
+    ...overrides,
+  });
 }
 
 function sseStream(chunks: string[]): ReadableStream<Uint8Array> {
@@ -80,167 +71,198 @@ function assertNoSecretLeak(result: OpenAIChatResult | unknown): void {
 }
 
 // =========================================================================
-// A: Input Validation
+// A: Input Validation — caller schema is { messages } only
 // =========================================================================
 
-describe("openai chat — input validation (.strict, types, ranges)", () => {
-  it("D1: rejects when `model` is missing", async () => {
+describe("openai chat — input validation (caller schema = messages only)", () => {
+  it("P1: accepts a minimal { messages } input", async () => {
+    server.use(
+      http.post(ENDPOINT, () =>
+        sseResponse([
+          JSON.stringify({ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }),
+        ]),
+      ),
+    );
     const { handler } = makeHandler();
-    await expect(handler({ messages: VALID_MESSAGES })).rejects.toThrow();
+    const result = await handler({ messages: VALID_MESSAGES });
+    expect(result.isError).toBe(false);
   });
 
-  it("D2: rejects when `messages` is missing", async () => {
+  it("D1: rejects when `messages` is missing", async () => {
     const { handler } = makeHandler();
-    await expect(handler({ model: VALID_MODEL })).rejects.toThrow();
+    await expect(handler({})).rejects.toThrow();
   });
 
-  it("D3: rejects when `messages` is empty", async () => {
+  it("D2: rejects when `messages` is empty", async () => {
     const { handler } = makeHandler();
-    await expect(handler({ model: VALID_MODEL, messages: [] })).rejects.toThrow();
+    await expect(handler({ messages: [] })).rejects.toThrow();
   });
 
-  it("D4: rejects `temperature` above 2", async () => {
+  it("D3: rejects caller-supplied `model` (strict schema)", async () => {
     const { handler } = makeHandler();
-    await expect(
-      handler({ model: VALID_MODEL, messages: VALID_MESSAGES, temperature: 3 }),
-    ).rejects.toThrow();
+    await expect(handler({ model: "override", messages: VALID_MESSAGES })).rejects.toThrow();
   });
 
-  it("D5: rejects `top_p` above 1", async () => {
+  it("D4: rejects caller-supplied `temperature` (strict schema)", async () => {
     const { handler } = makeHandler();
-    await expect(
-      handler({ model: VALID_MODEL, messages: VALID_MESSAGES, top_p: 2 }),
-    ).rejects.toThrow();
+    await expect(handler({ messages: VALID_MESSAGES, temperature: 0.5 })).rejects.toThrow();
   });
 
-  it("D6: rejects unknown extra keys (strict schema)", async () => {
+  it("D5: rejects caller-supplied `max_tokens` (strict schema)", async () => {
     const { handler } = makeHandler();
-    await expect(
-      handler({ model: VALID_MODEL, messages: VALID_MESSAGES, unknownKey: "x" }),
-    ).rejects.toThrow();
+    await expect(handler({ messages: VALID_MESSAGES, max_tokens: 100 })).rejects.toThrow();
+  });
+
+  it("D6: rejects caller-supplied `top_p` (strict schema)", async () => {
+    const { handler } = makeHandler();
+    await expect(handler({ messages: VALID_MESSAGES, top_p: 0.9 })).rejects.toThrow();
+  });
+
+  it("D7: rejects caller-supplied `stop` (strict schema)", async () => {
+    const { handler } = makeHandler();
+    await expect(handler({ messages: VALID_MESSAGES, stop: "END" })).rejects.toThrow();
+  });
+
+  it("D8: rejects unknown extra keys", async () => {
+    const { handler } = makeHandler();
+    await expect(handler({ messages: VALID_MESSAGES, unknown: "x" })).rejects.toThrow();
   });
 });
 
 // =========================================================================
-// B: max_tokens clamp
+// B: Config-driven upstream parameters
 // =========================================================================
 
-describe("openai chat — max_tokens clamp", () => {
-  it("P1: passes max_tokens unchanged when ≤ ceiling", async () => {
-    let observedMaxTokens: number | undefined;
+describe("openai chat — server config drives upstream call", () => {
+  it("P1: config.model is forwarded as the upstream model", async () => {
+    let observedModel: string | undefined;
     server.use(
       http.post(ENDPOINT, async ({ request }) => {
-        const body = (await request.json()) as { max_tokens?: number };
-        observedMaxTokens = body.max_tokens;
+        const body = (await request.json()) as { model?: string };
+        observedModel = body.model;
+        return sseResponse([
+          JSON.stringify({ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }),
+        ]);
+      }),
+    );
+    const { handler } = makeHandler({ model: "config-model-id" });
+    await handler({ messages: VALID_MESSAGES });
+    expect(observedModel).toBe("config-model-id");
+  });
+
+  it("P2: config.temperature is forwarded when set", async () => {
+    let body: { temperature?: number } | undefined;
+    server.use(
+      http.post(ENDPOINT, async ({ request }) => {
+        body = (await request.json()) as typeof body;
+        return sseResponse([
+          JSON.stringify({ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }),
+        ]);
+      }),
+    );
+    const { handler } = makeHandler({ temperature: 0.7 });
+    await handler({ messages: VALID_MESSAGES });
+    expect(body?.temperature).toBe(0.7);
+  });
+
+  it("N1: temperature is omitted from upstream call when unset", async () => {
+    let body: Record<string, unknown> | undefined;
+    server.use(
+      http.post(ENDPOINT, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
         return sseResponse([
           JSON.stringify({ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }),
         ]);
       }),
     );
     const { handler } = makeHandler();
-    await handler({ model: VALID_MODEL, messages: VALID_MESSAGES, max_tokens: 100 });
-    expect(observedMaxTokens).toBe(100);
+    await handler({ messages: VALID_MESSAGES });
+    expect(body).toBeDefined();
+    expect("temperature" in (body ?? {})).toBe(false);
   });
 
-  it("N1: silently clamps max_tokens to default ceiling (4096) when over", async () => {
-    let observedMaxTokens: number | undefined;
+  it("P3: config.max_tokens is forwarded as max_tokens", async () => {
+    let body: { max_tokens?: number } | undefined;
     server.use(
       http.post(ENDPOINT, async ({ request }) => {
-        const body = (await request.json()) as { max_tokens?: number };
-        observedMaxTokens = body.max_tokens;
+        body = (await request.json()) as typeof body;
+        return sseResponse([
+          JSON.stringify({ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }),
+        ]);
+      }),
+    );
+    const { handler } = makeHandler({ max_tokens: 256 });
+    await handler({ messages: VALID_MESSAGES });
+    expect(body?.max_tokens).toBe(256);
+  });
+
+  it("N2: max_tokens is omitted from upstream call when unset", async () => {
+    let body: Record<string, unknown> | undefined;
+    server.use(
+      http.post(ENDPOINT, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
         return sseResponse([
           JSON.stringify({ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }),
         ]);
       }),
     );
     const { handler } = makeHandler();
-    const result = await handler({
-      model: VALID_MODEL,
-      messages: VALID_MESSAGES,
-      max_tokens: 999_999,
-    });
-    expect(result.isError).toBe(false);
-    expect(observedMaxTokens).toBe(4096);
+    await handler({ messages: VALID_MESSAGES });
+    expect("max_tokens" in (body ?? {})).toBe(false);
   });
 
-  it("N2: respects an injected ceiling override", async () => {
-    let observedMaxTokens: number | undefined;
+  it("P4: config.top_p is forwarded when set", async () => {
+    let body: { top_p?: number } | undefined;
     server.use(
       http.post(ENDPOINT, async ({ request }) => {
-        const body = (await request.json()) as { max_tokens?: number };
-        observedMaxTokens = body.max_tokens;
+        body = (await request.json()) as typeof body;
         return sseResponse([
           JSON.stringify({ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }),
         ]);
       }),
     );
-    const { handler } = makeHandler({ maxOutputTokensCeiling: 100 });
-    await handler({ model: VALID_MODEL, messages: VALID_MESSAGES, max_tokens: 999 });
-    expect(observedMaxTokens).toBe(100);
+    const { handler } = makeHandler({ top_p: 0.9 });
+    await handler({ messages: VALID_MESSAGES });
+    expect(body?.top_p).toBe(0.9);
   });
 
-  it("P2: injects ceiling as default when caller omits max_tokens", async () => {
-    let observedMaxTokens: number | undefined;
+  it("P5: config.stop (string) is forwarded as upstream stop", async () => {
+    let body: { stop?: unknown } | undefined;
     server.use(
       http.post(ENDPOINT, async ({ request }) => {
-        const body = (await request.json()) as { max_tokens?: number };
-        observedMaxTokens = body.max_tokens;
+        body = (await request.json()) as typeof body;
         return sseResponse([
           JSON.stringify({ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }),
         ]);
       }),
     );
-    const { handler } = makeHandler();
-    await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
-    expect(observedMaxTokens).toBe(4096);
+    const { handler } = makeHandler({ stop: "END" });
+    await handler({ messages: VALID_MESSAGES });
+    expect(body?.stop).toBe("END");
   });
 
-  it("P3: omitted max_tokens uses injected ceiling, not the 4096 default", async () => {
-    let observedMaxTokens: number | undefined;
+  it("P6: config.stop (array) is forwarded as upstream stop", async () => {
+    let body: { stop?: unknown } | undefined;
     server.use(
       http.post(ENDPOINT, async ({ request }) => {
-        const body = (await request.json()) as { max_tokens?: number };
-        observedMaxTokens = body.max_tokens;
+        body = (await request.json()) as typeof body;
         return sseResponse([
           JSON.stringify({ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }),
         ]);
       }),
     );
-    const { handler } = makeHandler({ maxOutputTokensCeiling: 256 });
-    await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
-    expect(observedMaxTokens).toBe(256);
+    const { handler } = makeHandler({ stop: ["END", "STOP"] });
+    await handler({ messages: VALID_MESSAGES });
+    expect(body?.stop).toEqual(["END", "STOP"]);
   });
 
-  it("P4: treats max_tokens=0 as 'use default' (ceiling)", async () => {
-    let observedMaxTokens: number | undefined;
-    server.use(
-      http.post(ENDPOINT, async ({ request }) => {
-        const body = (await request.json()) as { max_tokens?: number };
-        observedMaxTokens = body.max_tokens;
-        return sseResponse([
-          JSON.stringify({ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }),
-        ]);
-      }),
-    );
-    const { handler } = makeHandler();
-    const result = await handler({
-      model: VALID_MODEL,
-      messages: VALID_MESSAGES,
-      max_tokens: 0,
-    });
-    expect(result.isError).toBe(false);
-    expect(observedMaxTokens).toBe(4096);
+  it("D9: makeOpenAIChatHandler throws when config.model is missing", () => {
+    // @ts-expect-error - intentional missing required field
+    expect(() => makeOpenAIChatHandler({ apiKey: TEST_API_KEY })).toThrow(/model/i);
   });
 
-  it("D1: still rejects negative max_tokens", async () => {
-    const { handler } = makeHandler();
-    await expect(
-      handler({
-        model: VALID_MODEL,
-        messages: VALID_MESSAGES,
-        max_tokens: -1,
-      }),
-    ).rejects.toThrow();
+  it("D10: makeOpenAIChatHandler throws when config.model is empty string", () => {
+    expect(() => makeOpenAIChatHandler({ apiKey: TEST_API_KEY, model: "" })).toThrow(/model/i);
   });
 });
 
@@ -248,7 +270,7 @@ describe("openai chat — max_tokens clamp", () => {
 // C: Streaming
 // =========================================================================
 
-describe("openai chat — streaming accumulation, usage, finish_reason, tool_calls, maxRetries", () => {
+describe("openai chat — streaming accumulation, usage, finish_reason, maxRetries", () => {
   it("P1: accumulates delta.content across chunks and captures usage + finish_reason", async () => {
     server.use(
       http.post(ENDPOINT, () =>
@@ -266,7 +288,7 @@ describe("openai chat — streaming accumulation, usage, finish_reason, tool_cal
       ),
     );
     const { handler } = makeHandler();
-    const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const result = await handler({ messages: VALID_MESSAGES });
     expect(result.isError).toBe(false);
     expect(result.content[0]?.text).toBe("Hello world");
     expect(result.structuredContent.usage).toEqual({
@@ -291,7 +313,7 @@ describe("openai chat — streaming accumulation, usage, finish_reason, tool_cal
       ),
     );
     const { handler } = makeHandler();
-    const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const result = await handler({ messages: VALID_MESSAGES });
     expect(result.isError).toBe(false);
     expect(result.content[0]?.text).toBe("");
     expect(result.structuredContent.finish_reason).toBe("tool_calls");
@@ -307,7 +329,7 @@ describe("openai chat — streaming accumulation, usage, finish_reason, tool_cal
       }),
     );
     const { handler } = makeHandler();
-    const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const result = await handler({ messages: VALID_MESSAGES });
     expect(result.isError).toBe(true);
     expect(result.structuredContent.code).toBe("upstream_error");
     expect(callCount).toBe(1);
@@ -331,10 +353,7 @@ describe("openai chat — abort propagation", () => {
     const { handler } = makeHandler();
     const ac = new AbortController();
     ac.abort();
-    const result = await handler(
-      { model: VALID_MODEL, messages: VALID_MESSAGES },
-      { signal: ac.signal },
-    );
+    const result = await handler({ messages: VALID_MESSAGES }, { signal: ac.signal });
     expect(result.isError).toBe(true);
     expect(result.structuredContent.code).toBe("upstream_error");
     assertNoSecretLeak(result);
@@ -365,10 +384,7 @@ describe("openai chat — abort propagation", () => {
     );
     const { handler } = makeHandler();
     const ac = new AbortController();
-    const promise = handler(
-      { model: VALID_MODEL, messages: VALID_MESSAGES },
-      { signal: ac.signal },
-    );
+    const promise = handler({ messages: VALID_MESSAGES }, { signal: ac.signal });
     await Promise.resolve();
     ac.abort();
     const result = await promise;
@@ -382,7 +398,7 @@ describe("openai chat — abort propagation", () => {
 // E: Error Mapping + Secret Guard
 // =========================================================================
 
-describe("openai chat — error mapping (auth, rate_limited, context_length, content_policy, upstream_error, bad_request)", () => {
+describe("openai chat — error mapping", () => {
   it("D1: maps upstream 401 to code: 'auth'", async () => {
     server.use(
       http.post(
@@ -391,7 +407,7 @@ describe("openai chat — error mapping (auth, rate_limited, context_length, con
       ),
     );
     const { handler } = makeHandler();
-    const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const result = await handler({ messages: VALID_MESSAGES });
     expect(result.isError).toBe(true);
     expect(result.structuredContent.code).toBe("auth");
     expect(result.content[0]?.text).toBe("Authentication failed");
@@ -403,7 +419,7 @@ describe("openai chat — error mapping (auth, rate_limited, context_length, con
       http.post(ENDPOINT, () => new HttpResponse(JSON.stringify({ error: {} }), { status: 403 })),
     );
     const { handler } = makeHandler();
-    const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const result = await handler({ messages: VALID_MESSAGES });
     expect(result.isError).toBe(true);
     expect(result.structuredContent.code).toBe("auth");
     assertNoSecretLeak(result);
@@ -421,7 +437,7 @@ describe("openai chat — error mapping (auth, rate_limited, context_length, con
       ),
     );
     const { handler } = makeHandler();
-    const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const result = await handler({ messages: VALID_MESSAGES });
     expect(result.isError).toBe(true);
     expect(result.structuredContent.code).toBe("rate_limited");
     expect(result.structuredContent.retryAfter).toBe(30);
@@ -433,7 +449,7 @@ describe("openai chat — error mapping (auth, rate_limited, context_length, con
       http.post(ENDPOINT, () => new HttpResponse(JSON.stringify({ error: {} }), { status: 429 })),
     );
     const { handler } = makeHandler();
-    const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const result = await handler({ messages: VALID_MESSAGES });
     expect(result.isError).toBe(true);
     expect(result.structuredContent.code).toBe("rate_limited");
     expect(result.structuredContent.retryAfter).toBeUndefined();
@@ -455,7 +471,7 @@ describe("openai chat — error mapping (auth, rate_limited, context_length, con
       ),
     );
     const { handler } = makeHandler();
-    const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const result = await handler({ messages: VALID_MESSAGES });
     expect(result.isError).toBe(true);
     expect(result.structuredContent.code).toBe("context_length");
     assertNoSecretLeak(result);
@@ -473,7 +489,7 @@ describe("openai chat — error mapping (auth, rate_limited, context_length, con
       ),
     );
     const { handler } = makeHandler();
-    const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const result = await handler({ messages: VALID_MESSAGES });
     expect(result.isError).toBe(true);
     expect(result.structuredContent.code).toBe("content_policy");
     assertNoSecretLeak(result);
@@ -484,7 +500,7 @@ describe("openai chat — error mapping (auth, rate_limited, context_length, con
       http.post(ENDPOINT, () => new HttpResponse(JSON.stringify({ error: {} }), { status: 500 })),
     );
     const { handler } = makeHandler();
-    const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const result = await handler({ messages: VALID_MESSAGES });
     expect(result.isError).toBe(true);
     expect(result.structuredContent.code).toBe("upstream_error");
     assertNoSecretLeak(result);
@@ -494,7 +510,7 @@ describe("openai chat — error mapping (auth, rate_limited, context_length, con
     const body = '{"detail":"query rejected: out of domain"}';
     server.use(http.post(ENDPOINT, () => new HttpResponse(body, { status: 500 })));
     const { handler } = makeHandler();
-    const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const result = await handler({ messages: VALID_MESSAGES });
     expect(result.isError).toBe(true);
     expect(result.structuredContent.code).toBe("upstream_error");
     expect(result.content[0]?.text).toContain("query rejected: out of domain");
@@ -505,7 +521,7 @@ describe("openai chat — error mapping (auth, rate_limited, context_length, con
     const body = JSON.stringify({ detail: `leak ${TEST_API_KEY} end` });
     server.use(http.post(ENDPOINT, () => new HttpResponse(body, { status: 500 })));
     const { handler } = makeHandler();
-    const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const result = await handler({ messages: VALID_MESSAGES });
     expect(result.isError).toBe(true);
     expect(result.structuredContent.code).toBe("upstream_error");
     expect(result.content[0]?.text).toContain("[REDACTED]");
@@ -515,7 +531,7 @@ describe("openai chat — error mapping (auth, rate_limited, context_length, con
   it("D7: maps a fetch-level network failure to code: 'upstream_error'", async () => {
     server.use(http.post(ENDPOINT, () => HttpResponse.error()));
     const { handler } = makeHandler();
-    const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const result = await handler({ messages: VALID_MESSAGES });
     expect(result.isError).toBe(true);
     expect(result.structuredContent.code).toBe("upstream_error");
     assertNoSecretLeak(result);
@@ -526,7 +542,7 @@ describe("openai chat — error mapping (auth, rate_limited, context_length, con
       http.post(ENDPOINT, () => new HttpResponse(JSON.stringify({ error: {} }), { status: 422 })),
     );
     const { handler } = makeHandler();
-    const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const result = await handler({ messages: VALID_MESSAGES });
     expect(result.isError).toBe(true);
     expect(result.structuredContent.code).toBe("bad_request");
     assertNoSecretLeak(result);
@@ -540,7 +556,7 @@ describe("openai chat — error mapping (auth, rate_limited, context_length, con
       ),
     );
     const { handler } = makeHandler();
-    const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const result = await handler({ messages: VALID_MESSAGES });
     expect(result.isError).toBe(true);
     expect(result.structuredContent.code).toBe("bad_request");
     assertNoSecretLeak(result);
@@ -568,7 +584,7 @@ describe("openai chat — error mapping (auth, rate_limited, context_length, con
     for (const responseFactory of errorScenarios) {
       server.resetHandlers();
       server.use(http.post(ENDPOINT, () => responseFactory()));
-      const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+      const result = await handler({ messages: VALID_MESSAGES });
       expect(result.isError).toBe(true);
       assertNoSecretLeak(result);
     }
@@ -576,7 +592,7 @@ describe("openai chat — error mapping (auth, rate_limited, context_length, con
 });
 
 // =========================================================================
-// F: Bundle surface
+// F: Bundle surface — description hint includes baked-in config values
 // =========================================================================
 
 describe("openai chat — handler bundle surface", () => {
@@ -585,28 +601,49 @@ describe("openai chat — handler bundle surface", () => {
     expect(bundle.name).toBe("chat-completions");
     expect(typeof bundle.description).toBe("string");
     expect(bundle.description.length).toBeGreaterThan(0);
-    const parsed = bundle.schema.safeParse({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const parsed = bundle.schema.safeParse({ messages: VALID_MESSAGES });
     expect(parsed.success).toBe(true);
     expect(typeof bundle.handler).toBe("function");
   });
 
-  it("P2: name and description are overridable per registration", () => {
-    const bundle = makeHandler({ name: "azure_chat", description: "Azure deployment" });
+  it("P2: default description advertises the configured model", () => {
+    const bundle = makeHandler({ model: "gpt-4o" });
+    expect(bundle.description).toContain("model: gpt-4o");
+  });
+
+  it("P3: default description advertises baked-in sampling fields", () => {
+    const bundle = makeHandler({
+      model: "gpt-4o",
+      temperature: 0.2,
+      max_tokens: 256,
+      top_p: 0.9,
+      stop: ["END"],
+    });
+    expect(bundle.description).toContain("temperature: 0.2");
+    expect(bundle.description).toContain("max_tokens: 256");
+    expect(bundle.description).toContain("top_p: 0.9");
+    expect(bundle.description).toContain("stop:");
+  });
+
+  it("P4: explicit `description` overrides the default", () => {
+    const bundle = makeHandler({ description: "Custom description" });
+    expect(bundle.description).toBe("Custom description");
+  });
+
+  it("P5: name is overridable per registration", () => {
+    const bundle = makeHandler({ name: "azure_chat" });
     expect(bundle.name).toBe("azure_chat");
-    expect(bundle.description).toBe("Azure deployment");
   });
 });
 
 // =========================================================================
-// G: Timeout — requestTimeoutMs propagates to the SDK and aborts in time
+// G: Timeout
 // =========================================================================
 
 describe("openai chat — requestTimeoutMs propagation", () => {
   it("D1: returns upstream_error within ~timeout when upstream stalls", async () => {
     server.use(
       http.post(ENDPOINT, async () => {
-        // Stall well past the configured timeout. The SDK's timeout should
-        // fire BEFORE this resolves, so the handler returns within ~timeout.
         await new Promise((r) => setTimeout(r, 500));
         return sseResponse([
           JSON.stringify({ choices: [{ delta: { content: "late" }, finish_reason: "stop" }] }),
@@ -615,20 +652,17 @@ describe("openai chat — requestTimeoutMs propagation", () => {
     );
     const { handler } = makeHandler({ requestTimeoutMs: 50 });
     const t0 = Date.now();
-    const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const result = await handler({ messages: VALID_MESSAGES });
     const elapsed = Date.now() - t0;
     expect(result.isError).toBe(true);
     expect(result.structuredContent.code).toBe("upstream_error");
-    // SDK timeouts are not always tight; allow generous headroom but reject
-    // the "no timeout fired" case (which would resolve only after the full
-    // 500 ms stall).
     expect(elapsed).toBeLessThan(450);
     assertNoSecretLeak(result);
   });
 });
 
 // =========================================================================
-// H: Verbose logger injection — request/response trace + secret redaction
+// H: Verbose logger injection
 // =========================================================================
 
 describe("openai chat — verbose logger injection", () => {
@@ -664,16 +698,12 @@ describe("openai chat — verbose logger injection", () => {
     const { handler } = makeHandler({ logger });
     const userMarker = "verbose-injection-user-marker";
     await handler({
-      model: VALID_MODEL,
       messages: [{ role: "user", content: userMarker }],
     });
     const combined = lines.join("");
-    // openai-http-request line exists
     expect(combined).toContain("openai-http-request");
-    // Authorization is redacted (Bearer + redacted marker), never the raw key
     expect(combined).toMatch(/Bearer \*\*\*redacted\(\d+chars\)\*\*\*/);
     expect(combined).not.toContain(TEST_API_KEY);
-    // Body messages are emitted verbatim
     expect(combined).toContain(userMarker);
   });
 
@@ -689,7 +719,6 @@ describe("openai chat — verbose logger injection", () => {
     const { handler } = makeHandler({ logger });
     const userMarker = "stream-start-user-marker-7777";
     await handler({
-      model: VALID_MODEL,
       messages: [{ role: "user", content: userMarker }],
     });
     const startLine = lines.find((l) => l.includes("openai-stream-start"));
@@ -711,7 +740,7 @@ describe("openai chat — verbose logger injection", () => {
     );
     const { lines, logger } = makeLogger();
     const { handler } = makeHandler({ logger });
-    await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    await handler({ messages: VALID_MESSAGES });
     const endLine = lines.find((l) => l.includes("openai-stream-end"));
     expect(endLine).toBeDefined();
     expect(endLine).toContain("Hello world");
@@ -730,7 +759,7 @@ describe("openai chat — verbose logger injection", () => {
     const { handler } = makeHandler({ logger });
     const ac = new AbortController();
     ac.abort();
-    await handler({ model: VALID_MODEL, messages: VALID_MESSAGES }, { signal: ac.signal });
+    await handler({ messages: VALID_MESSAGES }, { signal: ac.signal });
     expect(lines.some((l) => l.includes("openai-cancelled"))).toBe(true);
   });
 
@@ -745,7 +774,7 @@ describe("openai chat — verbose logger injection", () => {
     const sentinel = "sk-supersecret-canary-12345";
     const { lines, logger } = makeLogger();
     const { handler } = makeHandler({ logger, apiKey: sentinel });
-    await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    await handler({ messages: VALID_MESSAGES });
     const combined = lines.join("");
     expect(combined).not.toContain(sentinel);
     expect(combined).not.toContain("supersecret");

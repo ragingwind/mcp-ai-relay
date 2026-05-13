@@ -9,7 +9,7 @@ import { makeOpenAIChatHandler, registerOpenAIChat } from "ai-relay/openai";
 
 const _ok: boolean = verifyBearer("a", "a") && verifyBearerSub("b", "b");
 
-const _cfg: OpenAIChatConfig = { apiKey: "k" };
+const _cfg: OpenAIChatConfig = { apiKey: "k", model: "gpt-4o-mini" };
 const _handler = makeOpenAIChatHandler(_cfg);
 const _register: typeof registerOpenAIChat = registerOpenAIChat;
 

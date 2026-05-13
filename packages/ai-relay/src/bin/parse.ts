@@ -3,7 +3,8 @@
 // Surface: `ai-relay-cli <provider> <tool> [flags] [input]`
 //
 // Long flags: --system -s, --model -m, --api-key, --base-url,
-//             --max-tokens, --timeout, --env, --verbose -v,
+//             --max-tokens, --temperature, --top-p, --stop,
+//             --timeout, --env, --verbose -v,
 //             --help -h, --version -V.
 //
 // Short forms: only the ones listed above are accepted.
@@ -21,6 +22,9 @@ export interface ParsedFlags {
   "api-key"?: string;
   "base-url"?: string;
   "max-tokens"?: number;
+  temperature?: number;
+  "top-p"?: number;
+  stop?: string | string[];
   timeout?: number;
   env?: string;
 }
@@ -41,10 +45,15 @@ const VALUE_FLAGS = new Set([
   "api-key",
   "base-url",
   "max-tokens",
+  "temperature",
+  "top-p",
+  "stop",
   "timeout",
   "env",
 ]);
-const NUMERIC_FLAGS = new Set(["max-tokens", "timeout"]);
+const INTEGER_FLAGS = new Set(["max-tokens", "timeout"]);
+const FLOAT_FLAGS = new Set(["temperature", "top-p"]);
+const STRING_ARRAY_FLAGS = new Set(["stop"]);
 const SHORT_TO_LONG: Record<string, string> = {
   s: "system",
   m: "model",
@@ -53,12 +62,50 @@ const SHORT_TO_LONG: Record<string, string> = {
   v: "verbose",
 };
 
-function parseNumber(name: string, raw: string): number {
+function parsePositiveInt(name: string, raw: string): number {
   const n = Number(raw);
   if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) {
     throw new UsageError(`--${name} must be a positive integer`);
   }
   return n;
+}
+
+function parseNonNegativeFloat(name: string, raw: string): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) {
+    throw new UsageError(`--${name} must be a non-negative number`);
+  }
+  return n;
+}
+
+function parseStringList(raw: string): string | string[] {
+  const parts = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (parts.length === 0) return raw;
+  if (parts.length === 1) {
+    const first = parts[0];
+    if (first === undefined) return raw;
+    return first;
+  }
+  return parts;
+}
+
+function assignFlag(out: Record<string, unknown>, key: string, raw: string): void {
+  if (INTEGER_FLAGS.has(key)) {
+    out[key] = parsePositiveInt(key, raw);
+    return;
+  }
+  if (FLOAT_FLAGS.has(key)) {
+    out[key] = parseNonNegativeFloat(key, raw);
+    return;
+  }
+  if (STRING_ARRAY_FLAGS.has(key)) {
+    out[key] = parseStringList(raw);
+    return;
+  }
+  out[key] = raw;
 }
 
 export function parseArgv(argv: readonly string[]): ParsedInvocation {
@@ -116,11 +163,7 @@ export function parseArgv(argv: readonly string[]): ParsedInvocation {
         value = next;
         i += 1;
       }
-      if (NUMERIC_FLAGS.has(key)) {
-        (out.flags as Record<string, unknown>)[key] = parseNumber(key, value);
-      } else {
-        (out.flags as Record<string, unknown>)[key] = value;
-      }
+      assignFlag(out.flags as Record<string, unknown>, key, value);
       continue;
     }
 
@@ -156,11 +199,7 @@ export function parseArgv(argv: readonly string[]): ParsedInvocation {
         value = next;
         i += 1;
       }
-      if (NUMERIC_FLAGS.has(long)) {
-        (out.flags as Record<string, unknown>)[long] = parseNumber(long, value);
-      } else {
-        (out.flags as Record<string, unknown>)[long] = value;
-      }
+      assignFlag(out.flags as Record<string, unknown>, long, value);
       continue;
     }
 
@@ -197,13 +236,18 @@ export function parseArgv(argv: readonly string[]): ParsedInvocation {
 // argv → ParsedMcpInvocation. Pure module with no I/O.
 //
 // Surface: `ai-relay <provider> [flags]`
-// Flags: --api-key, --base-url, --max-tokens, --timeout, --env,
-//        --verbose -v, --help -h, --version -V.
+// Flags: --model -m, --api-key, --base-url, --max-tokens, --temperature,
+//        --top-p, --stop, --timeout, --env, --verbose -v,
+//        --help -h, --version -V.
 
 export interface ParsedMcpFlags {
+  model?: string;
   "api-key"?: string;
   "base-url"?: string;
   "max-tokens"?: number;
+  temperature?: number;
+  "top-p"?: number;
+  stop?: string | string[];
   timeout?: number;
   env?: string;
 }
@@ -216,8 +260,20 @@ export interface ParsedMcpInvocation {
   flags: ParsedMcpFlags;
 }
 
-const MCP_VALUE_FLAGS = new Set(["api-key", "base-url", "max-tokens", "timeout", "env"]);
-const MCP_NUMERIC_FLAGS = new Set(["max-tokens", "timeout"]);
+const MCP_VALUE_FLAGS = new Set([
+  "model",
+  "api-key",
+  "base-url",
+  "max-tokens",
+  "temperature",
+  "top-p",
+  "stop",
+  "timeout",
+  "env",
+]);
+const MCP_SHORT_TO_LONG: Record<string, string> = {
+  m: "model",
+};
 
 export function parseMcpArgv(argv: readonly string[]): ParsedMcpInvocation {
   const out: ParsedMcpInvocation = {
@@ -272,29 +328,44 @@ export function parseMcpArgv(argv: readonly string[]): ParsedMcpInvocation {
         value = next;
         i += 1;
       }
-      if (MCP_NUMERIC_FLAGS.has(key)) {
-        (out.flags as Record<string, unknown>)[key] = parseNumber(key, value);
-      } else {
-        (out.flags as Record<string, unknown>)[key] = value;
-      }
+      assignFlag(out.flags as Record<string, unknown>, key, value);
       continue;
     }
 
     if (tok.startsWith("-") && tok !== "-") {
       const body = tok.slice(1);
-      if (body === "h") {
+      const eq = body.indexOf("=");
+      const short = eq === -1 ? body : body.slice(0, eq);
+      const inlineValue = eq === -1 ? undefined : body.slice(eq + 1);
+      if (short === "h") {
         out.help = true;
         continue;
       }
-      if (body === "V") {
+      if (short === "V") {
         out.version = true;
         continue;
       }
-      if (body === "v") {
+      if (short === "v") {
         out.verbose = true;
         continue;
       }
-      throw new UsageError(`unknown flag: -${body}`);
+      const long = MCP_SHORT_TO_LONG[short];
+      if (!long) {
+        throw new UsageError(`unknown flag: -${short}`);
+      }
+      let value: string;
+      if (inlineValue !== undefined) {
+        value = inlineValue;
+      } else {
+        const next = argv[i + 1];
+        if (next === undefined) {
+          throw new UsageError(`-${short} requires a value`);
+        }
+        value = next;
+        i += 1;
+      }
+      assignFlag(out.flags as Record<string, unknown>, long, value);
+      continue;
     }
 
     positionals.push(tok);

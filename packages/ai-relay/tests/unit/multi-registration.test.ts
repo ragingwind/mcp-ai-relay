@@ -47,25 +47,39 @@ describe("registerOpenAIChat — multi-registration on one McpServer", () => {
   it("P1: registers three tools with distinct names without throwing", () => {
     const server = new McpServer({ name: "multi-relay-test", version: "0.0.1" });
     expect(() => {
-      registerOpenAIChat(server, { name: "chat-completions-primary", apiKey: "key-openai" });
+      registerOpenAIChat(server, {
+        name: "chat-completions-primary",
+        apiKey: "key-openai",
+        model: VALID_MODEL,
+      });
       registerOpenAIChat(server, {
         name: "azure_chat",
         apiKey: "key-azure",
         baseURL: "https://azure.example.com/v1",
+        model: VALID_MODEL,
       });
       registerOpenAIChat(server, {
         name: "local_llm",
         apiKey: "key-local",
         baseURL: "http://localhost:11434/v1",
+        model: "llama3",
       });
     }).not.toThrow();
   });
 
   it("D1: rejects duplicate tool names on the same server", () => {
     const server = new McpServer({ name: "multi-relay-test", version: "0.0.1" });
-    registerOpenAIChat(server, { name: "completion_chat", apiKey: "key-1" });
+    registerOpenAIChat(server, {
+      name: "completion_chat",
+      apiKey: "key-1",
+      model: VALID_MODEL,
+    });
     expect(() => {
-      registerOpenAIChat(server, { name: "completion_chat", apiKey: "key-2" });
+      registerOpenAIChat(server, {
+        name: "completion_chat",
+        apiKey: "key-2",
+        model: VALID_MODEL,
+      });
     }).toThrow();
   });
 });
@@ -86,15 +100,20 @@ describe("makeOpenAIChatHandler — closure isolation across handlers", () => {
       }),
     );
 
-    const a = makeOpenAIChatHandler({ name: "chat-completions-primary", apiKey: "key-openai" });
+    const a = makeOpenAIChatHandler({
+      name: "chat-completions-primary",
+      apiKey: "key-openai",
+      model: VALID_MODEL,
+    });
     const b = makeOpenAIChatHandler({
       name: "azure_chat",
       apiKey: "key-azure",
       baseURL: "https://azure.example.com/v1",
+      model: VALID_MODEL,
     });
 
-    const ra = await a.handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
-    const rb = await b.handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const ra = await a.handler({ messages: VALID_MESSAGES });
+    const rb = await b.handler({ messages: VALID_MESSAGES });
 
     expect(ra.isError).toBe(false);
     expect(rb.isError).toBe(false);
@@ -104,7 +123,7 @@ describe("makeOpenAIChatHandler — closure isolation across handlers", () => {
     expect(azureAuth).toBe("Bearer key-azure");
   });
 
-  it("P2: each handler enforces its own max_tokens ceiling", async () => {
+  it("P2: each handler forwards its own max_tokens config", async () => {
     let observedAtA: number | undefined;
     let observedAtB: number | undefined;
 
@@ -124,19 +143,21 @@ describe("makeOpenAIChatHandler — closure isolation across handlers", () => {
     const a = makeOpenAIChatHandler({
       apiKey: "key-a",
       baseURL: "https://a.example.com/v1",
-      maxOutputTokensCeiling: 100,
+      model: VALID_MODEL,
+      max_tokens: 100,
     });
     const b = makeOpenAIChatHandler({
       apiKey: "key-b",
       baseURL: "https://b.example.com/v1",
-      maxOutputTokensCeiling: 8000,
+      model: VALID_MODEL,
+      max_tokens: 8000,
     });
 
-    await a.handler({ model: VALID_MODEL, messages: VALID_MESSAGES, max_tokens: 999 });
-    await b.handler({ model: VALID_MODEL, messages: VALID_MESSAGES, max_tokens: 999 });
+    await a.handler({ messages: VALID_MESSAGES });
+    await b.handler({ messages: VALID_MESSAGES });
 
-    expect(observedAtA).toBe(100); // clamped
-    expect(observedAtB).toBe(999); // under b's ceiling — passes through
+    expect(observedAtA).toBe(100);
+    expect(observedAtB).toBe(8000);
   });
 
   it("D1: aborting one handler does not affect a concurrent call on another", async () => {
@@ -169,18 +190,17 @@ describe("makeOpenAIChatHandler — closure isolation across handlers", () => {
     const a = makeOpenAIChatHandler({
       apiKey: "key-a",
       baseURL: "https://a.example.com/v1",
+      model: VALID_MODEL,
     });
     const b = makeOpenAIChatHandler({
       apiKey: "key-b",
       baseURL: "https://b.example.com/v1",
+      model: VALID_MODEL,
     });
 
     const acA = new AbortController();
-    const promiseA = a.handler(
-      { model: VALID_MODEL, messages: VALID_MESSAGES },
-      { signal: acA.signal },
-    );
-    const promiseB = b.handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const promiseA = a.handler({ messages: VALID_MESSAGES }, { signal: acA.signal });
+    const promiseB = b.handler({ messages: VALID_MESSAGES });
 
     await Promise.resolve();
     acA.abort();

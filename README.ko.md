@@ -8,11 +8,15 @@
 
 ## Quick reference
 
+> **0.10.0 (breaking):** 호출자가 보내는 MCP tool 입력은 `{ messages }`만 받습니다. `model`, `temperature`, `max_tokens`, `top_p`, `stop` 같은 업스트림/샘플링 파라미터는 서버 인스턴스 단위로 env 또는 플래그를 통해 설정합니다. caller(Claude Desktop 등 MCP 호스트)가 `model`을 보내면 MCP-SDK validator가 조용히 떼어내고 서버 설정값이 우선됩니다. 자세한 사항은 [`CHANGELOG`](./packages/ai-relay/CHANGELOG.md#0100--2026-05-13).
+
 **1. 단발 CLI** — 셸에서 모델 호출:
 
 ```bash
 AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions -m gpt-4o-mini "ping"
 ```
+
+(`-m`은 CLI가 이번 호출에 사용할 모델을 서버 측 설정으로 박는 옵션입니다. MCP `tools/call` 인자로 전송되는 값이 **아닙니다**.)
 
 **2. stdio MCP** — Claude Desktop / Claude Code / Cursor에 등록:
 
@@ -21,12 +25,14 @@ AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions -m gpt-4o-mini 
   "mcpServers": {
     "ai-relay": {
       "command": "npx",
-      "args": ["-y", "ai-relay", "openai"],
+      "args": ["-y", "ai-relay", "openai", "-m", "gpt-4o-mini"],
       "env": { "AI_RELAY_API_KEY": "sk-..." }
     }
   }
 }
 ```
+
+MCP 호스트(Claude Desktop, Cursor 등)는 `tools/call` 호출 시 `{ "messages": [...] }`만 보냅니다. 모델은 서버 쪽에서 선택합니다 (위 예시처럼 `-m` 플래그 또는 `env`에 `AI_RELAY_MODEL` 추가).
 
 **3. Docker HTTP** — MCP HTTP 엔드포인트 셀프 호스팅:
 
@@ -34,8 +40,11 @@ AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions -m gpt-4o-mini 
 docker run -p 8787:8787 \
   -e AI_RELAY_API_KEY=sk-... \
   -e AI_RELAY_AUTH_TOKEN=$(openssl rand -hex 32) \
+  -e AI_RELAY_MODEL=gpt-4o-mini \
   ghcr.io/ragingwind/ai-relay:latest
 ```
+
+`AI_RELAY_MODEL`은 필수입니다 — 누락 시 Hono 서버가 부팅 단계에서 거부합니다.
 
 **4. SDK** — 직접 만든 MCP 서버에 임베드:
 
@@ -45,24 +54,32 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { registerOpenAIChat } from "ai-relay/openai";
 
 const server = new McpServer({ name: "my-relay", version: "0.1.0" });
-registerOpenAIChat(server, { apiKey: process.env.AI_RELAY_API_KEY! });
+registerOpenAIChat(server, {
+  apiKey: process.env.AI_RELAY_API_KEY!,
+  model: "gpt-4o-mini",
+});
 await server.connect(new StdioServerTransport());
 ```
+
+`model`은 `OpenAIChatConfig`의 필수 필드입니다. 없으면 `registerOpenAIChat`이 부팅 시 throw합니다.
 
 ---
 
 ## 1. 단발 CLI
 
-호출 형식: `ai-relay-cli <provider> <tool> [flags] [input]`. 현재 `<provider>`는 `openai`, `<tool>`은 `chat-completions`. 모델은 JSON 입력 → `-m` 플래그 → `AI_RELAY_MODEL` 순으로 해결됩니다. 입력은 위치 인자 또는 stdin 파이프 둘 중 하나(XOR); 평문은 `{messages:[{role:"user",content:…}]}` 배열로 감싸지고, JSON 리터럴(`{` / `[`)은 그대로 전달됩니다.
+호출 형식: `ai-relay-cli <provider> <tool> [flags] [input]`. 현재 `<provider>`는 `openai`, `<tool>`은 `chat-completions`. **모델과 샘플링 파라미터는 서버 사이드 설정** — `-m`/`--model`/`--temperature`/`--max-tokens`/`--top-p`/`--stop` 플래그 또는 대응되는 `AI_RELAY_*` env로 지정합니다. 입력은 위치 인자 또는 stdin 파이프 둘 중 하나(XOR); 평문은 `{messages:[{role:"user",content:…}]}`로 감싸지고, JSON 리터럴(`{` / `[`)은 그대로 전달되지만 `messages` 외 키는 `.strict()`가 거부합니다.
 
 ```bash
-# JSON 입력 (payload에 모델 포함)
-npx ai-relay-cli openai chat-completions \
-  '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"ping"}]}'
+# 평문 입력 (자동으로 {messages:[…]} 로 감싸짐)
+npx ai-relay-cli openai chat-completions -m gpt-4o-mini "ping"
 
-# stdin + 시스템 프롬프트
+# JSON 입력 (messages만 — model 은 payload 가 아니라 flag/env 로)
+npx ai-relay-cli openai chat-completions -m gpt-4o-mini \
+  '{"messages":[{"role":"user","content":"ping"}]}'
+
+# stdin + 시스템 프롬프트 + 샘플링 오버라이드
 echo "explain TLS in 2 sentences" \
-  | npx ai-relay-cli openai chat-completions -m gpt-4o-mini -s "be terse"
+  | npx ai-relay-cli openai chat-completions -m gpt-4o-mini --temperature 0.2 -s "be terse"
 
 # Azure OpenAI / vLLM / Ollama / AI Gateway 같은 OpenAI 호환 엔드포인트
 npx ai-relay-cli openai chat-completions -m gpt-4o-mini \
@@ -75,18 +92,29 @@ npx ai-relay-cli openai chat-completions -m gpt-4o-mini \
 
 ## 2. stdio MCP 서버
 
-자식 프로세스를 spawn해 stdin/stdout으로 JSON-RPC를 주고받는 모든 호스트(Claude Desktop, Claude Code, Cursor, 프로젝트 로컬 `.mcp.json`)에 `ai-relay`를 등록합니다. `sk-...`만 본인 키로 바꾸면 끝.
+자식 프로세스를 spawn해 stdin/stdout으로 JSON-RPC를 주고받는 모든 호스트(Claude Desktop, Claude Code, Cursor, 프로젝트 로컬 `.mcp.json`)에 `ai-relay`를 등록합니다. `AI_RELAY_API_KEY`와 모델 (`-m` 플래그 또는 `AI_RELAY_MODEL` env) 둘 다 지정하면 끝 — MCP 호스트는 `{ "messages": [...] }`만 보냅니다.
 
-OpenAI 호환 엔드포인트를 가리키려면 `env` 블록에 `AI_RELAY_BASE_URL` 추가:
+OpenAI 호환 엔드포인트로 가리키고, 샘플링도 서버에 박으려면:
 
 ```json
-"env": {
-  "AI_RELAY_API_KEY": "sk-...",
-  "AI_RELAY_BASE_URL": "https://my-azure.openai.azure.com/v1"
+{
+  "mcpServers": {
+    "ai-relay": {
+      "command": "npx",
+      "args": ["-y", "ai-relay", "openai"],
+      "env": {
+        "AI_RELAY_API_KEY": "sk-...",
+        "AI_RELAY_MODEL": "gpt-4o-mini",
+        "AI_RELAY_BASE_URL": "https://my-azure.openai.azure.com/v1",
+        "AI_RELAY_TEMPERATURE": "0.7",
+        "AI_RELAY_MAX_TOKENS": "4096"
+      }
+    }
+  }
 }
 ```
 
-`--api-key`, `--base-url`, `--max-tokens`, `--timeout`, `--env <path>` 플래그도 받습니다. 전체 목록은 `npx ai-relay --help`.
+bin은 `-m`/`--model`, `--api-key`, `--base-url`, `--max-tokens`, `--temperature`, `--top-p`, `--stop`, `--timeout`, `--env <path>` 플래그도 받습니다. flag와 env 어느 쪽이든 OK이지만 `AI_RELAY_MODEL` (또는 `-m`)은 필수입니다. 전체 목록은 `npx ai-relay --help`.
 
 ---
 
@@ -123,9 +151,12 @@ SDK API 레퍼런스: [`packages/ai-relay/README.md`](./packages/ai-relay/README
 | 변수 | 필수 | 기본값 |
 |---|---|---|
 | `AI_RELAY_API_KEY` | 예 | — |
+| `AI_RELAY_MODEL` | 예 (HTTP 앱; stdio bin은 `-m` 또는 이 env 필요) | — |
 | `AI_RELAY_BASE_URL` | 아니오 | OpenAI 기본 |
-| `AI_RELAY_MODEL` | 아니오 (CLI 전용) | — |
-| `AI_RELAY_MAX_OUTPUT_TOKENS` | 아니오 | 4096 |
+| `AI_RELAY_TEMPERATURE` | 아니오 | 업스트림 기본 |
+| `AI_RELAY_MAX_TOKENS` | 아니오 | 업스트림 기본 |
+| `AI_RELAY_TOP_P` | 아니오 | 업스트림 기본 |
+| `AI_RELAY_STOP` | 아니오 (단일 값 또는 콤마 분리 리스트) | — |
 | `AI_RELAY_REQUEST_TIMEOUT_MS` | 아니오 | 60000 |
 | `AI_RELAY_AUTH_TOKEN` | 예 (Docker / HTTP 앱) | — |
 | `AI_RELAY_PORT` | 아니오 (HTTP 앱) | 8787 |

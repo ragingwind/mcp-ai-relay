@@ -95,16 +95,23 @@ The non-streaming path uses the SDK default retry (2 attempts). **The streaming 
 
 Invokes OpenAI Chat Completions once and returns the accumulated text.
 
-**Input schema (Zod)**
+**Input schema (Zod, `.strict()`)**
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `model` | `string` | ✅ | Forwarded as-is to the upstream Chat Completions endpoint |
 | `messages` | `Array<{role: "system"|"user"|"assistant", content: string}>` | ✅ | OpenAI Chat shape |
-| `temperature` | `number` (0~2) | ❌ | OpenAI default applies |
-| `max_tokens` | `number` (1~`AI_RELAY_MAX_OUTPUT_TOKENS`, default 4096) | ❌ | Clamped to the server ceiling |
-| `top_p` | `number` (0~1) | ❌ | |
-| `stop` | `string | string[]` | ❌ | |
+
+The caller-facing surface is intentionally minimal — `model` and all sampling parameters (`temperature`, `max_tokens`, `top_p`, `stop`) are configured per server instance and forwarded automatically on every call. Callers that include any of these fields in `tools/call` arguments will have them silently stripped by the MCP SDK validator before the handler runs.
+
+**Server-side configuration (`OpenAIChatConfig` / `AI_RELAY_*` env)**
+
+| Field | Env | Required | Notes |
+|---|---|---|---|
+| `model` | `AI_RELAY_MODEL` | ✅ | Forwarded as-is to the upstream Chat Completions endpoint |
+| `temperature` | `AI_RELAY_TEMPERATURE` | ❌ | 0..2; forwarded when set |
+| `max_tokens` | `AI_RELAY_MAX_TOKENS` | ❌ | Positive integer; forwarded as-is — no clamp applied |
+| `top_p` | `AI_RELAY_TOP_P` | ❌ | 0..1; forwarded when set |
+| `stop` | `AI_RELAY_STOP` | ❌ | Single string or comma-separated list |
 
 **Output schema**
 
@@ -259,9 +266,13 @@ project that consumes `ai-relay` from npm (see `examples/vercel/README.md`).
 | Key | Required | Secret | Description |
 |---|---|---|---|
 | `AI_RELAY_API_KEY` | ✅ | Sensitive | Upstream API key. Recommend separate keys for Production/Preview. |
-| `AI_RELAY_BASE_URL` | ❌ | Plain | Override the upstream base URL. Default: SDK built-in. Use to point at Azure OpenAI, a self-hosted vLLM/Ollama gateway, or a local mock. |
 | `AI_RELAY_AUTH_TOKEN` | ✅ | Sensitive | Bearer token sent by the MCP host. 32+ random bytes. |
-| `AI_RELAY_MAX_OUTPUT_TOKENS` | ❌ | Plain | Integer. Default `4096`. Overrides caller's value. |
+| `AI_RELAY_MODEL` | ✅ | Plain | Upstream model id forwarded on every `tools/call`. The caller-facing tool input no longer accepts `model`. |
+| `AI_RELAY_BASE_URL` | ❌ | Plain | Override the upstream base URL. Default: SDK built-in. Use to point at Azure OpenAI, a self-hosted vLLM/Ollama gateway, or a local mock. |
+| `AI_RELAY_TEMPERATURE` | ❌ | Plain | Float 0..2. Forwarded as `temperature` to every upstream call when set. |
+| `AI_RELAY_MAX_TOKENS` | ❌ | Plain | Positive integer. Forwarded as `max_tokens` to every upstream call. No server-side clamp is applied — set conservatively. |
+| `AI_RELAY_TOP_P` | ❌ | Plain | Float 0..1. Forwarded as `top_p` to every upstream call when set. |
+| `AI_RELAY_STOP` | ❌ | Plain | Single value or comma-separated list (`END` or `END,STOP`). Forwarded as `stop` to every upstream call. |
 | `AI_RELAY_REQUEST_TIMEOUT_MS` | ❌ | Plain | Integer. Default `60000`. Upstream call timeout. |
 | `AI_RELAY_PORT` | ❌ | Plain | Integer 1..65535. Default `8787`. Bind port for the Hono server. |
 

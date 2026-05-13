@@ -30,10 +30,16 @@ Intended to be spawned by an MCP host (Claude Desktop, Claude Code, Cursor, …)
 Providers:
   ${Object.keys(registry).join(", ")}
 
+Required:
+  -m, --model <id>        Upstream model id (or set AI_RELAY_MODEL)
+
 Flags:
       --api-key <key>     Upstream API key (overrides AI_RELAY_API_KEY)
       --base-url <url>    Upstream base URL (overrides AI_RELAY_BASE_URL)
-      --max-tokens <n>    Ceiling for max_tokens
+      --max-tokens <n>    Max tokens forwarded upstream (or AI_RELAY_MAX_TOKENS)
+      --temperature <f>   Sampling temperature 0..2 (or AI_RELAY_TEMPERATURE)
+      --top-p <f>         Nucleus sampling 0..1 (or AI_RELAY_TOP_P)
+      --stop <csv>        Stop sequence(s), comma-separated (or AI_RELAY_STOP)
       --timeout <ms>      Upstream request timeout in ms
       --env <path>        Load AI_RELAY_* keys from a dotenv file
   -v, --verbose           Trace stages to stderr (also: AI_RELAY_VERBOSE=1)
@@ -45,7 +51,7 @@ Example claude_desktop_config.json:
     "mcpServers": {
       "ai-relay": {
         "command": "npx",
-        "args": ["-y", "ai-relay", "openai"],
+        "args": ["-y", "ai-relay", "openai", "-m", "gpt-4o-mini"],
         "env": { "AI_RELAY_API_KEY": "sk-..." }
       }
     }
@@ -137,13 +143,21 @@ export async function main(argv: readonly string[], io: AiRelayIO): Promise<numb
   const args: Record<string, unknown> = { provider: "openai" };
   if (parsed.flags["api-key"] !== undefined) args.apiKey = parsed.flags["api-key"];
   if (parsed.flags["base-url"] !== undefined) args.baseURL = parsed.flags["base-url"];
-  if (parsed.flags["max-tokens"] !== undefined) args.maxOutputTokens = parsed.flags["max-tokens"];
+  if (parsed.flags.model !== undefined) args.model = parsed.flags.model;
+  if (parsed.flags.temperature !== undefined) args.temperature = parsed.flags.temperature;
+  if (parsed.flags["max-tokens"] !== undefined) args.max_tokens = parsed.flags["max-tokens"];
+  if (parsed.flags["top-p"] !== undefined) args.top_p = parsed.flags["top-p"];
+  if (parsed.flags.stop !== undefined) args.stop = parsed.flags.stop;
   if (parsed.flags.timeout !== undefined) args.requestTimeoutMs = parsed.flags.timeout;
 
   let providerConfig: {
     apiKey: string;
     baseURL?: string | undefined;
-    maxOutputTokens?: number | undefined;
+    model: string;
+    temperature?: number | undefined;
+    max_tokens?: number | undefined;
+    top_p?: number | undefined;
+    stop?: string | string[] | undefined;
     requestTimeoutMs?: number | undefined;
   };
   try {
@@ -159,7 +173,11 @@ export async function main(argv: readonly string[], io: AiRelayIO): Promise<numb
   verbose.log("loaded-config", {
     apiKey: redactSecret(providerConfig.apiKey),
     baseURL: providerConfig.baseURL ?? "(default)",
-    maxOutputTokens: providerConfig.maxOutputTokens ?? "(default)",
+    model: providerConfig.model,
+    temperature: providerConfig.temperature ?? "(unset)",
+    max_tokens: providerConfig.max_tokens ?? "(unset)",
+    top_p: providerConfig.top_p ?? "(unset)",
+    stop: providerConfig.stop ?? "(unset)",
     requestTimeoutMs: providerConfig.requestTimeoutMs ?? "(default)",
   });
 
@@ -171,9 +189,13 @@ export async function main(argv: readonly string[], io: AiRelayIO): Promise<numb
     config: {
       apiKey: providerConfig.apiKey,
       ...(providerConfig.baseURL !== undefined ? { baseURL: providerConfig.baseURL } : {}),
-      ...(providerConfig.maxOutputTokens !== undefined
-        ? { maxOutputTokensCeiling: providerConfig.maxOutputTokens }
+      model: providerConfig.model,
+      ...(providerConfig.temperature !== undefined
+        ? { temperature: providerConfig.temperature }
         : {}),
+      ...(providerConfig.max_tokens !== undefined ? { max_tokens: providerConfig.max_tokens } : {}),
+      ...(providerConfig.top_p !== undefined ? { top_p: providerConfig.top_p } : {}),
+      ...(providerConfig.stop !== undefined ? { stop: providerConfig.stop } : {}),
       ...(providerConfig.requestTimeoutMs !== undefined
         ? { requestTimeoutMs: providerConfig.requestTimeoutMs }
         : {}),

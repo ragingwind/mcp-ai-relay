@@ -40,7 +40,11 @@ const handler = createMcpHandler(
     registerOpenAIChat(server, {
       apiKey: env.AI_RELAY_API_KEY,
       ...(env.AI_RELAY_BASE_URL ? { baseURL: env.AI_RELAY_BASE_URL } : {}),
-      maxOutputTokensCeiling: env.AI_RELAY_MAX_OUTPUT_TOKENS,
+      model: env.AI_RELAY_MODEL,
+      ...(env.AI_RELAY_TEMPERATURE !== undefined ? { temperature: env.AI_RELAY_TEMPERATURE } : {}),
+      ...(env.AI_RELAY_MAX_TOKENS !== undefined ? { max_tokens: env.AI_RELAY_MAX_TOKENS } : {}),
+      ...(env.AI_RELAY_TOP_P !== undefined ? { top_p: env.AI_RELAY_TOP_P } : {}),
+      ...(env.AI_RELAY_STOP !== undefined ? { stop: env.AI_RELAY_STOP } : {}),
       requestTimeoutMs: env.AI_RELAY_REQUEST_TIMEOUT_MS,
       ...(logger.enabled ? { logger } : {}),
     });

@@ -58,20 +58,23 @@ describe("ALS scope isolation across concurrent handlers", () => {
     const a = makeOpenAIChatHandler({
       apiKey: keyA,
       baseURL: "https://a.example.com/v1",
+      model: VALID_MODEL,
     });
     const b = makeOpenAIChatHandler({
       apiKey: keyB,
       baseURL: "https://b.example.com/v1",
+      model: VALID_MODEL,
     });
     const c = makeOpenAIChatHandler({
       apiKey: keyC,
       baseURL: "https://c.example.com/v1",
+      model: VALID_MODEL,
     });
 
     const [ra, rb, rc] = await Promise.all([
-      a.handler({ model: VALID_MODEL, messages: VALID_MESSAGES }),
-      b.handler({ model: VALID_MODEL, messages: VALID_MESSAGES }),
-      c.handler({ model: VALID_MODEL, messages: VALID_MESSAGES }),
+      a.handler({ messages: VALID_MESSAGES }),
+      b.handler({ messages: VALID_MESSAGES }),
+      c.handler({ messages: VALID_MESSAGES }),
     ]);
 
     expect(ra.isError).toBe(true);

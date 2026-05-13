@@ -11,3 +11,4 @@ delete process.env.OPENAI_BASE_URL;
 // overwritten.
 process.env.AI_RELAY_API_KEY ??= "test-ai-relay-api-key";
 process.env.AI_RELAY_AUTH_TOKEN ??= "x".repeat(32);
+process.env.AI_RELAY_MODEL ??= "gpt-4o-mini";

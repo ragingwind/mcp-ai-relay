@@ -14,6 +14,8 @@ npm install ai-relay @modelcontextprotocol/sdk openai
 
 ## Quick reference
 
+> **0.10.0 (breaking):** the caller-facing MCP tool `inputSchema` accepts only `{ messages }`. The upstream model and sampling parameters live on the server config (`OpenAIChatConfig` for SDK embeds, env vars for the HTTP server, flags for `ai-relay` / `ai-relay-cli`). `OpenAIChatConfig.model` is now required and the SDK throws at boot when missing. See [`CHANGELOG`](./CHANGELOG.md#0100--2026-05-13).
+
 **1. One-shot CLI** — `ai-relay-cli <provider> <tool> [flags] [input]`:
 
 ```bash
@@ -27,7 +29,7 @@ AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions -m gpt-4o-mini 
   "mcpServers": {
     "ai-relay": {
       "command": "npx",
-      "args": ["-y", "ai-relay", "openai"],
+      "args": ["-y", "ai-relay", "openai", "-m", "gpt-4o-mini"],
       "env": { "AI_RELAY_API_KEY": "sk-..." }
     }
   }
@@ -42,18 +44,26 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { registerOpenAIChat } from "ai-relay/openai";
 
 const server = new McpServer({ name: "my-relay", version: "0.1.0" });
-registerOpenAIChat(server, { apiKey: process.env.AI_RELAY_API_KEY! });
+registerOpenAIChat(server, {
+  apiKey: process.env.AI_RELAY_API_KEY!,
+  model: "gpt-4o-mini",
+});
 await server.connect(new StdioServerTransport());
 ```
 
-**4. Multi-upstream** — one server, multiple `registerOpenAIChat` calls with distinct `name` values:
+**4. Multi-upstream** — one server, multiple `registerOpenAIChat` calls with distinct `name` values (each call captures its own `model`):
 
 ```ts
-registerOpenAIChat(server, { name: "chat-completions", apiKey: process.env.AI_RELAY_API_KEY! });
+registerOpenAIChat(server, {
+  name: "chat-completions",
+  apiKey: process.env.AI_RELAY_API_KEY!,
+  model: "gpt-4o-mini",
+});
 registerOpenAIChat(server, {
   name: "azure-chat-completions",
   apiKey: process.env.AZURE_OPENAI_KEY!,
   baseURL: "https://<resource>.openai.azure.com/openai/deployments/<deployment>",
+  model: "gpt-4o",
 });
 ```
 
@@ -66,20 +76,24 @@ Prints a single tool result as JSON on stdout, exits. Input is a positional argu
 ```bash
 ai-relay-cli openai chat-completions -m gpt-4o-mini "ping"
 ai-relay-cli openai chat-completions --model gpt-4o-mini -s "be terse" "explain TLS"
-ai-relay-cli openai chat-completions '{"model":"gpt-4o","messages":[{"role":"user","content":"ping"}]}'
+ai-relay-cli openai chat-completions -m gpt-4o --temperature 0.2 \
+  '{"messages":[{"role":"user","content":"ping"}]}'
 ai-relay-cli openai chat-completions -m gpt-4o-mini --base-url https://my-azure.openai.azure.com/v1 "ping"
 echo '{"messages":[…]}' | ai-relay-cli openai chat-completions -m gpt-4o-mini
 ```
 
-**Model resolution** (first match wins): JSON input `model` field → `-m`/`--model` flag → `AI_RELAY_MODEL` env.
+**Model resolution** (first match wins): `-m`/`--model` flag → `AI_RELAY_MODEL` env. JSON input no longer accepts a `model` field — the caller schema is `{ messages }` only and `.strict()` rejects extra keys.
 
 | Flag | Purpose |
 |---|---|
-| `-m, --model <id>` | Model id (e.g. `gpt-4o-mini`) |
+| `-m, --model <id>` | Model id (e.g. `gpt-4o-mini`) — required (flag or `AI_RELAY_MODEL`) |
 | `-s, --system <text>` | System message prepended to plain-text input |
 | `--api-key <key>` | Override `AI_RELAY_API_KEY` |
 | `--base-url <url>` | Override `AI_RELAY_BASE_URL` |
-| `--max-tokens <n>` | Cap on `max_tokens` |
+| `--max-tokens <n>` | Forwarded upstream as `max_tokens` (or `AI_RELAY_MAX_TOKENS`) |
+| `--temperature <f>` | Sampling temperature 0..2 (or `AI_RELAY_TEMPERATURE`) |
+| `--top-p <f>` | Nucleus sampling 0..1 (or `AI_RELAY_TOP_P`) |
+| `--stop <csv>` | Stop sequence(s), comma-separated (or `AI_RELAY_STOP`) |
 | `--timeout <ms>` | Per-request timeout |
 | `--env <path>` | Load `AI_RELAY_*` from a dotenv file |
 | `-v, --verbose` | Trace stages to stderr (also: `AI_RELAY_VERBOSE=1`) |
@@ -99,14 +113,14 @@ Project-local `.mcp.json` with an absolute bin path:
   "mcpServers": {
     "ai-relay": {
       "command": "node",
-      "args": ["./node_modules/ai-relay/dist/bin/ai-relay.js", "openai"],
+      "args": ["./node_modules/ai-relay/dist/bin/ai-relay.js", "openai", "-m", "gpt-4o-mini"],
       "env": { "AI_RELAY_API_KEY": "sk-..." }
     }
   }
 }
 ```
 
-`--api-key`, `--base-url`, `--max-tokens`, `--timeout`, `--env` are accepted as flags too — pass them in `args` after the provider name.
+`-m`/`--model` (or `AI_RELAY_MODEL` in `env`) is required. `--api-key`, `--base-url`, `--max-tokens`, `--temperature`, `--top-p`, `--stop`, `--timeout`, `--env` are accepted as flags too — pass them in `args` after the provider name.
 
 For HTTP/SSE MCP transport instead of stdio, deploy the reference Hono app in this repo's [`app/`](https://github.com/ragingwind/mcp-ai-relay/tree/main/app) — see the project root README.
 
@@ -132,8 +146,12 @@ const handler = createMcpHandler(
   (server) => {
     registerOpenAIChat(server, {
       apiKey: provider.apiKey,
+      model: provider.model,
       ...(provider.baseURL ? { baseURL: provider.baseURL } : {}),
-      ...(provider.maxOutputTokens ? { maxOutputTokensCeiling: provider.maxOutputTokens } : {}),
+      ...(provider.temperature !== undefined ? { temperature: provider.temperature } : {}),
+      ...(provider.max_tokens !== undefined ? { max_tokens: provider.max_tokens } : {}),
+      ...(provider.top_p !== undefined ? { top_p: provider.top_p } : {}),
+      ...(provider.stop !== undefined ? { stop: provider.stop } : {}),
       ...(provider.requestTimeoutMs ? { requestTimeoutMs: provider.requestTimeoutMs } : {}),
     });
   },
@@ -168,7 +186,10 @@ export class OpenAIRelay extends McpAgent {
   server = new McpServer({ name: "openai-relay", version: "0.1.0" });
 
   async init() {
-    registerOpenAIChat(this.server, { apiKey: this.env.AI_RELAY_API_KEY });
+    registerOpenAIChat(this.server, {
+      apiKey: this.env.AI_RELAY_API_KEY,
+      model: this.env.AI_RELAY_MODEL,
+    });
   }
 }
 ```
@@ -187,23 +208,26 @@ const server = new McpServer({ name: "multi-relay", version: "0.1.0" });
 registerOpenAIChat(server, {
   name: "chat-completions",
   apiKey: process.env.AI_RELAY_API_KEY!,
+  model: "gpt-4o-mini",
 });
 
 registerOpenAIChat(server, {
   name: "azure-chat-completions",
   apiKey: process.env.AZURE_OPENAI_KEY!,
   baseURL: "https://<resource>.openai.azure.com/openai/deployments/<deployment>",
+  model: "gpt-4o",
 });
 
 registerOpenAIChat(server, {
   name: "local-llm",
   apiKey: "not-needed",
   baseURL: "http://localhost:11434/v1",
-  maxOutputTokensCeiling: 8192,
+  model: "llama3",
+  max_tokens: 8192,
 });
 ```
 
-`tools/list` exposes `chat-completions`, `azure-chat-completions`, and `local-llm`.
+`tools/list` exposes `chat-completions`, `azure-chat-completions`, and `local-llm`. Each tool is invoked with `{ messages }` only; the upstream model and sampling parameters captured at `registerOpenAIChat` time are authoritative.
 
 ---
 
@@ -219,7 +243,11 @@ interface OpenAIChatConfig {
   description?: string;
   apiKey: string;
   baseURL?: string;
-  maxOutputTokensCeiling?: number;  // default 4096
+  model: string;                    // required — caller-facing input no longer accepts model
+  temperature?: number;             // forwarded as-is to every upstream call
+  max_tokens?: number;              // forwarded as-is; no server-side clamp
+  top_p?: number;
+  stop?: string | string[];
   requestTimeoutMs?: number;        // default 60000
   openaiClient?: OpenAI;            // inject your own client
   requestScope?: RequestScope;

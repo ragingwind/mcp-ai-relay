@@ -28,9 +28,9 @@ $ pnpm test
 For non-trivial code changes, run the Inspector procedure and tick each scenario
 that passed. For docs-only or CI-config-only PRs, mark **N/A — non-runtime change**.
 
-- [ ] C1 — `tools/list` exposes a single `chat-completions` tool with input schema
-- [ ] C2 — `chat-completions` happy path returns text + usage metadata
-- [ ] C4 — `max_tokens` clamp succeeds without error
+- [ ] C1 — `tools/list` exposes a single `chat-completions` tool whose input schema is `{ messages }` only (model / sampling fields are server-side, not caller-supplied)
+- [ ] C2 — `chat-completions` happy path returns text + usage metadata + `structuredContent.model` matches the server's `AI_RELAY_MODEL`
+- [ ] C4 — Server-side sampling override (`AI_RELAY_MAX_TOKENS` / `AI_RELAY_TEMPERATURE`) is honored on every call
 - [ ] C5 — Wrong bearer returns 401 + `WWW-Authenticate: Bearer`
 - [ ] C6 — Cancellation aborts the upstream call
 

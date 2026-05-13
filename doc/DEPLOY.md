@@ -143,8 +143,10 @@ into the container's process env. Same env contract as raw `docker run`
 docker run --rm -p 8787:8787 \
   -e AI_RELAY_API_KEY=sk-... \
   -e AI_RELAY_AUTH_TOKEN=$(openssl rand -hex 32) \
+  -e AI_RELAY_MODEL=gpt-4o-mini \
   -e AI_RELAY_BASE_URL=https://your-gateway.example.com/v1 \
-  -e AI_RELAY_MAX_OUTPUT_TOKENS=4096 \
+  -e AI_RELAY_TEMPERATURE=0.7 \
+  -e AI_RELAY_MAX_TOKENS=4096 \
   -e AI_RELAY_REQUEST_TIMEOUT_MS=60000 \
   ghcr.io/ragingwind/ai-relay:latest
 ```
@@ -155,10 +157,17 @@ Or with `--env-file`:
 docker run --rm -p 8787:8787 --env-file .env.production ghcr.io/ragingwind/ai-relay:latest
 ```
 
-`AI_RELAY_API_KEY` and `AI_RELAY_AUTH_TOKEN` are required. The remaining
-keys (including `AI_RELAY_PORT`) are optional — see
+`AI_RELAY_API_KEY`, `AI_RELAY_AUTH_TOKEN`, and `AI_RELAY_MODEL` are required.
+The remaining keys (including `AI_RELAY_PORT`, `AI_RELAY_TEMPERATURE`,
+`AI_RELAY_TOP_P`, `AI_RELAY_STOP`) are optional — see
 [`ARCHITECTURE.md` §7](./ARCHITECTURE.md#7-environment-variables) for
 defaults.
+
+> **0.10.0 note:** the caller-facing MCP tool input no longer accepts
+> `model` / sampling parameters. Configure them per server instance via
+> the `AI_RELAY_*` env vars above. `AI_RELAY_MAX_OUTPUT_TOKENS` (with its
+> server-side clamp) was removed; `AI_RELAY_MAX_TOKENS` is now forwarded
+> as-is on every upstream call.
 
 ### 3.4 Verification checklist
 

@@ -3,13 +3,15 @@
 // `pnpm verify` here.
 //
 // Sends JSON-RPC directly to /api/mcp, covering C1, C2, C5 from
-// doc/QA-MCP-INSPECTOR.md. The MCP Inspector UI is bypassed — its only role in
-// the manual procedure is to construct these same requests for a human.
+// doc/QA-MCP-INSPECTOR.md. The caller-facing MCP tool accepts ONLY
+// { messages } per 0.10.0 — model / sampling parameters live on the server
+// (env or flags). This script asserts the server is correctly configured
+// by reading structuredContent.model back from the C2 response.
 //
 // Skipped:
-//   C4 (max_tokens clamp) — server-side, invisible to client; covered by
-//      tests/unit/completion-chat.test.ts.
-//   C6 (cancellation)     — relies on visual inspection of the OpenAI usage
+//   C4 (server-side sampling override) — requires restarting the server with
+//      different env values; stays manual per QA-MCP-INSPECTOR.md.
+//   C6 (cancellation) — relies on visual inspection of the OpenAI usage
 //      page; stays manual per QA-MCP-INSPECTOR.md.
 
 const TOKEN = process.env.AI_RELAY_AUTH_TOKEN;
@@ -26,7 +28,6 @@ const URL_BASE =
   process.env.MCP_URL ||
   "http://localhost:8787/api/mcp";
 
-const MODEL = process.env.VERIFY_MODEL || "gpt-4o-mini";
 const ACCEPT_BOTH = "application/json, text/event-stream";
 
 async function readJsonRpc(res) {
@@ -73,7 +74,7 @@ try {
 }
 
 console.log(`endpoint:  ${URL_BASE}`);
-console.log(`model:     ${MODEL}`);
+console.log("model:     (server-configured; read from C2 response)");
 console.log("");
 
 // ---- C1: tools/list ----------------------------------------------------
@@ -104,7 +105,6 @@ try {
     params: {
       name: "chat-completions",
       arguments: {
-        model: MODEL,
         messages: [{ role: "user", content: "ping" }],
       },
     },
@@ -114,14 +114,17 @@ try {
   const result = env.result;
   const text = result?.content?.[0]?.text ?? "";
   const usage = result?.structuredContent?.usage;
+  const model = result?.structuredContent?.model;
   const ok =
     result?.isError === false &&
     typeof text === "string" &&
     text.length > 0 &&
     typeof usage?.total_tokens === "number" &&
-    usage.total_tokens > 0;
+    usage.total_tokens > 0 &&
+    typeof model === "string" &&
+    model.length > 0;
   const note = usage
-    ? `prompt=${usage.prompt_tokens} completion=${usage.completion_tokens} total=${usage.total_tokens}`
+    ? `model=${model ?? "(missing)"} prompt=${usage.prompt_tokens} completion=${usage.completion_tokens} total=${usage.total_tokens}`
     : "no usage";
   record("C2", "chat-completions happy path", ok, note);
 } catch (err) {
@@ -151,12 +154,12 @@ console.log("");
 console.log("--- evidence record (paste into PR) ---");
 console.log(`MCP smoke verification — ${new Date().toISOString()}`);
 console.log(`Endpoint:  ${URL_BASE}`);
-console.log(`Model:     ${MODEL}`);
+console.log("Model:     (server-configured via AI_RELAY_MODEL)");
 console.log("");
 for (const r of results) {
   console.log(`${r.id}  ${r.pass ? "PASS" : "FAIL"}  ${r.label}${r.note ? " — " + r.note : ""}`);
 }
-console.log("C4  N/A   server-side clamp; covered by unit tests");
+console.log("C4  N/A   server-side sampling override; manual only");
 console.log("C6  N/A   cancellation; manual only");
 console.log("--- end ---");
 

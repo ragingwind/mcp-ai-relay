@@ -6,14 +6,18 @@
 //   --url=<URL>      MCP_URL              http://localhost:8787/api/mcp
 //   --token=<TOK>    AI_RELAY_AUTH_TOKEN  (required)
 //   --tool=<NAME>    MCP_TOOL             chat-completions
-//   --model=<NAME>   MCP_MODEL            gpt-4o-mini
 //   --message=<TXT>  MCP_MESSAGE          ping
 //   --method=<RPC>                        tools/call   (also: tools/list)
+//
+// 0.10.0: the caller-facing MCP tool input now accepts only { messages }.
+// Model / sampling parameters live on the server (AI_RELAY_MODEL etc. on the
+// Hono server, `-m`/`--temperature`/… flags on the stdio bin). This wrapper
+// therefore no longer ships a --model flag or MCP_MODEL env.
 //
 // Examples:
 //   pnpm inspect                                  # tools/call → chat-completions
 //   pnpm inspect --method=tools/list
-//   pnpm inspect --url=http://localhost:3001/api/mcp --model=gpt-4o
+//   pnpm inspect --url=http://localhost:8788/api/mcp
 //   pnpm inspect --tool=other_tool --message="..."
 //   MCP_URL=https://relay.example.com/api/mcp AI_RELAY_AUTH_TOKEN=... pnpm inspect
 
@@ -33,9 +37,15 @@ const URL_BASE =
   flags.url ?? process.env.MCP_URL ?? "http://localhost:8787/api/mcp";
 const TOKEN = flags.token ?? process.env.AI_RELAY_AUTH_TOKEN;
 const TOOL = flags.tool ?? process.env.MCP_TOOL ?? "chat-completions";
-const MODEL = flags.model ?? process.env.MCP_MODEL ?? "gpt-4o-mini";
 const MESSAGE = flags.message ?? process.env.MCP_MESSAGE ?? "ping";
 const METHOD = flags.method ?? "tools/call";
+
+if ("model" in flags) {
+  console.error(
+    "[mcp-inspect] --model is no longer accepted. Set AI_RELAY_MODEL on the server (env or stdio --model flag) — the caller-facing MCP input is { messages } only since 0.10.0.",
+  );
+  process.exit(2);
+}
 
 if (!TOKEN) {
   console.error(
@@ -70,15 +80,12 @@ if (METHOD === "tools/call") {
     "--tool-name",
     TOOL,
     "--tool-arg",
-    `model=${MODEL}`,
-    "--tool-arg",
     `messages=${JSON.stringify([{ role: "user", content: MESSAGE }])}`,
   );
 }
 
 const tokenPreview = `${TOKEN.slice(0, 4)}…${TOKEN.slice(-4)}`;
-const callDetail =
-  METHOD === "tools/call" ? `  tool=${TOOL}  model=${MODEL}` : "";
+const callDetail = METHOD === "tools/call" ? `  tool=${TOOL}` : "";
 console.error(
   `[mcp-inspect] ${METHOD} → ${URL_BASE}${callDetail}  token=${tokenPreview}`,
 );

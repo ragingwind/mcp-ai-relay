@@ -93,7 +93,7 @@ describe("A: Positive — Happy Path Scenarios", () => {
     });
   });
 
-  it("H-7: input JSON 'model' wins over -m flag", async () => {
+  it("H-7: input JSON 'model' is rejected by the strict caller schema", async () => {
     mock.setResponse(() => ({ status: 200, body: defaultSseBody("ok") }));
     const r = await runCli({
       args: [
@@ -105,8 +105,25 @@ describe("A: Positive — Happy Path Scenarios", () => {
       ],
       env: happyEnv(),
     });
+    expect(r.status).toBe(1);
+    expect(mock.requests).toHaveLength(0);
+    expect(r.stderr).toMatch(/Unrecognized|model|strict/i);
+  });
+
+  it("H-8: -m flag resolves the model when input JSON only carries messages", async () => {
+    mock.setResponse(() => ({ status: 200, body: defaultSseBody("ok") }));
+    const r = await runCli({
+      args: [
+        "openai",
+        "chat-completions",
+        "-m",
+        "from-flag",
+        '{"messages":[{"role":"user","content":"hi"}]}',
+      ],
+      env: happyEnv(),
+    });
     expect(r.status).toBe(0);
-    expect(mock.requests[0]?.body).toMatchObject({ model: "from-json" });
+    expect(mock.requests[0]?.body).toMatchObject({ model: "from-flag" });
   });
 });
 
@@ -201,13 +218,13 @@ describe("C: Negative — Error / Exit Codes", () => {
     expect(r.stderr).toMatch(/ZodError|Invalid input|messages/i);
   });
 
-  it("E-8: no model from any source on plain text → exit 2 + 'no model resolved'", async () => {
+  it("E-8: no model from any source on plain text → exit 2 + schema error mentioning model", async () => {
     const r = await runCli({
       args: ["openai", "chat-completions", "hi"],
       env: happyEnv(),
     });
     expect(r.status).toBe(2);
-    expect(r.stderr).toContain("no model resolved");
+    expect(r.stderr).toMatch(/model/i);
   });
 });
 

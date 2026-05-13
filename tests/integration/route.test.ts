@@ -226,7 +226,7 @@ describe("route /api/mcp — tools/list", () => {
   // The SDK serializes Zod shapes as JSON Schema. We only assert the shape's
   // top-level structure (object, properties.model, required) — not the full
   // serialization, which is an SDK implementation detail.
-  it("P2: tools/list response includes the input schema", async () => {
+  it("P2: tools/list response exposes only `messages` in the input schema", async () => {
     const res = await app.fetch(makeListRequest());
     const envelope = await readJsonRpcResponse(res);
     const tools = (envelope.result?.tools ?? []) as Array<{
@@ -237,8 +237,12 @@ describe("route /api/mcp — tools/list", () => {
     expect(schema).toBeDefined();
     expect(schema?.type).toBe("object");
     expect(schema?.properties).toBeDefined();
-    expect(schema?.properties).toHaveProperty("model");
     expect(schema?.properties).toHaveProperty("messages");
+    expect(schema?.properties).not.toHaveProperty("model");
+    expect(schema?.properties).not.toHaveProperty("temperature");
+    expect(schema?.properties).not.toHaveProperty("max_tokens");
+    expect(schema?.properties).not.toHaveProperty("top_p");
+    expect(schema?.properties).not.toHaveProperty("stop");
   });
 });
 
@@ -266,7 +270,6 @@ describe("route /api/mcp — tools/call (happy + clamp)", () => {
 
     const res = await app.fetch(
       makeCallRequest({
-        model: "gpt-4o-mini",
         messages: [{ role: "user", content: "say hi" }],
       }),
     );
@@ -282,14 +285,40 @@ describe("route /api/mcp — tools/call (happy + clamp)", () => {
     });
   });
 
-  // B8: max_tokens above ceiling → silently clamped, response succeeds.
-  // We assert the upstream OpenAI request body shows the clamped value.
-  it("N1: tools/call silently clamps max_tokens above ceiling", async () => {
-    let observedMaxTokens: number | undefined;
+  // The caller-facing schema is `messages`-only. The server-configured model
+  // (from `AI_RELAY_MODEL`) is what reaches the upstream — callers cannot
+  // override it per-call.
+  it("P2: server forwards AI_RELAY_MODEL to the upstream OpenAI request", async () => {
+    let observedModel: string | undefined;
     server.use(
       http.post(ENDPOINT, async ({ request }) => {
-        const body = (await request.json()) as { max_tokens?: number };
-        observedMaxTokens = body.max_tokens;
+        const body = (await request.json()) as { model?: string };
+        observedModel = body.model;
+        return sseResponse([
+          JSON.stringify({
+            choices: [{ delta: { content: "ok" }, finish_reason: "stop" }],
+          }),
+        ]);
+      }),
+    );
+    const res = await app.fetch(makeCallRequest({ messages: [{ role: "user", content: "hi" }] }));
+    expect(res.status).toBe(200);
+    const envelope = await readJsonRpcResponse(res);
+    const result = asCallToolResult(envelope);
+    expect(result.isError).toBe(false);
+    expect(observedModel).toBe(env.AI_RELAY_MODEL);
+  });
+
+  // The caller-facing schema does NOT declare `model`. The MCP/SDK boundary
+  // either rejects the extra field as a validation error OR strips it before
+  // the handler runs. Either way, the caller-supplied value MUST NOT reach
+  // upstream as the model id.
+  it("D1: caller-supplied `model` cannot override the server-configured model", async () => {
+    let observedModel: string | undefined;
+    server.use(
+      http.post(ENDPOINT, async ({ request }) => {
+        const body = (await request.json()) as { model?: string };
+        observedModel = body.model;
         return sseResponse([
           JSON.stringify({
             choices: [{ delta: { content: "ok" }, finish_reason: "stop" }],
@@ -299,16 +328,17 @@ describe("route /api/mcp — tools/call (happy + clamp)", () => {
     );
     const res = await app.fetch(
       makeCallRequest({
-        model: "gpt-4o-mini",
+        model: "caller-overrides-not-allowed",
         messages: [{ role: "user", content: "hi" }],
-        max_tokens: 999_999,
       }),
     );
     expect(res.status).toBe(200);
-    const envelope = await readJsonRpcResponse(res);
-    const result = asCallToolResult(envelope);
-    expect(result.isError).toBe(false);
-    expect(observedMaxTokens).toBe(env.AI_RELAY_MAX_OUTPUT_TOKENS);
+    // Whether the SDK rejects (no upstream hit) or strips and forwards (upstream
+    // sees server-configured model), the caller value never reaches upstream.
+    expect(observedModel).not.toBe("caller-overrides-not-allowed");
+    if (observedModel !== undefined) {
+      expect(observedModel).toBe(env.AI_RELAY_MODEL);
+    }
   });
 });
 
@@ -332,7 +362,6 @@ describe("route /api/mcp — tools/call (streaming + errors + cancel)", () => {
     );
     const res = await app.fetch(
       makeCallRequest({
-        model: "gpt-4o-mini",
         messages: [{ role: "user", content: "hi" }],
       }),
     );
@@ -356,7 +385,6 @@ describe("route /api/mcp — tools/call (streaming + errors + cancel)", () => {
     );
     const res = await app.fetch(
       makeCallRequest({
-        model: "gpt-4o-mini",
         messages: [{ role: "user", content: "hi" }],
       }),
     );
@@ -381,7 +409,6 @@ describe("route /api/mcp — tools/call (streaming + errors + cancel)", () => {
     );
     const res = await app.fetch(
       makeCallRequest({
-        model: "gpt-4o-mini",
         messages: [{ role: "user", content: "hi" }],
       }),
     );
@@ -399,7 +426,6 @@ describe("route /api/mcp — tools/call (streaming + errors + cancel)", () => {
     );
     const res = await app.fetch(
       makeCallRequest({
-        model: "gpt-4o-mini",
         messages: [{ role: "user", content: "hi" }],
       }),
     );
@@ -446,13 +472,7 @@ describe("route /api/mcp — tools/call (streaming + errors + cancel)", () => {
       let rejected = false;
       try {
         const res = await app.fetch(
-          makeCallRequest(
-            {
-              model: "gpt-4o-mini",
-              messages: [{ role: "user", content: "hi" }],
-            },
-            { signal: ac.signal },
-          ),
+          makeCallRequest({ messages: [{ role: "user", content: "hi" }] }, { signal: ac.signal }),
         );
         // Route may resolve with a Response (because MSW returned quickly)
         // OR with whatever the adapter built before abort. Both prove the

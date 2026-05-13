@@ -32,6 +32,7 @@ interface Env {
   AI_RELAY_API_KEY: string;
   AI_RELAY_BASE_URL?: string;
   AI_RELAY_AUTH_TOKEN: string;
+  AI_RELAY_MODEL: string;
   MCP_OBJECT: DurableObjectNamespace;
 }
 
@@ -44,6 +45,7 @@ export class OpenAIRelay extends McpAgent<Env> {
   async init() {
     registerOpenAIChat(this.server, {
       apiKey: this.env.AI_RELAY_API_KEY,
+      model: this.env.AI_RELAY_MODEL,
       ...(this.env.AI_RELAY_BASE_URL ? { baseURL: this.env.AI_RELAY_BASE_URL } : {}),
     });
   }

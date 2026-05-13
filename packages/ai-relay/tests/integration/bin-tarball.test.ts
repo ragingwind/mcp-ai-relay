@@ -225,7 +225,7 @@ describe("ai-relay-cli bin — installed tarball, one-shot CLI mode", () => {
       env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
     });
     expect(r.status).toBe(2);
-    expect(r.stderr).toContain("no model resolved");
+    expect(r.stderr).toMatch(/model/i);
     expect(mock.requests).toHaveLength(0);
   });
 
@@ -417,7 +417,7 @@ const initializedNotification = {
 describe("ai-relay bin — installed tarball, MCP stdio mode (openai provider positional)", () => {
   it("A1: initialize handshake returns protocolVersion + serverInfo", async () => {
     const r = await runMcpSession([initRequest, initializedNotification], {
-      args: ["openai"],
+      args: ["openai", "-m", "gpt-4o-mini"],
       env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
     });
     expect(r.status).toBe(0);
@@ -432,24 +432,26 @@ describe("ai-relay bin — installed tarball, MCP stdio mode (openai provider po
     expect(initRes?.capabilities?.tools).toBeDefined();
   });
 
-  it("A2: tools/list returns chat-completions with input schema", async () => {
+  it("A2: tools/list returns chat-completions with input schema (messages-only)", async () => {
     const r = await runMcpSession(
       [initRequest, initializedNotification, { jsonrpc: "2.0", id: 2, method: "tools/list" }],
       {
-        args: ["openai"],
+        args: ["openai", "-m", "gpt-4o-mini"],
         env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
       },
     );
     expect(r.status).toBe(0);
     expect(r.responses).toHaveLength(2);
     const listRes = r.responses[1]?.result as {
-      tools?: Array<{ name: string; inputSchema?: { required?: string[] } }>;
+      tools?: Array<{
+        name: string;
+        inputSchema?: { required?: string[]; properties?: Record<string, unknown> };
+      }>;
     };
     expect(listRes?.tools).toHaveLength(1);
     expect(listRes?.tools?.[0]?.name).toBe("chat-completions");
-    expect(listRes?.tools?.[0]?.inputSchema?.required).toEqual(
-      expect.arrayContaining(["model", "messages"]),
-    );
+    expect(listRes?.tools?.[0]?.inputSchema?.required).toEqual(["messages"]);
+    expect(listRes?.tools?.[0]?.inputSchema?.properties).not.toHaveProperty("model");
   });
 
   it("B1: tools/call chat-completions forwards messages and returns assistant text", async () => {
@@ -467,14 +469,13 @@ describe("ai-relay bin — installed tarball, MCP stdio mode (openai provider po
           params: {
             name: "chat-completions",
             arguments: {
-              model: "gpt-4o-mini",
               messages: [{ role: "user", content: "ping" }],
             },
           },
         },
       ],
       {
-        args: ["openai"],
+        args: ["openai", "-m", "gpt-4o-mini"],
         env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
       },
     );
@@ -551,7 +552,7 @@ describe("ai-relay bin — installed tarball, MCP stdio mode (openai provider po
     const r = await runMcpSession(
       [initRequest, initializedNotification, { jsonrpc: "2.0", id: 2, method: "tools/list" }],
       {
-        args: ["openai", "--verbose"],
+        args: ["openai", "-m", "gpt-4o-mini", "--verbose"],
         env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
       },
     );
@@ -566,7 +567,7 @@ describe("ai-relay bin — installed tarball, MCP stdio mode (openai provider po
 
   it("V2: AI_RELAY_VERBOSE=1 enables verbose without the flag", async () => {
     const r = await runMcpSession([initRequest, initializedNotification], {
-      args: ["openai"],
+      args: ["openai", "-m", "gpt-4o-mini"],
       env: {
         AI_RELAY_API_KEY: "test-k",
         AI_RELAY_BASE_URL: mock.baseURL,
@@ -581,7 +582,7 @@ describe("ai-relay bin — installed tarball, MCP stdio mode (openai provider po
   it("V3: --verbose redacts the AI_RELAY_API_KEY in stderr", async () => {
     const canary = "sk-mcp-leak-canary-9999";
     const r = await runMcpSession([initRequest, initializedNotification], {
-      args: ["openai", "--verbose"],
+      args: ["openai", "-m", "gpt-4o-mini", "--verbose"],
       env: { AI_RELAY_API_KEY: canary, AI_RELAY_BASE_URL: mock.baseURL },
     });
     expect(r.status).toBe(0);
@@ -605,14 +606,13 @@ describe("ai-relay bin — installed tarball, MCP stdio mode (openai provider po
           params: {
             name: "chat-completions",
             arguments: {
-              model: "gpt-4o-mini",
               messages: [{ role: "user", content: userMarker }],
             },
           },
         },
       ],
       {
-        args: ["openai", "--verbose"],
+        args: ["openai", "-m", "gpt-4o-mini", "--verbose"],
         env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
       },
     );

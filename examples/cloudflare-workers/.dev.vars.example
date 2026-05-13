@@ -1,5 +1,6 @@
 # Wrangler local dev reads .dev.vars (gitignored). Copy this file to .dev.vars
 # and fill in. For production, use `wrangler secret put <NAME>`.
 AI_RELAY_API_KEY="sk-test-..."
+AI_RELAY_MODEL="gpt-4o-mini"
 # AI_RELAY_BASE_URL="https://your-openai-compatible.example.com/v1"
 AI_RELAY_AUTH_TOKEN="<32-byte-hex; generate via: openssl rand -hex 32>"

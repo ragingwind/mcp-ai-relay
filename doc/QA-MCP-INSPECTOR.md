@@ -12,8 +12,15 @@ Two ways to run it:
 
 - **Automated smoke** — `pnpm verify` covers C1, C2, C5 in ~10 seconds.
   Use this on most PRs.
-- **Manual five-scenario** — required when C4 (clamp) or C6 (cancellation)
-  is in scope, and after every production deploy.
+- **Manual five-scenario** — required when C4 (server-side sampling override)
+  or C6 (cancellation) is in scope, and after every production deploy.
+
+> **0.10.0 change:** the caller-facing MCP tool input now accepts only
+> `{ messages }`. `model`, `temperature`, `max_tokens`, `top_p`, and `stop`
+> are server-side configuration (env vars on the Hono app, flags on the
+> stdio bin). Scenarios below have been updated accordingly — calls that
+> previously asserted caller-side `model` / `max_tokens` are now asserted
+> against `AI_RELAY_MODEL` / `AI_RELAY_MAX_TOKENS` on the server.
 
 **Time budget**: ~3 minutes for the manual procedure once your env is set up.
 
@@ -46,14 +53,18 @@ Inputs (env-only — `verify.mjs` does not parse flags):
 
 | env | default | purpose |
 |---|---|---|
-| `MCP_URL`      | `http://localhost:3000/api/mcp` | endpoint |
-| `VERIFY_MODEL` | `gpt-4o-mini`                   | model for the C2 happy-path call |
+| `MCP_URL`      | `http://localhost:8787/api/mcp` | endpoint (matches Hono `AI_RELAY_PORT` default) |
 
-`RELAY_AUTH_TOKEN` is read from `.env.local`.
+The model used for the C2 happy-path call is whatever `AI_RELAY_MODEL` is set
+to on the running server — `verify.mjs` no longer overrides it (the caller
+schema is `{ messages }` only).
 
-C4 (clamp) and C6 (cancellation) cannot be asserted from a client — for those
-two, fall through to the manual five-scenario procedure below. Production-side
-re-verification (§E) is also manual: this script is local-only.
+`AI_RELAY_AUTH_TOKEN` is read from `.env.local`.
+
+C4 (server-side sampling override) and C6 (cancellation) cannot be asserted
+from a client — for those two, fall through to the manual five-scenario
+procedure below. Production-side re-verification (§E) is also manual: this
+script is local-only.
 
 ### `pnpm inspect` — ad-hoc single call
 
@@ -65,7 +76,7 @@ non-default endpoint / model / tool.
 pnpm inspect                                  # tools/call → chat-completions with "ping"
 pnpm inspect --method=tools/list              # registered tools only
 pnpm inspect --message="안녕"                 # custom user message
-pnpm inspect --url=http://localhost:3001/api/mcp --model=gpt-4o
+pnpm inspect --url=http://localhost:8788/api/mcp
 pnpm inspect --tool=other_tool --message="..."
 ```
 
@@ -73,12 +84,15 @@ Flags (priority: `--flag=` > `process.env` > `.env.local` > default):
 
 | Flag | env | default |
 |---|---|---|
-| `--url=`     | `MCP_URL`     | `http://localhost:3000/api/mcp` |
-| `--token=`   | `RELAY_AUTH_TOKEN` (also read from `.env.local`) | — |
+| `--url=`     | `MCP_URL`     | `http://localhost:8787/api/mcp` |
+| `--token=`   | `AI_RELAY_AUTH_TOKEN` (also read from `.env.local`) | — |
 | `--tool=`    | `MCP_TOOL`    | `chat-completions` |
-| `--model=`   | `MCP_MODEL`   | `gpt-4o-mini` |
 | `--message=` | `MCP_MESSAGE` | `ping` |
 | `--method=`  | —             | `tools/call` (also `tools/list`) |
+
+`--model=` is no longer accepted — the model is server-side configuration
+(`AI_RELAY_MODEL` env on the Hono server, `-m` flag on the stdio bin). The
+tools/call arguments built by this script send `{ messages }` only.
 
 ---
 
@@ -98,7 +112,7 @@ remains clean.
 ai-relay-cli openai chat-completions -v -m gpt-4o-mini "ping"
 
 AI_RELAY_VERBOSE=1 npx @modelcontextprotocol/inspector --cli \
-  node packages/ai-relay/dist/bin/ai-relay.js openai \
+  node packages/ai-relay/dist/bin/ai-relay.js openai -m gpt-4o-mini \
   --method tools/list
 ```
 
@@ -109,11 +123,12 @@ stderr.
 
 ## A. Preparation
 
-1. Populate `.env.local` with **a personal dev OpenAI key** (not the production key)
-   and a `RELAY_AUTH_TOKEN` of your choice (32+ bytes):
+1. Populate `.env.local` with **a personal dev OpenAI key** (not the production key),
+   an `AI_RELAY_AUTH_TOKEN` of your choice (32+ bytes), and the upstream model:
    ```bash
    AI_RELAY_API_KEY=sk-...
-   RELAY_AUTH_TOKEN=$(openssl rand -hex 32)
+   AI_RELAY_AUTH_TOKEN=$(openssl rand -hex 32)
+   AI_RELAY_MODEL=gpt-4o-mini
    ```
    `.env.local` is gitignored — never commit values.
 
@@ -121,14 +136,14 @@ stderr.
    ```bash
    pnpm dev
    ```
-   The server listens on `http://localhost:3000`. The MCP endpoint is
-   `http://localhost:3000/api/mcp`.
+   The server listens on `http://localhost:8787` (Hono, matches
+   `AI_RELAY_PORT` default). The MCP endpoint is
+   `http://localhost:8787/api/mcp`.
 
-3. **Warm-up** (avoids the Inspector first-connect timing out on Next.js's
-   initial JIT compile of the route):
+3. **Warm-up**:
    ```bash
-   curl -i "http://localhost:3000/api/mcp" \
-     -H "Authorization: Bearer $RELAY_AUTH_TOKEN" \
+   curl -i "http://localhost:8787/api/mcp" \
+     -H "Authorization: Bearer $AI_RELAY_AUTH_TOKEN" \
      -X GET
    ```
    Expect HTTP 4xx (mcp-handler responds to bare GET). Anything other than
@@ -147,8 +162,8 @@ stderr.
 
 2. The browser opens automatically. In the Inspector UI:
    - **Transport**: Streamable HTTP
-   - **URL**: `http://localhost:3000/api/mcp`
-   - **Header**: `Authorization: Bearer <RELAY_AUTH_TOKEN>` (paste the
+   - **URL**: `http://localhost:8787/api/mcp`
+   - **Header**: `Authorization: Bearer <AI_RELAY_AUTH_TOKEN>` (paste the
      value from your `.env.local`)
    - **Proxy Session Token**: paste the token from the Inspector terminal
      (`CLAUDE.md` §9 — frequently forgotten)
@@ -168,12 +183,12 @@ upstreams on one server).
 
 | # | Scenario | Steps | Expected result |
 |---|---|---|---|
-| **C1** | Tool list | In Inspector, switch to **Tools** tab | Single tool `chat-completions` is listed with input schema (model, messages, temperature, max_tokens, top_p, stop) |
-| **C2** | Happy path | Click **Run Tool** on `chat-completions`. Inputs: `model: gpt-4o-mini`, `messages: [{role: "user", content: "ping"}]` | Response contains accumulated text in `result.content[0].text`. `result.structuredContent.usage.total_tokens > 0`. `result.isError` is `false`. |
-| **C4** | max_tokens clamp | Same as C2 but `max_tokens: 999999` (well above `AI_RELAY_MAX_OUTPUT_TOKENS`) | Response succeeds; the value was silently clamped to `AI_RELAY_MAX_OUTPUT_TOKENS` (default 4096) before the upstream call. No error. |
+| **C1** | Tool list | In Inspector, switch to **Tools** tab | Single tool `chat-completions` is listed. Its input schema is `{ messages: Array<{role, content}> }` only (no `model` / `temperature` / `max_tokens` / `top_p` / `stop` fields) — `.strict()`. |
+| **C2** | Happy path | Click **Run Tool** on `chat-completions`. Inputs: `messages: [{role: "user", content: "ping"}]` (only field accepted). | Response contains accumulated text in `result.content[0].text`. `result.structuredContent.model` matches the server's `AI_RELAY_MODEL`. `result.structuredContent.usage.total_tokens > 0`. `result.isError` is `false`. |
+| **C4** | Server-side sampling override | **Stop** the dev server. Restart with `AI_RELAY_MAX_TOKENS=64 AI_RELAY_TEMPERATURE=0.1 pnpm dev`. Re-run C2. | Response succeeds. Server stderr verbose log (`pnpm dev -v` or `AI_RELAY_VERBOSE=1`) shows `max_tokens: 64`, `temperature: 0.1` in the `openai-request` payload. Caller did not send these fields. |
 | **C5** | Bearer rejection | In Inspector, **Disconnect**, change the Header to `Authorization: Bearer wrong-token`, **Connect** | Connection fails with HTTP 401 + `WWW-Authenticate: Bearer` header. Reconnect with the correct token to continue. |
 | **C6** | Cancellation (manual) | Run C2 with a long prompt (e.g., "Write a 500-word essay about sourdough"). Mid-stream, **Disconnect** in the Inspector | Server logs show the SDK call aborted; OpenAI usage page (refreshed in ~1 minute) does NOT show full output cost. (Imprecise visual confirmation — manual observation only.) |
-| **C7** | Multi-registration *(SDK consumers only)* | On a server that registered `registerOpenAIChat` against two distinct names (e.g. `chat-completions` + `azure_chat` with different `apiKey` + `baseURL`), open **Tools** then run each one. | `tools/list` returns both entries. Each `tools/call` answers from its own upstream (verify by switching upstreams between calls and confirming responses do not cross). |
+| **C7** | Multi-registration *(SDK consumers only)* | On a server that registered `registerOpenAIChat` against two distinct names (e.g. `chat-completions` + `azure_chat` with different `apiKey` + `baseURL` + `model`), open **Tools** then run each one with `{ messages: [...] }`. | `tools/list` returns both entries. Each `tools/call` answers from its own upstream with its own captured `model` (verify via `structuredContent.model` in each response). |
 
 ---
 
@@ -190,20 +205,21 @@ MCP Inspector verification — <YYYY-MM-DD HH:MM TZ>
 Verifier:  <your name / handle>
 Branch:    <branch name>
 Commit:    <git rev-parse --short HEAD>
-Endpoint:  http://localhost:3000/api/mcp  (or production URL — see doc/DEPLOY.md §3)
+Endpoint:  http://localhost:8787/api/mcp  (or production URL — see doc/DEPLOY.md §3)
+Model:     <AI_RELAY_MODEL value used by the server>
 
-C1 tools/list                — PASS / FAIL  <one-line note>
-C2 chat-completions happy path    — PASS / FAIL  usage: {prompt_tokens: N, completion_tokens: N, total_tokens: N}
-C4 max_tokens clamp          — PASS / FAIL  <one-line note>
-C5 wrong bearer 401          — PASS / FAIL  <one-line note>
-C6 cancellation              — PASS / FAIL  <one-line note>
+C1 tools/list (messages-only schema) — PASS / FAIL  <one-line note>
+C2 chat-completions happy path       — PASS / FAIL  usage: {prompt_tokens: N, completion_tokens: N, total_tokens: N}
+C4 server-side sampling override     — PASS / FAIL  <one-line note>
+C5 wrong bearer 401                  — PASS / FAIL  <one-line note>
+C6 cancellation                      — PASS / FAIL  <one-line note>
 
 Notes:
 - <any anomaly worth flagging>
 ```
 
 If a scenario fails, redact secrets from any included response excerpt before
-attaching to the PR (`AI_RELAY_API_KEY`, `RELAY_AUTH_TOKEN`, full prompt text —
+attaching to the PR (`AI_RELAY_API_KEY`, `AI_RELAY_AUTH_TOKEN`, full prompt text —
 metadata only per `CLAUDE.md` §4).
 
 ---
@@ -213,10 +229,11 @@ metadata only per `CLAUDE.md` §4).
 After running [`doc/DEPLOY.md` §3.5 verification checklist](./DEPLOY.md#35-verification-checklist),
 re-run **C1, C2, C5** against the production URL
 (`https://<project>.vercel.app/api/mcp`) using the **production**
-`RELAY_AUTH_TOKEN` and the prod-issued `AI_RELAY_API_KEY`.
+`AI_RELAY_AUTH_TOKEN` and the prod-issued `AI_RELAY_API_KEY`.
 
-C4 and C6 are local-only (the clamp behavior is the same on both environments;
-cancellation observation is harder to confirm in production).
+C4 and C6 are local-only (the sampling override requires restarting the server
+with different env vars; cancellation observation is harder to confirm in
+production).
 
 ---
 

@@ -26,6 +26,7 @@ if (process.env.AI_RELAY_API_KEY) {
     name: "chat-completions",
     apiKey: process.env.AI_RELAY_API_KEY,
     ...(process.env.AI_RELAY_BASE_URL ? { baseURL: process.env.AI_RELAY_BASE_URL } : {}),
+    model: process.env.AI_RELAY_MODEL ?? "gpt-4o-mini",
     description: "OpenAI Chat Completions — proper",
   });
   registeredCount++;
@@ -36,6 +37,7 @@ if (process.env.AZURE_OPENAI_KEY && process.env.AZURE_OPENAI_BASE_URL) {
     name: "azure_chat",
     apiKey: process.env.AZURE_OPENAI_KEY,
     baseURL: process.env.AZURE_OPENAI_BASE_URL,
+    model: process.env.AZURE_OPENAI_MODEL ?? "gpt-4o-mini",
     description: "Azure OpenAI deployment",
   });
   registeredCount++;
@@ -46,7 +48,8 @@ if (process.env.LOCAL_LLM_BASE_URL) {
     name: "local_llm",
     apiKey: process.env.LOCAL_LLM_KEY ?? "not-needed",
     baseURL: process.env.LOCAL_LLM_BASE_URL,
-    maxOutputTokensCeiling: 8192,
+    model: process.env.LOCAL_LLM_MODEL ?? "llama3",
+    max_tokens: 8192,
     description: "Local Ollama / vLLM (OpenAI-compatible)",
   });
   registeredCount++;

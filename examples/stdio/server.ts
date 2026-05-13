@@ -12,6 +12,12 @@ if (!apiKey) {
   process.exit(1);
 }
 
+const model = process.env.AI_RELAY_MODEL;
+if (!model) {
+  console.error("AI_RELAY_MODEL environment variable is required.");
+  process.exit(1);
+}
+
 const server = new McpServer({
   name: "openai-relay-stdio",
   version: "0.1.0",
@@ -19,6 +25,7 @@ const server = new McpServer({
 
 registerOpenAIChat(server, {
   apiKey,
+  model,
   ...(process.env.AI_RELAY_BASE_URL ? { baseURL: process.env.AI_RELAY_BASE_URL } : {}),
 });
 

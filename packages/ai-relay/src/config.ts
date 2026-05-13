@@ -14,6 +14,8 @@ import { z } from "zod";
 export type Provider = "openai";
 export type Capability = "chat";
 
+const stopSchema = z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]);
+
 const providerConfigSchema = z
   .object({
     id: z.string().min(1).optional(),
@@ -21,7 +23,11 @@ const providerConfigSchema = z
     capability: z.literal("chat").default("chat"),
     apiKey: z.string().min(1),
     baseURL: z.string().url().optional(),
-    maxOutputTokens: z.number().int().positive().optional(),
+    model: z.string().min(1),
+    temperature: z.number().min(0).max(2).optional(),
+    max_tokens: z.number().int().positive().optional(),
+    top_p: z.number().min(0).max(1).optional(),
+    stop: stopSchema.optional(),
     requestTimeoutMs: z.number().int().positive().optional(),
     description: z.string().optional(),
   })
@@ -44,7 +50,11 @@ export type ArgsSource = {
   id?: string;
   apiKey?: string;
   baseURL?: string;
-  maxOutputTokens?: number;
+  model?: string;
+  temperature?: number;
+  max_tokens?: number;
+  top_p?: number;
+  stop?: string | string[];
   requestTimeoutMs?: number;
   description?: string;
 };
@@ -55,7 +65,6 @@ export type LoadConfigSource = {
   args?: ArgsSource;
 };
 
-const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
 const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
 
 // Mirrors redactZodError in app/lib/env.ts; keep the two in lock-step.
@@ -75,14 +84,43 @@ function parsePositiveInt(value: string | undefined): number | undefined {
   return n;
 }
 
+function parseFloatInRange(value: string | undefined, lo: number, hi: number): number | undefined {
+  if (value === undefined || value === "") return undefined;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < lo || n > hi) {
+    throw new Error("Invalid number in range (env value redacted)");
+  }
+  return n;
+}
+
+function parseStopList(value: string | undefined): string | string[] | undefined {
+  if (value === undefined || value === "") return undefined;
+  const parts = value
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (parts.length === 0) return undefined;
+  if (parts.length === 1) return parts[0];
+  return parts;
+}
+
 function envOpenAIPartial(env: EnvSource): Partial<ProviderConfig> {
   const out: Partial<ProviderConfig> = {};
   if (env.AI_RELAY_API_KEY) out.apiKey = env.AI_RELAY_API_KEY;
   if (env.AI_RELAY_BASE_URL && env.AI_RELAY_BASE_URL.trim().length > 0) {
     out.baseURL = env.AI_RELAY_BASE_URL;
   }
-  const maxTok = parsePositiveInt(env.AI_RELAY_MAX_OUTPUT_TOKENS);
-  if (maxTok !== undefined) out.maxOutputTokens = maxTok;
+  if (env.AI_RELAY_MODEL && env.AI_RELAY_MODEL.length > 0) {
+    out.model = env.AI_RELAY_MODEL;
+  }
+  const temperature = parseFloatInRange(env.AI_RELAY_TEMPERATURE, 0, 2);
+  if (temperature !== undefined) out.temperature = temperature;
+  const maxTokens = parsePositiveInt(env.AI_RELAY_MAX_TOKENS);
+  if (maxTokens !== undefined) out.max_tokens = maxTokens;
+  const topP = parseFloatInRange(env.AI_RELAY_TOP_P, 0, 1);
+  if (topP !== undefined) out.top_p = topP;
+  const stop = parseStopList(env.AI_RELAY_STOP);
+  if (stop !== undefined) out.stop = stop;
   const timeoutMs = parsePositiveInt(env.AI_RELAY_REQUEST_TIMEOUT_MS);
   if (timeoutMs !== undefined) out.requestTimeoutMs = timeoutMs;
   return out;
@@ -96,7 +134,6 @@ function materialiseId(p: ProviderConfig): ProviderConfig {
 function withDefaults(p: ProviderConfig): ProviderConfig {
   return {
     ...p,
-    maxOutputTokens: p.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
     requestTimeoutMs: p.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
   };
 }
@@ -113,7 +150,11 @@ function buildFromArgsAndEnv(args: ArgsSource, env: EnvSource): RelayConfig {
     ...(args.id !== undefined ? { id: args.id } : {}),
     ...(args.apiKey !== undefined ? { apiKey: args.apiKey } : {}),
     ...(args.baseURL !== undefined ? { baseURL: args.baseURL } : {}),
-    ...(args.maxOutputTokens !== undefined ? { maxOutputTokens: args.maxOutputTokens } : {}),
+    ...(args.model !== undefined ? { model: args.model } : {}),
+    ...(args.temperature !== undefined ? { temperature: args.temperature } : {}),
+    ...(args.max_tokens !== undefined ? { max_tokens: args.max_tokens } : {}),
+    ...(args.top_p !== undefined ? { top_p: args.top_p } : {}),
+    ...(args.stop !== undefined ? { stop: args.stop } : {}),
     ...(args.requestTimeoutMs !== undefined ? { requestTimeoutMs: args.requestTimeoutMs } : {}),
     ...(args.description !== undefined ? { description: args.description } : {}),
   };
@@ -144,7 +185,11 @@ function applyArgsOverrides(p: ProviderConfig, args: ArgsSource): ProviderConfig
     ...(args.id !== undefined ? { id: args.id } : {}),
     ...(args.apiKey !== undefined ? { apiKey: args.apiKey } : {}),
     ...(args.baseURL !== undefined ? { baseURL: args.baseURL } : {}),
-    ...(args.maxOutputTokens !== undefined ? { maxOutputTokens: args.maxOutputTokens } : {}),
+    ...(args.model !== undefined ? { model: args.model } : {}),
+    ...(args.temperature !== undefined ? { temperature: args.temperature } : {}),
+    ...(args.max_tokens !== undefined ? { max_tokens: args.max_tokens } : {}),
+    ...(args.top_p !== undefined ? { top_p: args.top_p } : {}),
+    ...(args.stop !== undefined ? { stop: args.stop } : {}),
     ...(args.requestTimeoutMs !== undefined ? { requestTimeoutMs: args.requestTimeoutMs } : {}),
     ...(args.description !== undefined ? { description: args.description } : {}),
   };

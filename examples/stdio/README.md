@@ -12,7 +12,7 @@ transport assumes the local process is trusted.
 pnpm install
 pnpm --filter ai-relay build
 
-AI_RELAY_API_KEY=sk-... pnpm --filter @example/stdio start
+AI_RELAY_API_KEY=sk-... AI_RELAY_MODEL=gpt-4o-mini pnpm --filter @example/stdio start
 ```
 
 The server reads JSON-RPC frames on stdin and writes responses on
@@ -20,7 +20,8 @@ stdout. To verify locally without Claude Desktop:
 
 ```bash
 # in another terminal — sends a tools/list request via npx mcp-inspector
-AI_RELAY_API_KEY=sk-... npx @modelcontextprotocol/inspector --cli \
+AI_RELAY_API_KEY=sk-... AI_RELAY_MODEL=gpt-4o-mini \
+  npx @modelcontextprotocol/inspector --cli \
   -- pnpm --filter @example/stdio start
 ```
 
@@ -38,7 +39,7 @@ npm install --save-dev tsx
 Copy `server.ts` from this directory, then:
 
 ```bash
-AI_RELAY_API_KEY=sk-... npx tsx server.ts
+AI_RELAY_API_KEY=sk-... AI_RELAY_MODEL=gpt-4o-mini npx tsx server.ts
 ```
 
 ## Register in Claude Desktop
@@ -57,7 +58,8 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
         "/absolute/path/to/examples/stdio/server.ts"
       ],
       "env": {
-        "AI_RELAY_API_KEY": "sk-..."
+        "AI_RELAY_API_KEY": "sk-...",
+        "AI_RELAY_MODEL": "gpt-4o-mini"
       }
     }
   }
@@ -90,8 +92,10 @@ Environment variables read by `server.ts`:
 | Var | Required | Notes |
 |---|---|---|
 | `AI_RELAY_API_KEY` | ✅ | OpenAI API key |
+| `AI_RELAY_MODEL` | ✅ | Upstream model id (e.g. `gpt-4o-mini`) — required since 0.10.0 |
 | `AI_RELAY_BASE_URL` | ❌ | Override for Azure / vLLM / Ollama / AI Gateway |
 
-`max_tokens` ceiling (default 4096) and request timeout (default 60 s)
-are taken from the SDK defaults. Set them by editing `server.ts` if you
-need custom values.
+`max_tokens`, `temperature`, `top_p`, `stop`, and request timeout are
+SDK-default unless you extend `server.ts` to pass them in
+`OpenAIChatConfig`. The caller-facing tool input is `{ messages }`
+only — these parameters cannot be supplied per call.

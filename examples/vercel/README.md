@@ -33,10 +33,23 @@ import { verifyBearer, loadConfig } from "ai-relay";
 import { registerOpenAIChat } from "ai-relay/openai";
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 
-const config = loadConfig(process.env);
+// loadConfig reads AI_RELAY_API_KEY + AI_RELAY_MODEL + optional sampling env vars.
+// AI_RELAY_MODEL is required since 0.10.0.
+const config = loadConfig({ env: process.env });
+const provider = config.providers[0]!;
 
 const handler = createMcpHandler(
-  (server) => registerOpenAIChat(server, config),
+  (server) =>
+    registerOpenAIChat(server, {
+      apiKey: provider.apiKey,
+      model: provider.model,
+      ...(provider.baseURL ? { baseURL: provider.baseURL } : {}),
+      ...(provider.temperature !== undefined ? { temperature: provider.temperature } : {}),
+      ...(provider.max_tokens !== undefined ? { max_tokens: provider.max_tokens } : {}),
+      ...(provider.top_p !== undefined ? { top_p: provider.top_p } : {}),
+      ...(provider.stop !== undefined ? { stop: provider.stop } : {}),
+      ...(provider.requestTimeoutMs ? { requestTimeoutMs: provider.requestTimeoutMs } : {}),
+    }),
   {},
   { basePath: "/api" },
 );
@@ -59,8 +72,10 @@ Copy this directory's `vercel.json` to your project root, then deploy:
 vercel deploy --prod
 ```
 
-Set `AI_RELAY_API_KEY` and `AI_RELAY_AUTH_TOKEN` as Vercel
-environment variables before the first deploy.
+Set `AI_RELAY_API_KEY`, `AI_RELAY_AUTH_TOKEN`, and `AI_RELAY_MODEL` as Vercel
+environment variables before the first deploy. Optional sampling overrides
+(`AI_RELAY_TEMPERATURE`, `AI_RELAY_MAX_TOKENS`, `AI_RELAY_TOP_P`,
+`AI_RELAY_STOP`) are forwarded to every upstream call when set.
 
 ## Verification
 

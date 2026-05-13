@@ -45,7 +45,7 @@ describe("openai chat — stream mid-error (C-3)", () => {
     );
 
     const { handler } = makeHandler();
-    const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const result = await handler({ messages: VALID_MESSAGES });
 
     expect(result.isError).toBe(true);
     expect(result.structuredContent.code).toBe("upstream_error");
@@ -74,8 +74,9 @@ describe("openai chat — chunk boundary (C-4)", () => {
     const { handler } = makeOpenAIChatHandler({
       apiKey: "test-key",
       baseURL: mock.baseURL,
+      model: VALID_MODEL,
     });
-    const result = await handler({ model: VALID_MODEL, messages: VALID_MESSAGES });
+    const result = await handler({ messages: VALID_MESSAGES });
 
     expect(result.isError).toBe(false);
     expect(result.content[0]?.text).toBe("hello");
@@ -85,5 +86,5 @@ describe("openai chat — chunk boundary (C-4)", () => {
 
 // Shared factory — kept tiny to avoid cross-file coupling.
 function makeHandler() {
-  return makeOpenAIChatHandler({ apiKey: "test-openai-api-key" });
+  return makeOpenAIChatHandler({ apiKey: "test-openai-api-key", model: VALID_MODEL });
 }

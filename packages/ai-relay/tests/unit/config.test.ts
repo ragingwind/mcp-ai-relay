@@ -30,8 +30,10 @@ const writeFile = (name: string, contents: string): string => {
 };
 
 describe("loadConfig — env-only single provider", () => {
-  it("P1: env with AI_RELAY_API_KEY → single provider, defaults applied, id=openai_chat", () => {
-    const cfg = loadConfig({ env: { AI_RELAY_API_KEY: "k" } });
+  it("P1: env with AI_RELAY_API_KEY + AI_RELAY_MODEL → single provider, defaults applied, id=openai_chat", () => {
+    const cfg = loadConfig({
+      env: { AI_RELAY_API_KEY: "k", AI_RELAY_MODEL: "gpt-4o-mini" },
+    });
     expect(cfg.providers).toHaveLength(1);
     const p = cfg.providers[0];
     if (!p) throw new Error("provider missing");
@@ -39,24 +41,46 @@ describe("loadConfig — env-only single provider", () => {
     expect(p.provider).toBe("openai");
     expect(p.capability).toBe("chat");
     expect(p.apiKey).toBe("k");
-    expect(p.maxOutputTokens).toBe(4096);
+    expect(p.model).toBe("gpt-4o-mini");
+    expect(p.max_tokens).toBeUndefined();
+    expect(p.temperature).toBeUndefined();
+    expect(p.top_p).toBeUndefined();
+    expect(p.stop).toBeUndefined();
     expect(p.requestTimeoutMs).toBe(60_000);
   });
 
-  it("P2: reads AI_RELAY_BASE_URL, AI_RELAY_MAX_OUTPUT_TOKENS, AI_RELAY_REQUEST_TIMEOUT_MS from env", () => {
+  it("P2: env-only resolution reads all AI_RELAY_* sampling vars", () => {
     const cfg = loadConfig({
       env: {
         AI_RELAY_API_KEY: "k",
+        AI_RELAY_MODEL: "gpt-4o-mini",
         AI_RELAY_BASE_URL: "https://my.example.com/v1",
-        AI_RELAY_MAX_OUTPUT_TOKENS: "8192",
+        AI_RELAY_TEMPERATURE: "0.7",
+        AI_RELAY_MAX_TOKENS: "8192",
+        AI_RELAY_TOP_P: "0.9",
+        AI_RELAY_STOP: "END,STOP",
         AI_RELAY_REQUEST_TIMEOUT_MS: "30000",
       },
     });
     const p = cfg.providers[0];
     if (!p) throw new Error("provider missing");
     expect(p.baseURL).toBe("https://my.example.com/v1");
-    expect(p.maxOutputTokens).toBe(8192);
+    expect(p.temperature).toBe(0.7);
+    expect(p.max_tokens).toBe(8192);
+    expect(p.top_p).toBe(0.9);
+    expect(p.stop).toEqual(["END", "STOP"]);
     expect(p.requestTimeoutMs).toBe(30_000);
+  });
+
+  it("P3: AI_RELAY_STOP with a single value is forwarded as a string", () => {
+    const cfg = loadConfig({
+      env: {
+        AI_RELAY_API_KEY: "k",
+        AI_RELAY_MODEL: "gpt-4o-mini",
+        AI_RELAY_STOP: "END",
+      },
+    });
+    expect(cfg.providers[0]?.stop).toBe("END");
   });
 
   it("D1: legacy OPENAI_API_KEY is ignored (no fallback) — env without AI_RELAY_API_KEY throws", () => {
@@ -68,10 +92,16 @@ describe("loadConfig — env-only single provider", () => {
     const cfg = loadConfig({
       env: {
         AI_RELAY_API_KEY: "k",
+        AI_RELAY_MODEL: "gpt-4o-mini",
         OPENAI_BASE_URL: "https://legacy.example.com/v1",
       },
     });
     expect(cfg.providers[0]?.baseURL).toBeUndefined();
+  });
+
+  it("D3: env-only without AI_RELAY_MODEL → schema rejects (model is required)", () => {
+    const err = expectThrow(() => loadConfig({ env: { AI_RELAY_API_KEY: "k" } }));
+    expect(err.message).toContain("model");
   });
 });
 
@@ -81,12 +111,13 @@ describe("loadConfig — file-based multi-provider", () => {
       "valid.json",
       JSON.stringify({
         providers: [
-          { provider: "openai", capability: "chat", apiKey: "k1" },
+          { provider: "openai", capability: "chat", apiKey: "k1", model: "gpt-4o-mini" },
           {
             id: "azure_chat",
             provider: "openai",
             capability: "chat",
             apiKey: "k2",
+            model: "gpt-4o",
             baseURL: "https://azure.example.com/v1",
           },
         ],
@@ -96,6 +127,7 @@ describe("loadConfig — file-based multi-provider", () => {
     expect(cfg.providers).toHaveLength(2);
     expect(cfg.providers[0]?.id).toBe("openai_chat");
     expect(cfg.providers[0]?.apiKey).toBe("k1");
+    expect(cfg.providers[0]?.model).toBe("gpt-4o-mini");
     expect(cfg.providers[1]?.id).toBe("azure_chat");
     expect(cfg.providers[1]?.baseURL).toBe("https://azure.example.com/v1");
   });
@@ -122,39 +154,83 @@ describe("loadConfig — file-based multi-provider", () => {
 });
 
 describe("loadConfig — args overrides", () => {
-  it("P1: args with provider+apiKey → single provider with overrides", () => {
+  it("P1: args with provider+apiKey+model → single provider with overrides", () => {
     const cfg = loadConfig({
-      args: { provider: "openai", capability: "chat", apiKey: "args-key", maxOutputTokens: 8192 },
+      args: {
+        provider: "openai",
+        capability: "chat",
+        apiKey: "args-key",
+        model: "gpt-4o-mini",
+        max_tokens: 8192,
+      },
     });
     expect(cfg.providers).toHaveLength(1);
     const p = cfg.providers[0];
     if (!p) throw new Error("provider missing");
     expect(p.apiKey).toBe("args-key");
-    expect(p.maxOutputTokens).toBe(8192);
+    expect(p.model).toBe("gpt-4o-mini");
+    expect(p.max_tokens).toBe(8192);
     expect(p.id).toBe("openai_chat");
   });
 
-  it("P2: args > env — when both define maxOutputTokens, args wins", () => {
+  it("P2: args > env — when both define max_tokens, args wins", () => {
     const cfg = loadConfig({
-      env: { AI_RELAY_API_KEY: "env-key", AI_RELAY_MAX_OUTPUT_TOKENS: "1000" },
-      args: { provider: "openai", capability: "chat", maxOutputTokens: 8192 },
+      env: {
+        AI_RELAY_API_KEY: "env-key",
+        AI_RELAY_MODEL: "gpt-4o-mini",
+        AI_RELAY_MAX_TOKENS: "1000",
+      },
+      args: { provider: "openai", capability: "chat", max_tokens: 8192 },
     });
     const p = cfg.providers[0];
     if (!p) throw new Error("provider missing");
-    expect(p.maxOutputTokens).toBe(8192);
+    expect(p.max_tokens).toBe(8192);
     expect(p.apiKey).toBe("env-key");
   });
 
-  it("P3: explicit args.id overrides default <provider>_<capability>", () => {
+  it("P3: args.model overrides AI_RELAY_MODEL from env", () => {
     const cfg = loadConfig({
-      args: { provider: "openai", capability: "chat", apiKey: "k", id: "my_custom_id" },
+      env: { AI_RELAY_API_KEY: "k", AI_RELAY_MODEL: "from-env" },
+      args: { provider: "openai", capability: "chat", model: "from-args" },
+    });
+    expect(cfg.providers[0]?.model).toBe("from-args");
+  });
+
+  it("P4: explicit args.id overrides default <provider>_<capability>", () => {
+    const cfg = loadConfig({
+      args: {
+        provider: "openai",
+        capability: "chat",
+        apiKey: "k",
+        model: "gpt-4o-mini",
+        id: "my_custom_id",
+      },
     });
     expect(cfg.providers[0]?.id).toBe("my_custom_id");
+  });
+
+  it("P5: sampling params from args are forwarded into the provider config", () => {
+    const cfg = loadConfig({
+      args: {
+        provider: "openai",
+        capability: "chat",
+        apiKey: "k",
+        model: "gpt-4o-mini",
+        temperature: 0.3,
+        top_p: 0.8,
+        stop: ["END"],
+      },
+    });
+    const p = cfg.providers[0];
+    if (!p) throw new Error("provider missing");
+    expect(p.temperature).toBe(0.3);
+    expect(p.top_p).toBe(0.8);
+    expect(p.stop).toEqual(["END"]);
   });
 });
 
 describe("loadConfig — file + args merge", () => {
-  it("P1: file with one openai provider + args.maxOutputTokens → args wins for matched provider", () => {
+  it("P1: file with one openai provider + args.max_tokens → args wins for matched provider", () => {
     const file = writeFile(
       "file-args-merge.json",
       JSON.stringify({
@@ -163,19 +239,20 @@ describe("loadConfig — file + args merge", () => {
             provider: "openai",
             capability: "chat",
             apiKey: "file-key",
-            maxOutputTokens: 1000,
+            model: "gpt-4o-mini",
+            max_tokens: 1000,
           },
         ],
       }),
     );
     const cfg = loadConfig({
       file,
-      args: { provider: "openai", capability: "chat", maxOutputTokens: 8192 },
+      args: { provider: "openai", capability: "chat", max_tokens: 8192 },
     });
     expect(cfg.providers).toHaveLength(1);
     const p = cfg.providers[0];
     if (!p) throw new Error("provider missing");
-    expect(p.maxOutputTokens).toBe(8192);
+    expect(p.max_tokens).toBe(8192);
     expect(p.apiKey).toBe("file-key");
   });
 
@@ -189,6 +266,7 @@ describe("loadConfig — file + args merge", () => {
             provider: "openai",
             capability: "chat",
             apiKey: "k",
+            model: "gpt-4o-mini",
           },
         ],
       }),
@@ -209,7 +287,8 @@ describe("loadConfig — file + args merge", () => {
             provider: "openai",
             capability: "chat",
             apiKey: "file-key",
-            maxOutputTokens: 1234,
+            model: "gpt-4o-mini",
+            max_tokens: 1234,
           },
         ],
       }),
@@ -218,7 +297,7 @@ describe("loadConfig — file + args merge", () => {
       file,
       args: { provider: "openai", capability: "chat" },
     });
-    expect(cfg.providers[0]?.maxOutputTokens).toBe(1234);
+    expect(cfg.providers[0]?.max_tokens).toBe(1234);
     expect(cfg.providers[0]?.apiKey).toBe("file-key");
   });
 });
@@ -227,6 +306,13 @@ describe("loadConfig — error paths", () => {
   it("D1: empty source → 'no providers resolved' error", () => {
     const err = expectThrow(() => loadConfig({}));
     expect(err.message).toContain("no providers resolved");
+  });
+
+  it("D2: args without model → schema rejects (model is required)", () => {
+    const err = expectThrow(() =>
+      loadConfig({ args: { provider: "openai", capability: "chat", apiKey: "k" } }),
+    );
+    expect(err.message).toContain("model");
   });
 });
 
@@ -246,7 +332,7 @@ describe("loadConfig — secret redaction", () => {
     const sentinel = "another-leak-marker-9999";
     const err = expectThrow(() =>
       loadConfig({
-        args: { provider: "openai", capability: "chat", apiKey: "" },
+        args: { provider: "openai", capability: "chat", apiKey: "", model: "gpt-4o-mini" },
         env: { AI_RELAY_BASE_URL: sentinel },
       }),
     );

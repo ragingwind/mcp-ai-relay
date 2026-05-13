@@ -17,21 +17,20 @@ describe("openAIChatTool.desugar — plain-text → input JSON", () => {
     });
   });
 
-  it("P3: model option lifts to a top-level field", () => {
-    expect(openAIChatTool.desugar?.("hi", { model: "gpt-x" })).toEqual({
-      model: "gpt-x",
-      messages: [{ role: "user", content: "hi" }],
-    });
-  });
-
-  it("P4: result merged with -m model passes the schema", () => {
+  it("P3: desugar result passes the messages-only schema", () => {
     const desugared = openAIChatTool.desugar?.("hi", {});
     expect(desugared).toBeDefined();
-    const merged = { ...desugared, model: "gpt-4o-mini" };
-    const schema = makeOpenAIChatSchema(4096);
-    const parsed = schema.parse(merged);
-    expect(parsed.model).toBe("gpt-4o-mini");
+    const schema = makeOpenAIChatSchema();
+    const parsed = schema.parse(desugared);
     expect(parsed.messages).toHaveLength(1);
+    expect(parsed.messages[0]).toEqual({ role: "user", content: "hi" });
+  });
+
+  it("D1: schema rejects a model field on caller input", () => {
+    const schema = makeOpenAIChatSchema();
+    expect(() =>
+      schema.parse({ model: "gpt-4o", messages: [{ role: "user", content: "hi" }] }),
+    ).toThrow();
   });
 });
 

@@ -29,20 +29,24 @@ Positionals:
 Providers: ${Object.keys(registry).join(", ")}
 
 Inputs (exactly one of):
-  positional <input>      JSON literal or plain text
-  stdin (when piped)      JSON literal or plain text
+  positional <input>      JSON object {"messages":[...]} or plain text
+  stdin (when piped)      JSON object {"messages":[...]} or plain text
 
-Model resolution (first match wins):
-  1. \`model\` key inside JSON input
-  2. -m / --model <id>
-  3. AI_RELAY_MODEL env var
+The caller-facing tool input schema accepts only {"messages":[...]}; the
+upstream model and sampling parameters are configured per server instance
+(via flags/env), NOT per call.
+
+Required:
+  -m, --model <id>        Upstream model id (or set AI_RELAY_MODEL)
 
 Flags:
-  -m, --model <id>        Model id (e.g. gpt-4o-mini)
   -s, --system <text>     System message prepended to plain-text input
       --api-key <key>     Upstream API key (overrides AI_RELAY_API_KEY)
       --base-url <url>    Upstream base URL (overrides AI_RELAY_BASE_URL)
-      --max-tokens <n>    Cap on max_tokens
+      --max-tokens <n>    Max tokens forwarded upstream (or AI_RELAY_MAX_TOKENS)
+      --temperature <f>   Sampling temperature 0..2 (or AI_RELAY_TEMPERATURE)
+      --top-p <f>         Nucleus sampling 0..1 (or AI_RELAY_TOP_P)
+      --stop <csv>        Stop sequence(s), comma-separated (or AI_RELAY_STOP)
       --timeout <ms>      Request timeout in ms
       --env <path>        Load AI_RELAY_* keys from a dotenv file
   -v, --verbose           Trace stages to stderr (also: AI_RELAY_VERBOSE=1)
@@ -52,10 +56,8 @@ Flags:
 Examples:
   ai-relay-cli openai chat-completions -m gpt-4o-mini "ping"
   ai-relay-cli openai chat-completions --model gpt-4o-mini -s "be terse" "explain TLS"
-  ai-relay-cli openai chat-completions '{"model":"gpt-4o","messages":[{"role":"user","content":"ping"}]}'
+  ai-relay-cli openai chat-completions -m gpt-4o-mini --temperature 0.2 "ping"
   AI_RELAY_MODEL=gpt-4o-mini ai-relay-cli openai chat-completions "ping"
-  ai-relay-cli openai chat-completions -m gpt-4o-mini --api-key sk-... "ping"
-  ai-relay-cli openai chat-completions -m gpt-4o-mini --base-url https://my-azure.openai.azure.com/v1 "ping"
   echo '{"messages":[…]}' | ai-relay-cli openai chat-completions -m gpt-4o-mini
 
 Tip: \`ai-relay <provider>\` (without -cli) starts the MCP stdio server.
@@ -142,13 +144,10 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
     kind: isJsonInput(rawInput) ? "json" : "plain-text",
   });
 
-  const fallbackModel = parsed.flags.model ?? io.env.AI_RELAY_MODEL;
-
   let inputObj: Record<string, unknown>;
   try {
     inputObj = coerceInput(rawInput, tool, {
       ...(parsed.flags.system !== undefined ? { system: parsed.flags.system } : {}),
-      ...(fallbackModel !== undefined ? { model: fallbackModel } : {}),
     });
   } catch (e) {
     io.stderr.write(`${(e as Error).message}\n`);
@@ -157,44 +156,8 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
 
   verbose.log("cli-input-parsed", {
     keys: Object.keys(inputObj),
-    model: inputObj.model,
     messages: dumpMessages(inputObj.messages),
   });
-
-  // Resolve model: input JSON > flag > env. If the input already carries
-  // `model`, it wins; otherwise inject the fallback so the schema accepts.
-  const resolvedModel =
-    typeof inputObj.model === "string" && inputObj.model.length > 0
-      ? inputObj.model
-      : fallbackModel;
-
-  verbose.log("cli-resolved-model", {
-    model: resolvedModel ?? "(none — will error)",
-    source:
-      typeof inputObj.model === "string" && inputObj.model.length > 0
-        ? "from JSON input"
-        : parsed.flags.model !== undefined
-          ? "from -m flag"
-          : io.env.AI_RELAY_MODEL !== undefined
-            ? "from AI_RELAY_MODEL env"
-            : "none — will error",
-  });
-
-  // Plain-text desugar without a resolved model means there's no way for
-  // the tool to know what to call upstream. JSON input is allowed to slip
-  // through here — zod will reject it with a clearer "model required" error.
-  if (resolvedModel === undefined && !isJsonInput(rawInput)) {
-    io.stderr.write(
-      "no model resolved: pass -m/--model, set AI_RELAY_MODEL, or include 'model' in JSON input\n",
-    );
-    return 2;
-  }
-
-  const merged: Record<string, unknown> = {
-    ...inputObj,
-    ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
-    ...(parsed.flags["max-tokens"] !== undefined ? { max_tokens: parsed.flags["max-tokens"] } : {}),
-  };
 
   let envFileMap: Record<string, string> = {};
   if (parsed.flags.env !== undefined) {
@@ -219,13 +182,21 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
   const args: Record<string, unknown> = { provider: "openai" };
   if (parsed.flags["api-key"] !== undefined) args.apiKey = parsed.flags["api-key"];
   if (parsed.flags["base-url"] !== undefined) args.baseURL = parsed.flags["base-url"];
-  if (parsed.flags["max-tokens"] !== undefined) args.maxOutputTokens = parsed.flags["max-tokens"];
+  if (parsed.flags.model !== undefined) args.model = parsed.flags.model;
+  if (parsed.flags.temperature !== undefined) args.temperature = parsed.flags.temperature;
+  if (parsed.flags["max-tokens"] !== undefined) args.max_tokens = parsed.flags["max-tokens"];
+  if (parsed.flags["top-p"] !== undefined) args.top_p = parsed.flags["top-p"];
+  if (parsed.flags.stop !== undefined) args.stop = parsed.flags.stop;
   if (parsed.flags.timeout !== undefined) args.requestTimeoutMs = parsed.flags.timeout;
 
   let providerConfig: {
     apiKey: string;
     baseURL?: string | undefined;
-    maxOutputTokens?: number | undefined;
+    model: string;
+    temperature?: number | undefined;
+    max_tokens?: number | undefined;
+    top_p?: number | undefined;
+    stop?: string | string[] | undefined;
     requestTimeoutMs?: number | undefined;
   };
   try {
@@ -241,16 +212,24 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
   verbose.log("loaded-config", {
     apiKey: redactSecret(providerConfig.apiKey),
     baseURL: providerConfig.baseURL ?? "(default)",
-    maxOutputTokens: providerConfig.maxOutputTokens ?? "(default)",
+    model: providerConfig.model,
+    temperature: providerConfig.temperature ?? "(unset)",
+    max_tokens: providerConfig.max_tokens ?? "(unset)",
+    top_p: providerConfig.top_p ?? "(unset)",
+    stop: providerConfig.stop ?? "(unset)",
     requestTimeoutMs: providerConfig.requestTimeoutMs ?? "(default)",
   });
 
   const toolConfig: OpenAIChatConfig = {
     apiKey: providerConfig.apiKey,
     ...(providerConfig.baseURL !== undefined ? { baseURL: providerConfig.baseURL } : {}),
-    ...(providerConfig.maxOutputTokens !== undefined
-      ? { maxOutputTokensCeiling: providerConfig.maxOutputTokens }
+    model: providerConfig.model,
+    ...(providerConfig.temperature !== undefined
+      ? { temperature: providerConfig.temperature }
       : {}),
+    ...(providerConfig.max_tokens !== undefined ? { max_tokens: providerConfig.max_tokens } : {}),
+    ...(providerConfig.top_p !== undefined ? { top_p: providerConfig.top_p } : {}),
+    ...(providerConfig.stop !== undefined ? { stop: providerConfig.stop } : {}),
     ...(providerConfig.requestTimeoutMs !== undefined
       ? { requestTimeoutMs: providerConfig.requestTimeoutMs }
       : {}),
@@ -259,7 +238,7 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
 
   const bundle: OpenAIChatHandlerBundle = tool.makeHandler(toolConfig);
 
-  const result = await bundle.handler(merged);
+  const result = await bundle.handler(inputObj);
 
   if (result.isError) {
     verbose.log("openai-error", {
@@ -296,7 +275,7 @@ function isJsonInput(raw: string): boolean {
 function coerceInput(
   raw: string,
   tool: AnyTool,
-  opts: { system?: string; model?: string },
+  opts: { system?: string },
 ): Record<string, unknown> {
   const trimmed = raw.trimStart();
   const first = trimmed[0];

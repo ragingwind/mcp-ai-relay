@@ -18,7 +18,9 @@ describe("ai-relay public surface", () => {
 
   it("P3: loadConfig from root produces a usable RelayConfig", async () => {
     const { loadConfig } = await import("ai-relay");
-    const cfg = loadConfig({ env: { AI_RELAY_API_KEY: "k" } });
+    const cfg = loadConfig({
+      env: { AI_RELAY_API_KEY: "k", AI_RELAY_MODEL: "gpt-4o-mini" },
+    });
     expect(cfg.providers).toHaveLength(1);
     expect(cfg.providers[0]?.id).toBe("openai_chat");
   });

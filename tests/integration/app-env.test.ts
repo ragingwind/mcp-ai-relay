@@ -7,6 +7,7 @@ import { type EnvSource, parseEnv } from "../../app/src/env.js";
 const minimalValid = {
   AI_RELAY_API_KEY: "test-ai-relay-api-key",
   AI_RELAY_AUTH_TOKEN: "x".repeat(32),
+  AI_RELAY_MODEL: "gpt-4o-mini",
 } satisfies EnvSource;
 
 const expectThrow = (input: EnvSource): Error => {
@@ -22,17 +23,42 @@ const expectThrow = (input: EnvSource): Error => {
 
 describe("parseEnv — required keys", () => {
   it("throws when AI_RELAY_API_KEY is missing", () => {
-    const err = expectThrow({ AI_RELAY_AUTH_TOKEN: "x".repeat(32) });
+    const err = expectThrow({
+      AI_RELAY_AUTH_TOKEN: "x".repeat(32),
+      AI_RELAY_MODEL: "gpt-4o-mini",
+    });
     expect(err.message).toContain("AI_RELAY_API_KEY");
   });
 
   it("throws when AI_RELAY_AUTH_TOKEN is missing", () => {
-    const err = expectThrow({ AI_RELAY_API_KEY: "k" });
+    const err = expectThrow({ AI_RELAY_API_KEY: "k", AI_RELAY_MODEL: "gpt-4o-mini" });
     expect(err.message).toContain("AI_RELAY_AUTH_TOKEN");
   });
 
+  it("throws when AI_RELAY_MODEL is missing", () => {
+    const err = expectThrow({
+      AI_RELAY_API_KEY: "k",
+      AI_RELAY_AUTH_TOKEN: "x".repeat(32),
+    });
+    expect(err.message).toContain("AI_RELAY_MODEL");
+  });
+
+  it("rejects empty AI_RELAY_MODEL with the required-key message", () => {
+    const err = expectThrow({
+      AI_RELAY_API_KEY: "k",
+      AI_RELAY_AUTH_TOKEN: "x".repeat(32),
+      AI_RELAY_MODEL: "",
+    });
+    expect(err.message).toContain("AI_RELAY_MODEL");
+    expect(err.message).toContain("required");
+  });
+
   it("rejects empty AI_RELAY_API_KEY with the required-key message", () => {
-    const err = expectThrow({ AI_RELAY_API_KEY: "", AI_RELAY_AUTH_TOKEN: "x".repeat(32) });
+    const err = expectThrow({
+      AI_RELAY_API_KEY: "",
+      AI_RELAY_AUTH_TOKEN: "x".repeat(32),
+      AI_RELAY_MODEL: "gpt-4o-mini",
+    });
     expect(err.message).toContain("AI_RELAY_API_KEY");
     expect(err.message).toContain("required");
   });
@@ -41,18 +67,27 @@ describe("parseEnv — required keys", () => {
     const err = expectThrow({
       OPENAI_API_KEY: "legacy",
       AI_RELAY_AUTH_TOKEN: "x".repeat(32),
+      AI_RELAY_MODEL: "gpt-4o-mini",
     });
     expect(err.message).toContain("AI_RELAY_API_KEY");
   });
 
   it("throws when AI_RELAY_AUTH_TOKEN is 31 bytes (one byte under the floor)", () => {
-    const err = expectThrow({ AI_RELAY_API_KEY: "k", AI_RELAY_AUTH_TOKEN: "x".repeat(31) });
+    const err = expectThrow({
+      AI_RELAY_API_KEY: "k",
+      AI_RELAY_AUTH_TOKEN: "x".repeat(31),
+      AI_RELAY_MODEL: "gpt-4o-mini",
+    });
     expect(err.message).toContain("AI_RELAY_AUTH_TOKEN");
     expect(err.message).toContain("at least 32 bytes");
   });
 
   it("accepts AI_RELAY_AUTH_TOKEN at exactly 32 bytes", () => {
-    const env = parseEnv({ AI_RELAY_API_KEY: "k", AI_RELAY_AUTH_TOKEN: "x".repeat(32) });
+    const env = parseEnv({
+      AI_RELAY_API_KEY: "k",
+      AI_RELAY_AUTH_TOKEN: "x".repeat(32),
+      AI_RELAY_MODEL: "gpt-4o-mini",
+    });
     expect(env.AI_RELAY_AUTH_TOKEN).toBe("x".repeat(32));
   });
 
@@ -60,7 +95,11 @@ describe("parseEnv — required keys", () => {
     const multibyte = "🦊".repeat(8);
     expect(multibyte.length).toBe(16);
     expect(Buffer.byteLength(multibyte, "utf8")).toBe(32);
-    const env = parseEnv({ AI_RELAY_API_KEY: "k", AI_RELAY_AUTH_TOKEN: multibyte });
+    const env = parseEnv({
+      AI_RELAY_API_KEY: "k",
+      AI_RELAY_AUTH_TOKEN: multibyte,
+      AI_RELAY_MODEL: "gpt-4o-mini",
+    });
     expect(env.AI_RELAY_AUTH_TOKEN).toBe(multibyte);
   });
 });
@@ -98,9 +137,24 @@ describe("parseEnv — AI_RELAY_BASE_URL", () => {
 });
 
 describe("parseEnv — defaults", () => {
-  it("defaults AI_RELAY_MAX_OUTPUT_TOKENS to 4096 when undefined", () => {
+  it("leaves AI_RELAY_MAX_TOKENS undefined when unset", () => {
     const env = parseEnv(minimalValid);
-    expect(env.AI_RELAY_MAX_OUTPUT_TOKENS).toBe(4096);
+    expect(env.AI_RELAY_MAX_TOKENS).toBeUndefined();
+  });
+
+  it("leaves AI_RELAY_TEMPERATURE undefined when unset", () => {
+    const env = parseEnv(minimalValid);
+    expect(env.AI_RELAY_TEMPERATURE).toBeUndefined();
+  });
+
+  it("leaves AI_RELAY_TOP_P undefined when unset", () => {
+    const env = parseEnv(minimalValid);
+    expect(env.AI_RELAY_TOP_P).toBeUndefined();
+  });
+
+  it("leaves AI_RELAY_STOP undefined when unset", () => {
+    const env = parseEnv(minimalValid);
+    expect(env.AI_RELAY_STOP).toBeUndefined();
   });
 
   it("defaults AI_RELAY_REQUEST_TIMEOUT_MS to 60000 when undefined", () => {
@@ -133,35 +187,77 @@ describe("parseEnv — AI_RELAY_PORT", () => {
 });
 
 describe("parseEnv — numeric coercion", () => {
-  it("coerces a numeric string AI_RELAY_MAX_OUTPUT_TOKENS to a number", () => {
-    const env = parseEnv({ ...minimalValid, AI_RELAY_MAX_OUTPUT_TOKENS: "8192" });
-    expect(env.AI_RELAY_MAX_OUTPUT_TOKENS).toBe(8192);
-    expect(typeof env.AI_RELAY_MAX_OUTPUT_TOKENS).toBe("number");
+  it("coerces a numeric string AI_RELAY_MAX_TOKENS to a number", () => {
+    const env = parseEnv({ ...minimalValid, AI_RELAY_MAX_TOKENS: "8192" });
+    expect(env.AI_RELAY_MAX_TOKENS).toBe(8192);
+    expect(typeof env.AI_RELAY_MAX_TOKENS).toBe("number");
   });
 
-  it("rejects AI_RELAY_MAX_OUTPUT_TOKENS = 0", () => {
-    const err = expectThrow({ ...minimalValid, AI_RELAY_MAX_OUTPUT_TOKENS: "0" });
-    expect(err.message).toContain("AI_RELAY_MAX_OUTPUT_TOKENS");
+  it("rejects AI_RELAY_MAX_TOKENS = 0", () => {
+    const err = expectThrow({ ...minimalValid, AI_RELAY_MAX_TOKENS: "0" });
+    expect(err.message).toContain("AI_RELAY_MAX_TOKENS");
   });
 
-  it("rejects negative AI_RELAY_MAX_OUTPUT_TOKENS", () => {
-    const err = expectThrow({ ...minimalValid, AI_RELAY_MAX_OUTPUT_TOKENS: "-1" });
-    expect(err.message).toContain("AI_RELAY_MAX_OUTPUT_TOKENS");
+  it("rejects negative AI_RELAY_MAX_TOKENS", () => {
+    const err = expectThrow({ ...minimalValid, AI_RELAY_MAX_TOKENS: "-1" });
+    expect(err.message).toContain("AI_RELAY_MAX_TOKENS");
   });
 
-  it("rejects non-integer AI_RELAY_MAX_OUTPUT_TOKENS", () => {
-    const err = expectThrow({ ...minimalValid, AI_RELAY_MAX_OUTPUT_TOKENS: "1.5" });
-    expect(err.message).toContain("AI_RELAY_MAX_OUTPUT_TOKENS");
+  it("rejects non-integer AI_RELAY_MAX_TOKENS", () => {
+    const err = expectThrow({ ...minimalValid, AI_RELAY_MAX_TOKENS: "1.5" });
+    expect(err.message).toContain("AI_RELAY_MAX_TOKENS");
   });
 
-  it("rejects non-numeric AI_RELAY_MAX_OUTPUT_TOKENS", () => {
-    const err = expectThrow({ ...minimalValid, AI_RELAY_MAX_OUTPUT_TOKENS: "abc" });
-    expect(err.message).toContain("AI_RELAY_MAX_OUTPUT_TOKENS");
+  it("rejects non-numeric AI_RELAY_MAX_TOKENS", () => {
+    const err = expectThrow({ ...minimalValid, AI_RELAY_MAX_TOKENS: "abc" });
+    expect(err.message).toContain("AI_RELAY_MAX_TOKENS");
   });
 
   it("coerces and accepts a numeric string AI_RELAY_REQUEST_TIMEOUT_MS", () => {
     const env = parseEnv({ ...minimalValid, AI_RELAY_REQUEST_TIMEOUT_MS: "30000" });
     expect(env.AI_RELAY_REQUEST_TIMEOUT_MS).toBe(30_000);
+  });
+});
+
+describe("parseEnv — sampling parameters", () => {
+  it("coerces AI_RELAY_TEMPERATURE to a number", () => {
+    const env = parseEnv({ ...minimalValid, AI_RELAY_TEMPERATURE: "0.7" });
+    expect(env.AI_RELAY_TEMPERATURE).toBe(0.7);
+  });
+
+  it("rejects AI_RELAY_TEMPERATURE below 0", () => {
+    const err = expectThrow({ ...minimalValid, AI_RELAY_TEMPERATURE: "-0.1" });
+    expect(err.message).toContain("AI_RELAY_TEMPERATURE");
+  });
+
+  it("rejects AI_RELAY_TEMPERATURE above 2", () => {
+    const err = expectThrow({ ...minimalValid, AI_RELAY_TEMPERATURE: "2.5" });
+    expect(err.message).toContain("AI_RELAY_TEMPERATURE");
+  });
+
+  it("coerces AI_RELAY_TOP_P to a number", () => {
+    const env = parseEnv({ ...minimalValid, AI_RELAY_TOP_P: "0.9" });
+    expect(env.AI_RELAY_TOP_P).toBe(0.9);
+  });
+
+  it("rejects AI_RELAY_TOP_P above 1", () => {
+    const err = expectThrow({ ...minimalValid, AI_RELAY_TOP_P: "1.5" });
+    expect(err.message).toContain("AI_RELAY_TOP_P");
+  });
+
+  it("parses a single-value AI_RELAY_STOP as a string", () => {
+    const env = parseEnv({ ...minimalValid, AI_RELAY_STOP: "END" });
+    expect(env.AI_RELAY_STOP).toBe("END");
+  });
+
+  it("parses a comma-separated AI_RELAY_STOP as an array", () => {
+    const env = parseEnv({ ...minimalValid, AI_RELAY_STOP: "END,STOP, \\n" });
+    expect(env.AI_RELAY_STOP).toEqual(["END", "STOP", "\\n"]);
+  });
+
+  it("treats empty AI_RELAY_STOP as undefined", () => {
+    const env = parseEnv({ ...minimalValid, AI_RELAY_STOP: "" });
+    expect(env.AI_RELAY_STOP).toBeUndefined();
   });
 });
 
@@ -188,7 +284,11 @@ describe("parseEnv — secret redaction", () => {
   it("does not echo AI_RELAY_AUTH_TOKEN value when it fails its own length check", () => {
     const sentinel = "short-secret-leak-marker-abcdef"; // 31 bytes
     expect(Buffer.byteLength(sentinel, "utf8")).toBe(31);
-    const err = expectThrow({ AI_RELAY_API_KEY: "k", AI_RELAY_AUTH_TOKEN: sentinel });
+    const err = expectThrow({
+      AI_RELAY_API_KEY: "k",
+      AI_RELAY_AUTH_TOKEN: sentinel,
+      AI_RELAY_MODEL: "gpt-4o-mini",
+    });
     expect(err.message).not.toContain(sentinel);
     expect(err.message).not.toContain("short-secret-leak-marker");
     expect(err.message).toContain("AI_RELAY_AUTH_TOKEN");

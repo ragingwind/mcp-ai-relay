@@ -6,6 +6,70 @@ the project adheres to [Semantic Versioning](https://semver.org/) once
 v1.0 ships. Pre-v1.0 minor bumps may include breaking changes — read
 this file before upgrading.
 
+## [0.10.0] — 2026-05-13
+
+### Changed (breaking)
+
+- The caller-facing MCP tool `inputSchema` now accepts ONLY `messages`.
+  `model`, `temperature`, `max_tokens`, `top_p`, and `stop` are no longer
+  caller-overridable — they live entirely in the server config
+  (`OpenAIChatConfig` for SDK embeds, `AI_RELAY_*` env vars for the
+  HTTP server, `--model`/`--temperature`/`--max-tokens`/`--top-p`/`--stop`
+  flags for the `ai-relay` and `ai-relay-cli` bins).
+- `OpenAIChatConfig.model` is now REQUIRED. `makeOpenAIChatHandler` and
+  `registerOpenAIChat` throw at boot when `model` is missing.
+- `AI_RELAY_MODEL` is now a required environment variable in
+  `app/src/env.ts` (the Hono server). Deployments that previously relied
+  on a caller-supplied model MUST set `AI_RELAY_MODEL` explicitly.
+
+### Added
+
+- `AI_RELAY_TEMPERATURE`, `AI_RELAY_MAX_TOKENS`, `AI_RELAY_TOP_P`, and
+  `AI_RELAY_STOP` environment variables — forwarded to every upstream
+  OpenAI request when set. `AI_RELAY_STOP` accepts a single string or a
+  comma-separated list.
+- Matching `--temperature`, `--max-tokens`, `--top-p`, `--stop` flags on
+  both `ai-relay` (MCP stdio launcher) and `ai-relay-cli` (one-shot CLI).
+- `OpenAIChatConfig` gained `temperature`, `max_tokens`, `top_p`, and
+  `stop` fields — all optional, forwarded as-is when set.
+
+### Removed
+
+- `AI_RELAY_MAX_OUTPUT_TOKENS` env var (replaced by `AI_RELAY_MAX_TOKENS`
+  semantics). The previous behavior also clamped any caller-supplied
+  `max_tokens` against this ceiling — both the env var AND the
+  clamp logic are gone. The server forwards the configured value as-is.
+- `OpenAIChatConfig.maxOutputTokensCeiling` field (replaced by the new
+  per-request `max_tokens` server-config field).
+- Caller-side support for `model` / `temperature` / `max_tokens` /
+  `top_p` / `stop` in the MCP tool input. Senders that pass these
+  fields will have them silently stripped by the MCP-SDK validator —
+  the server-configured values are authoritative.
+
+### Migration
+
+```ts
+// Before
+registerOpenAIChat(server, { apiKey, maxOutputTokensCeiling: 4096 });
+
+// After — model is required, sampling lives on the server config
+registerOpenAIChat(server, {
+  apiKey,
+  model: "gpt-4o-mini",
+  max_tokens: 4096,
+  temperature: 0.7,
+});
+```
+
+```sh
+# Before — caller could vary the model per call
+ai-relay openai
+
+# After — model is server-configured (env or flag)
+AI_RELAY_MODEL=gpt-4o-mini ai-relay openai
+ai-relay openai -m gpt-4o-mini --temperature 0.7 --max-tokens 4096
+```
+
 ## [0.9.0] — 2026-05-12
 
 ### Added

@@ -105,10 +105,13 @@ snippet is omitted from result text.
 |---|---|---|
 | `AI_RELAY_API_KEY` | ✅ | Set via `wrangler secret put` |
 | `AI_RELAY_AUTH_TOKEN` | ✅ | Bearer token sent by the MCP host (32+ bytes) |
+| `AI_RELAY_MODEL` | ✅ | Upstream model id (e.g. `gpt-4o-mini`) — required since 0.10.0 |
 | `AI_RELAY_BASE_URL` | ❌ | Override for Azure / vLLM / Ollama / AI Gateway |
 
-`max_tokens` ceiling and request timeout default to the SDK's values
-(4096 / 60 s). Edit `src/index.ts` to override.
+Caller-facing tool input is `{ messages }` only (0.10.0 breaking change).
+`max_tokens`, `temperature`, `top_p`, `stop`, and request timeout are
+SDK-default unless you extend `init()` in `src/index.ts` to pass them in
+`OpenAIChatConfig`.
 
 ## Connect from an MCP host
 

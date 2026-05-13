@@ -29,11 +29,16 @@ pnpm install
 pnpm --filter ai-relay build
 
 # enable the upstreams you have credentials for
-AI_RELAY_API_KEY=sk-... \
-AZURE_OPENAI_KEY=... AZURE_AI_RELAY_BASE_URL=https://<resource>.openai.azure.com/openai/deployments/<deployment> \
-LOCAL_LLM_BASE_URL=http://localhost:11434/v1 \
+AI_RELAY_API_KEY=sk-... AI_RELAY_MODEL=gpt-4o-mini \
+AZURE_OPENAI_KEY=... AZURE_OPENAI_BASE_URL=https://<resource>.openai.azure.com/openai/deployments/<deployment> AZURE_OPENAI_MODEL=gpt-4o \
+LOCAL_LLM_BASE_URL=http://localhost:11434/v1 LOCAL_LLM_MODEL=llama3 \
   pnpm --filter @example/multi-upstream start
 ```
+
+Each upstream needs its own model id; `server.ts` reads `AI_RELAY_MODEL` /
+`AZURE_OPENAI_MODEL` / `LOCAL_LLM_MODEL` and falls back to sensible defaults.
+Since 0.10.0 the caller-facing MCP input is `{ messages }` only — model is
+captured per-registration at server boot.
 
 The server logs `multi-upstream-relay: registered N tool(s).` to stderr
 on start (so it doesn't pollute the JSON-RPC stdout stream). At least
@@ -43,7 +48,8 @@ exits non-zero.
 ## Verify with MCP Inspector (C7)
 
 ```bash
-AI_RELAY_API_KEY=sk-... LOCAL_LLM_BASE_URL=http://localhost:11434/v1 \
+AI_RELAY_API_KEY=sk-... AI_RELAY_MODEL=gpt-4o-mini \
+LOCAL_LLM_BASE_URL=http://localhost:11434/v1 LOCAL_LLM_MODEL=llama3 \
   npx @modelcontextprotocol/inspector --cli \
     -- pnpm --filter @example/multi-upstream start
 ```
@@ -75,9 +81,12 @@ wired to mock A via `AI_RELAY_BASE_URL` and to mock B via
 | Var | Effect |
 |---|---|
 | `AI_RELAY_API_KEY` | Registers `chat-completions` against OpenAI proper |
+| `AI_RELAY_MODEL` | Model id for `chat-completions` (default `gpt-4o-mini`) |
 | `AI_RELAY_BASE_URL` | Optional base URL override for `chat-completions` |
-| `AZURE_OPENAI_KEY` + `AZURE_AI_RELAY_BASE_URL` | Registers `azure_chat` |
-| `LOCAL_LLM_BASE_URL` | Registers `local_llm` (default ceiling 8192) |
+| `AZURE_OPENAI_KEY` + `AZURE_OPENAI_BASE_URL` | Registers `azure_chat` |
+| `AZURE_OPENAI_MODEL` | Model id for `azure_chat` (default `gpt-4o-mini`) |
+| `LOCAL_LLM_BASE_URL` | Registers `local_llm` (default `max_tokens: 8192`) |
+| `LOCAL_LLM_MODEL` | Model id for `local_llm` (default `llama3`) |
 | `LOCAL_LLM_KEY` | Optional auth for the local LLM endpoint |
 
 Add more upstreams by copying the `registerOpenAIChat` block in
@@ -91,5 +100,5 @@ npm pkg set type=module
 npm install ai-relay @modelcontextprotocol/sdk openai
 npm install --save-dev tsx
 # Copy server.ts from this directory.
-AI_RELAY_API_KEY=sk-... npx tsx server.ts
+AI_RELAY_API_KEY=sk-... AI_RELAY_MODEL=gpt-4o-mini npx tsx server.ts
 ```

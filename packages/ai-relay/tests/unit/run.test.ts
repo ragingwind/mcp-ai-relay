@@ -136,14 +136,17 @@ describe("run — usage errors short-circuit", () => {
 
 describe("run — input handling", () => {
   it("D1: stdin + positional both present → exit 2 with conflict message", async () => {
-    const cap = makeIO({ stdin: '{"messages":[]}' });
+    const cap = makeIO({
+      stdin: '{"messages":[{"role":"user","content":"x"}]}',
+      env: { AI_RELAY_API_KEY: "k" },
+    });
     const code = await run(["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(2);
     expect(cap.stderr.value).toContain("received both stdin and positional input");
   });
 
   it("P1: positional plain text desugared and dispatched", async () => {
-    let captured: { messages?: { role: string; content: string }[] } | undefined;
+    let captured: { messages?: { role: string; content: string }[]; model?: string } | undefined;
     server.use(
       http.post(ENDPOINT, async ({ request }) => {
         captured = (await request.json()) as typeof captured;
@@ -154,13 +157,14 @@ describe("run — input handling", () => {
     const code = await run(["openai", "chat-completions", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(0);
     expect(captured?.messages).toEqual([{ role: "user", content: "hi" }]);
+    expect(captured?.model).toBe("gpt-4o-mini");
     const out = JSON.parse(cap.stdout.value.trim());
     expect(out.isError).toBe(false);
     expect(out.content[0].text).toBe("hello");
     expect(out.structuredContent.model).toBe("gpt-4o-mini");
   });
 
-  it("P2: stdin JSON parsed verbatim with model from flag", async () => {
+  it("P2: stdin JSON ({messages}) parsed verbatim with model from flag", async () => {
     let captured: { messages?: { role: string; content: string }[]; model?: string } | undefined;
     server.use(
       http.post(ENDPOINT, async ({ request }) => {
@@ -178,38 +182,30 @@ describe("run — input handling", () => {
     expect(captured?.model).toBe("gpt-4o-mini");
   });
 
-  it("P3: positional JSON with model field — input JSON wins over flag", async () => {
-    let captured: { model?: string } | undefined;
-    server.use(
-      http.post(ENDPOINT, async ({ request }) => {
-        captured = (await request.json()) as typeof captured;
-        return happyResponse();
-      }),
-    );
+  it("D2: caller-supplied JSON `model` rejected by strict schema → exit 1", async () => {
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
-    const code = await run(
-      [
-        "openai",
-        "chat-completions",
-        "-m",
-        "gpt-4o-mini",
-        '{"model":"override-from-json","messages":[{"role":"user","content":"ping"}]}',
-      ],
-      cap.io,
-    );
-    expect(code).toBe(0);
-    expect(captured?.model).toBe("override-from-json");
+    await expect(
+      run(
+        [
+          "openai",
+          "chat-completions",
+          "-m",
+          "gpt-4o-mini",
+          '{"model":"x","messages":[{"role":"user","content":"hi"}]}',
+        ],
+        cap.io,
+      ),
+    ).rejects.toThrow(/model|Unrecognized/i);
   });
 
-  it("D2: empty stdin pipe → exit 2 with empty-stdin message (not generic 'requires input')", async () => {
+  it("D3: empty stdin pipe → exit 2", async () => {
     const cap = makeIO({ stdin: "", env: { AI_RELAY_API_KEY: "k" } });
     const code = await run(["openai", "chat-completions", "-m", "gpt-4o-mini"], cap.io);
     expect(code).toBe(2);
     expect(cap.stderr.value).toContain("empty stdin");
-    expect(cap.stderr.value).not.toContain("requires input");
   });
 
-  it("D3: positional JSON array → exit 2 with array-rejection message naming the tool", async () => {
+  it("D4: positional JSON array → exit 2 with array-rejection message naming the tool", async () => {
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
     const code = await run(["openai", "chat-completions", "-m", "gpt-4o-mini", "[1,2,3]"], cap.io);
     expect(code).toBe(2);
@@ -218,7 +214,7 @@ describe("run — input handling", () => {
     );
   });
 
-  it("P4: --system + plain text → system prepended", async () => {
+  it("P3: --system + plain text → system prepended", async () => {
     let captured: { messages?: { role: string; content: string }[] } | undefined;
     server.use(
       http.post(ENDPOINT, async ({ request }) => {
@@ -239,8 +235,8 @@ describe("run — input handling", () => {
   });
 });
 
-describe("run — model resolution precedence", () => {
-  it("P1: -m flag resolves model when none in JSON", async () => {
+describe("run — model resolution", () => {
+  it("P1: -m flag sets the server-config model", async () => {
     let captured: { model?: string } | undefined;
     server.use(
       http.post(ENDPOINT, async ({ request }) => {
@@ -254,7 +250,7 @@ describe("run — model resolution precedence", () => {
     expect(captured?.model).toBe("from-flag");
   });
 
-  it("P2: AI_RELAY_MODEL env used when no flag and plain text input", async () => {
+  it("P2: AI_RELAY_MODEL env used when no flag", async () => {
     let captured: { model?: string } | undefined;
     server.use(
       http.post(ENDPOINT, async ({ request }) => {
@@ -282,30 +278,7 @@ describe("run — model resolution precedence", () => {
     expect(captured?.model).toBe("from-flag");
   });
 
-  it("P4: input JSON 'model' wins over both -m flag and env", async () => {
-    let captured: { model?: string } | undefined;
-    server.use(
-      http.post(ENDPOINT, async ({ request }) => {
-        captured = (await request.json()) as typeof captured;
-        return happyResponse();
-      }),
-    );
-    const cap = makeIO({ env: { AI_RELAY_API_KEY: "k", AI_RELAY_MODEL: "from-env" } });
-    const code = await run(
-      [
-        "openai",
-        "chat-completions",
-        "-m",
-        "from-flag",
-        '{"model":"from-json","messages":[{"role":"user","content":"hi"}]}',
-      ],
-      cap.io,
-    );
-    expect(code).toBe(0);
-    expect(captured?.model).toBe("from-json");
-  });
-
-  it("P5: --model long form works just like -m", async () => {
+  it("P4: --model long form works just like -m", async () => {
     let captured: { model?: string } | undefined;
     server.use(
       http.post(ENDPOINT, async ({ request }) => {
@@ -322,20 +295,11 @@ describe("run — model resolution precedence", () => {
     expect(captured?.model).toBe("from-long-flag");
   });
 
-  it("D1: no model from any source on plain text input → exit 2 with helpful message", async () => {
+  it("D1: no model from any source → exit 2 with config error", async () => {
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
     const code = await run(["openai", "chat-completions", "hi"], cap.io);
     expect(code).toBe(2);
-    expect(cap.stderr.value).toContain("no model resolved");
-    expect(cap.stderr.value).toMatch(/-m\/--model/);
-    expect(cap.stderr.value).toContain("AI_RELAY_MODEL");
-  });
-
-  it("D2: no model on JSON input falls through to schema rejection (ZodError)", async () => {
-    const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
-    await expect(
-      run(["openai", "chat-completions", '{"messages":[{"role":"user","content":"hi"}]}'], cap.io),
-    ).rejects.toThrow(/model/i);
+    expect(cap.stderr.value).toMatch(/model/i);
   });
 });
 
@@ -447,8 +411,8 @@ describe("run — secret redaction", () => {
   });
 });
 
-describe("run — flag-driven config", () => {
-  it("P1: --max-tokens flag flows to upstream request body", async () => {
+describe("run — flag-driven server config", () => {
+  it("P1: --max-tokens flows to upstream request body as server-config max_tokens", async () => {
     let body: { max_tokens?: number } | undefined;
     server.use(
       http.post(ENDPOINT, async ({ request }) => {
@@ -489,6 +453,74 @@ describe("run — flag-driven config", () => {
     expect(code).toBe(0);
     expect(hit).toBe(true);
   });
+
+  it("P3: --temperature flows to upstream request body", async () => {
+    let body: { temperature?: number } | undefined;
+    server.use(
+      http.post(ENDPOINT, async ({ request }) => {
+        body = (await request.json()) as typeof body;
+        return happyResponse();
+      }),
+    );
+    const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
+    const code = await run(
+      ["openai", "chat-completions", "-m", "gpt-4o-mini", "--temperature", "0.2", "hi"],
+      cap.io,
+    );
+    expect(code).toBe(0);
+    expect(body?.temperature).toBe(0.2);
+  });
+
+  it("P4: --top-p flows to upstream request body", async () => {
+    let body: { top_p?: number } | undefined;
+    server.use(
+      http.post(ENDPOINT, async ({ request }) => {
+        body = (await request.json()) as typeof body;
+        return happyResponse();
+      }),
+    );
+    const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
+    const code = await run(
+      ["openai", "chat-completions", "-m", "gpt-4o-mini", "--top-p", "0.9", "hi"],
+      cap.io,
+    );
+    expect(code).toBe(0);
+    expect(body?.top_p).toBe(0.9);
+  });
+
+  it("P5: --stop (single) flows to upstream as a string", async () => {
+    let body: { stop?: unknown } | undefined;
+    server.use(
+      http.post(ENDPOINT, async ({ request }) => {
+        body = (await request.json()) as typeof body;
+        return happyResponse();
+      }),
+    );
+    const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
+    const code = await run(
+      ["openai", "chat-completions", "-m", "gpt-4o-mini", "--stop", "END", "hi"],
+      cap.io,
+    );
+    expect(code).toBe(0);
+    expect(body?.stop).toBe("END");
+  });
+
+  it("P6: --stop CSV flows to upstream as an array", async () => {
+    let body: { stop?: unknown } | undefined;
+    server.use(
+      http.post(ENDPOINT, async ({ request }) => {
+        body = (await request.json()) as typeof body;
+        return happyResponse();
+      }),
+    );
+    const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
+    const code = await run(
+      ["openai", "chat-completions", "-m", "gpt-4o-mini", "--stop", "END,STOP", "hi"],
+      cap.io,
+    );
+    expect(code).toBe(0);
+    expect(body?.stop).toEqual(["END", "STOP"]);
+  });
 });
 
 describe("run — verbose stderr", () => {
@@ -497,16 +529,13 @@ describe("run — verbose stderr", () => {
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
     const code = await run(["openai", "chat-completions", "-v", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(0);
-    // stdout stays exactly one JSON line (no verbose pollution)
     expect(cap.stdout.value.trim().split("\n")).toHaveLength(1);
-    // stderr contains the expected stage sequence
     for (const stage of [
       "argv",
       "parsed-flags",
       "env-snapshot",
       "cli-input-raw",
       "cli-input-parsed",
-      "cli-resolved-model",
       "loaded-config",
       "openai-stream-start",
       "openai-http-request",
@@ -516,11 +545,9 @@ describe("run — verbose stderr", () => {
     ]) {
       expect(cap.stderr.value).toContain(`] ${stage}:`);
     }
-    // every verbose line starts with the timestamp-free [ai-relay] prefix
     for (const line of cap.stderr.value.split("\n").filter((l) => l.length > 0)) {
       expect(line).toMatch(/^\[ai-relay\] /);
     }
-    // no ISO timestamp should appear in the prefix
     expect(cap.stderr.value).not.toMatch(/^\[verbose \d{4}-/m);
   });
 
@@ -563,7 +590,7 @@ describe("run — verbose stderr", () => {
     expect(cap.stderr.value).not.toContain(sentinel);
   });
 
-  it("D3: Authorization header on outbound OpenAI request is redacted (Bearer secret never echoed)", async () => {
+  it("D3: Authorization header on outbound OpenAI request is redacted", async () => {
     server.use(http.post(ENDPOINT, () => happyResponse("ok")));
     const sentinel = "sk-supersecret-canary-12345";
     const cap = makeIO({ env: { AI_RELAY_API_KEY: sentinel } });
@@ -574,15 +601,13 @@ describe("run — verbose stderr", () => {
     expect(cap.stderr.value).toMatch(/Bearer \*\*\*redacted\(\d+chars\)\*\*\*/);
   });
 
-  it("D3b: verbose emits the accumulated upstream text verbatim (body disclosure trade-off)", async () => {
+  it("D3b: verbose emits the accumulated upstream text verbatim", async () => {
     const upstreamMarker = "upstream-body-trace-marker-3333";
     server.use(http.post(ENDPOINT, () => happyResponse(upstreamMarker)));
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
     const code = await run(["openai", "chat-completions", "-v", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(0);
-    // stderr now shows the body (operator opted into --verbose)
     expect(cap.stderr.value).toContain(upstreamMarker);
-    // stdout also carries the body (this is the JSON channel)
     expect(cap.stdout.value).toContain(upstreamMarker);
   });
 

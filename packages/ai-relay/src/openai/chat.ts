@@ -27,7 +27,6 @@ import { type CreatedOpenAIClient, createOpenAIClient, type RequestScope } from 
 const DEFAULT_NAME = "chat-completions";
 const DEFAULT_DESCRIPTION =
   "Invoke OpenAI Chat Completions and return the accumulated assistant message.";
-const DEFAULT_CEILING = 4096;
 const DEFAULT_TIMEOUT_MS = 60_000;
 
 // --- config ---------------------------------------------------------------
@@ -36,16 +35,25 @@ export interface OpenAIChatConfig {
   /** Registered MCP tool name. Default `"chat-completions"`. Must be unique
    *  within an MCP server when multiple instances are registered. */
   name?: string;
-  /** Description override. Default is the SDK's built-in summary. */
+  /** Description override. The default summary includes the model id and
+   *  any sampling values baked into the server config. */
   description?: string;
   /** OpenAI API key. Required unless `openaiClient` is supplied. */
   apiKey: string;
   /** OpenAI base URL override (Azure / vLLM / Ollama / AI Gateway / mock). */
   baseURL?: string;
-  /** Ceiling for `max_tokens`. Default 4096. Doubles as the default
-   *  injected when the caller omits `max_tokens` — every upstream call
-   *  carries an explicit cap. */
-  maxOutputTokensCeiling?: number;
+  /** Model id forwarded to the upstream Chat Completions endpoint. Required.
+   *  The MCP tool inputSchema no longer accepts a caller-supplied model — the
+   *  server is the single source of truth. */
+  model: string;
+  /** Sampling temperature (0..2). When set, forwarded with every call. */
+  temperature?: number;
+  /** Max tokens forwarded to the upstream. Positive integer. */
+  max_tokens?: number;
+  /** Nucleus sampling cutoff (0..1). When set, forwarded with every call. */
+  top_p?: number;
+  /** Stop sequence (single string or array). When set, forwarded with every call. */
+  stop?: string | string[];
   /** Per-request OpenAI timeout in ms. Default 60_000. */
   requestTimeoutMs?: number;
   /** Inject a pre-built OpenAI client (advanced — share a client across
@@ -65,10 +73,9 @@ export interface OpenAIChatConfig {
 
 // --- input schema ---------------------------------------------------------
 
-export function makeOpenAIChatSchema(ceiling: number) {
+export function makeOpenAIChatSchema() {
   return z
     .object({
-      model: z.string().min(1),
       messages: z
         .array(
           z.object({
@@ -77,18 +84,6 @@ export function makeOpenAIChatSchema(ceiling: number) {
           }),
         )
         .min(1),
-      temperature: z.number().min(0).max(2).optional(),
-      // Accept omitted OR 0 as "use the configured default"; clamp
-      // positive values to the ceiling. Negative values are rejected.
-      // Result is always a positive integer ≤ ceiling.
-      max_tokens: z
-        .number()
-        .int()
-        .nonnegative()
-        .optional()
-        .transform((n) => (n === undefined || n === 0 ? ceiling : Math.min(n, ceiling))),
-      top_p: z.number().min(0).max(1).optional(),
-      stop: z.union([z.string(), z.array(z.string())]).optional(),
     })
     .strict();
 }
@@ -207,10 +202,12 @@ export interface OpenAIChatHandlerBundle {
 }
 
 export function makeOpenAIChatHandler(config: OpenAIChatConfig): OpenAIChatHandlerBundle {
+  if (!config.model || config.model.length === 0) {
+    throw new Error("OpenAIChatConfig.model is required");
+  }
   const name = config.name ?? DEFAULT_NAME;
-  const description = config.description ?? DEFAULT_DESCRIPTION;
-  const ceiling = config.maxOutputTokensCeiling ?? DEFAULT_CEILING;
-  const schema = makeOpenAIChatSchema(ceiling);
+  const description = config.description ?? buildDefaultDescription(config);
+  const schema = makeOpenAIChatSchema();
 
   const { client, requestScope } = resolveClient(config);
   const logger = config.logger;
@@ -227,7 +224,9 @@ export function makeOpenAIChatHandler(config: OpenAIChatConfig): OpenAIChatHandl
       }
     }
 
-    return requestScope.run({}, () => runOnce(input, client, requestScope, ac, logger));
+    return requestScope.run({}, () =>
+      runOnce(input.messages, config, client, requestScope, ac, logger),
+    );
   };
 
   return { schema, handler, name, description };
@@ -254,7 +253,7 @@ export interface ToolDescriptor<C = unknown, B = unknown> {
   /** Make a handler bundle (schema + handler + names) for one config. */
   makeHandler: (config: C) => B;
   /** Optional CLI sugar: turn plain text into a JSON object the schema accepts. */
-  desugar?: (plain: string, opts: { system?: string; model?: string }) => Record<string, unknown>;
+  desugar?: (plain: string, opts: { system?: string }) => Record<string, unknown>;
 }
 
 export const openAIChatTool: ToolDescriptor<OpenAIChatConfig, OpenAIChatHandlerBundle> = {
@@ -265,11 +264,22 @@ export const openAIChatTool: ToolDescriptor<OpenAIChatConfig, OpenAIChatHandlerB
     const messages: Array<{ role: "system" | "user"; content: string }> = [];
     if (opts.system) messages.push({ role: "system", content: opts.system });
     messages.push({ role: "user", content: plain });
-    return opts.model ? { model: opts.model, messages } : { messages };
+    return { messages };
   },
 };
 
 // --- internals ------------------------------------------------------------
+
+function buildDefaultDescription(config: OpenAIChatConfig): string {
+  const hints: string[] = [`model: ${config.model}`];
+  if (config.temperature !== undefined) hints.push(`temperature: ${config.temperature}`);
+  if (config.max_tokens !== undefined) hints.push(`max_tokens: ${config.max_tokens}`);
+  if (config.top_p !== undefined) hints.push(`top_p: ${config.top_p}`);
+  if (config.stop !== undefined) {
+    hints.push(`stop: ${Array.isArray(config.stop) ? JSON.stringify(config.stop) : config.stop}`);
+  }
+  return `${DEFAULT_DESCRIPTION} (${hints.join(", ")})`;
+}
 
 function resolveClient(config: OpenAIChatConfig): CreatedOpenAIClient {
   if (config.openaiClient) {
@@ -290,21 +300,23 @@ function resolveClient(config: OpenAIChatConfig): CreatedOpenAIClient {
 }
 
 async function runOnce(
-  input: OpenAIChatInput,
+  messages: OpenAIChatInput["messages"],
+  config: OpenAIChatConfig,
   client: OpenAI,
   requestScope: RequestScope,
   ac: AbortController,
   logger?: VerboseLogger,
 ): Promise<OpenAIChatResult> {
   const startedAt = Date.now();
+  const model = config.model;
   if (logger?.enabled) {
     logger.log("openai-stream-start", {
-      model: input.model,
-      messages: dumpMessages(input.messages),
-      temperature: input.temperature,
-      max_tokens: input.max_tokens,
-      top_p: input.top_p,
-      stop: input.stop,
+      model,
+      messages: dumpMessages(messages),
+      temperature: config.temperature,
+      max_tokens: config.max_tokens,
+      top_p: config.top_p,
+      stop: config.stop,
       maxRetries: 0,
     });
     if (ac.signal.aborted) {
@@ -328,12 +340,12 @@ async function runOnce(
   try {
     const stream = await client.chat.completions.create(
       {
-        model: input.model,
-        messages: input.messages,
-        ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
-        max_tokens: input.max_tokens,
-        ...(input.top_p !== undefined ? { top_p: input.top_p } : {}),
-        ...(input.stop !== undefined ? { stop: input.stop } : {}),
+        model,
+        messages,
+        ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
+        ...(config.max_tokens !== undefined ? { max_tokens: config.max_tokens } : {}),
+        ...(config.top_p !== undefined ? { top_p: config.top_p } : {}),
+        ...(config.stop !== undefined ? { stop: config.stop } : {}),
         stream: true,
         stream_options: { include_usage: true },
       },
@@ -360,7 +372,7 @@ async function runOnce(
     }
 
     const structuredContent: OpenAIChatStructured = {
-      model: input.model,
+      model,
       ...(usage !== undefined ? { usage } : {}),
       ...(finishReason !== undefined ? { finish_reason: finishReason } : {}),
     };
@@ -382,7 +394,7 @@ async function runOnce(
   } catch (err) {
     const mapped = mapOpenAIError(err, requestScope);
     const structuredContent: OpenAIChatStructured = {
-      model: input.model,
+      model,
       code: mapped.code,
       ...(mapped.retryAfter !== undefined ? { retryAfter: mapped.retryAfter } : {}),
     };

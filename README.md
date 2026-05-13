@@ -8,11 +8,15 @@
 
 ## Quick reference
 
+> **0.10.0 (breaking):** the caller-facing MCP tool now accepts only `{ messages }`. The upstream model and sampling parameters (`model`, `temperature`, `max_tokens`, `top_p`, `stop`) are configured per server instance via env vars or flags. Callers that still send `model` will have the field silently stripped by the MCP-SDK validator — the server-configured value wins. See [`CHANGELOG`](./packages/ai-relay/CHANGELOG.md#0100--2026-05-13).
+
 **1. One-shot CLI** — run a model from the shell:
 
 ```bash
 AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions -m gpt-4o-mini "ping"
 ```
+
+(`-m` configures the model the CLI uses for this invocation; it is NOT sent in the MCP call arguments.)
 
 **2. stdio MCP** — register in Claude Desktop / Claude Code / Cursor:
 
@@ -21,12 +25,14 @@ AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions -m gpt-4o-mini 
   "mcpServers": {
     "ai-relay": {
       "command": "npx",
-      "args": ["-y", "ai-relay", "openai"],
+      "args": ["-y", "ai-relay", "openai", "-m", "gpt-4o-mini"],
       "env": { "AI_RELAY_API_KEY": "sk-..." }
     }
   }
 }
 ```
+
+The MCP host (Claude Desktop, Cursor, …) calls `tools/call` with `{ "messages": [...] }` only — model selection happens on the server (above, via `-m`; or via `AI_RELAY_MODEL` in the `env` block).
 
 **3. Docker HTTP** — self-host an MCP HTTP endpoint:
 
@@ -34,8 +40,11 @@ AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions -m gpt-4o-mini 
 docker run -p 8787:8787 \
   -e AI_RELAY_API_KEY=sk-... \
   -e AI_RELAY_AUTH_TOKEN=$(openssl rand -hex 32) \
+  -e AI_RELAY_MODEL=gpt-4o-mini \
   ghcr.io/ragingwind/ai-relay:latest
 ```
+
+`AI_RELAY_MODEL` is required — the Hono server rejects boot if it is unset.
 
 **4. SDK** — embed in your own MCP server:
 
@@ -45,24 +54,32 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { registerOpenAIChat } from "ai-relay/openai";
 
 const server = new McpServer({ name: "my-relay", version: "0.1.0" });
-registerOpenAIChat(server, { apiKey: process.env.AI_RELAY_API_KEY! });
+registerOpenAIChat(server, {
+  apiKey: process.env.AI_RELAY_API_KEY!,
+  model: "gpt-4o-mini",
+});
 await server.connect(new StdioServerTransport());
 ```
+
+`model` is now a required field on `OpenAIChatConfig`; `registerOpenAIChat` throws at boot if it is missing.
 
 ---
 
 ## 1. One-shot CLI
 
-Invocation: `ai-relay-cli <provider> <tool> [flags] [input]`. Today `<provider>` is `openai` and `<tool>` is `chat-completions`. The model resolves from JSON input → `-m` flag → `AI_RELAY_MODEL`, in that order. Input is either a positional or piped via stdin (XOR); plain text becomes `{messages:[{role:"user",content:…}]}`, JSON literals (`{` / `[`) pass through.
+Invocation: `ai-relay-cli <provider> <tool> [flags] [input]`. Today `<provider>` is `openai` and `<tool>` is `chat-completions`. **Model and sampling parameters are server-side configuration** — set them via `-m`/`--model`/`--temperature`/`--max-tokens`/`--top-p`/`--stop` flags or the matching `AI_RELAY_*` env vars. Input is either a positional or piped via stdin (XOR); plain text becomes `{messages:[{role:"user",content:…}]}`, JSON literals (`{` / `[`) pass through but MUST only contain `messages` (extra keys are rejected by `.strict()`).
 
 ```bash
-# JSON input (model inside the payload)
-npx ai-relay-cli openai chat-completions \
-  '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"ping"}]}'
+# Plain-text input (wrapped into {messages:[…]} automatically)
+npx ai-relay-cli openai chat-completions -m gpt-4o-mini "ping"
 
-# Stdin pipe + system prompt
+# JSON input (messages only — model lives in the flag/env, not the payload)
+npx ai-relay-cli openai chat-completions -m gpt-4o-mini \
+  '{"messages":[{"role":"user","content":"ping"}]}'
+
+# Stdin pipe + system prompt + sampling override
 echo "explain TLS in 2 sentences" \
-  | npx ai-relay-cli openai chat-completions -m gpt-4o-mini -s "be terse"
+  | npx ai-relay-cli openai chat-completions -m gpt-4o-mini --temperature 0.2 -s "be terse"
 
 # Azure OpenAI / vLLM / Ollama / AI Gateway — any OpenAI-compatible endpoint
 npx ai-relay-cli openai chat-completions -m gpt-4o-mini \
@@ -75,18 +92,29 @@ npx ai-relay-cli openai chat-completions -m gpt-4o-mini \
 
 ## 2. stdio MCP server
 
-Register `ai-relay` as an MCP server in any host that spawns a child process and speaks JSON-RPC over stdin/stdout (Claude Desktop, Claude Code, Cursor, project-local `.mcp.json`). Replace `sk-...` and you're done.
+Register `ai-relay` as an MCP server in any host that spawns a child process and speaks JSON-RPC over stdin/stdout (Claude Desktop, Claude Code, Cursor, project-local `.mcp.json`). Provide both `AI_RELAY_API_KEY` and a model (via `-m` flag or `AI_RELAY_MODEL` env) and you're done — the MCP host then calls the tool with `{ "messages": [...] }` only.
 
-Point at an OpenAI-compatible endpoint by adding `AI_RELAY_BASE_URL` to the `env` block:
+Point at an OpenAI-compatible endpoint and pin sampling on the server side:
 
 ```json
-"env": {
-  "AI_RELAY_API_KEY": "sk-...",
-  "AI_RELAY_BASE_URL": "https://my-azure.openai.azure.com/v1"
+{
+  "mcpServers": {
+    "ai-relay": {
+      "command": "npx",
+      "args": ["-y", "ai-relay", "openai"],
+      "env": {
+        "AI_RELAY_API_KEY": "sk-...",
+        "AI_RELAY_MODEL": "gpt-4o-mini",
+        "AI_RELAY_BASE_URL": "https://my-azure.openai.azure.com/v1",
+        "AI_RELAY_TEMPERATURE": "0.7",
+        "AI_RELAY_MAX_TOKENS": "4096"
+      }
+    }
+  }
 }
 ```
 
-The bin also accepts `--api-key`, `--base-url`, `--max-tokens`, `--timeout`, `--env <path>` as flags. Run `npx ai-relay --help` for the full list.
+The bin also accepts `-m`/`--model`, `--api-key`, `--base-url`, `--max-tokens`, `--temperature`, `--top-p`, `--stop`, `--timeout`, `--env <path>` as flags. Either flags OR env vars work; `AI_RELAY_MODEL` (or `-m`) is required. Run `npx ai-relay --help` for the full list.
 
 ---
 
@@ -123,9 +151,12 @@ SDK API reference: [`packages/ai-relay/README.md`](./packages/ai-relay/README.md
 | Variable | Required | Default |
 |---|---|---|
 | `AI_RELAY_API_KEY` | yes | — |
+| `AI_RELAY_MODEL` | yes (HTTP app; stdio bin requires `-m` or this) | — |
 | `AI_RELAY_BASE_URL` | no | OpenAI default |
-| `AI_RELAY_MODEL` | no (CLI only) | — |
-| `AI_RELAY_MAX_OUTPUT_TOKENS` | no | 4096 |
+| `AI_RELAY_TEMPERATURE` | no | upstream default |
+| `AI_RELAY_MAX_TOKENS` | no | upstream default |
+| `AI_RELAY_TOP_P` | no | upstream default |
+| `AI_RELAY_STOP` | no (single value or comma-separated list) | — |
 | `AI_RELAY_REQUEST_TIMEOUT_MS` | no | 60000 |
 | `AI_RELAY_AUTH_TOKEN` | yes (Docker / HTTP app) | — |
 | `AI_RELAY_PORT` | no (HTTP app) | 8787 |
