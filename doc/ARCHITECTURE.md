@@ -26,6 +26,9 @@ sources in the [Reference index](#reference-index).
 | D5 | **Node.js 20.x + multi-arch Docker** (`ghcr.io/ragingwind/ai-relay`, amd64+arm64) | Self-hosted; portable across cloud + on-prem. Vercel target moved to `examples/vercel/` (community-supported) |
 | D6 | **Streamable HTTP transport only** (SSE disabled) | Stateless. Avoids Redis dependency |
 | D7 | **OpenAI streams are accumulated server-side and returned as a single `CallToolResult`** | MCP `tools/call` returns a single result; there is no token-level streaming channel |
+| D8 | **Env interpretation is invocation-derived** | `AI_RELAY_*` keys reinterpret per the invoked provider; multi-provider-per-server is forbidden. See §12.1. |
+| D9 | **Tool-name namespacing is deferred-until-collision** | Flat kebab-case names today; `<provider>-<api>` migration only on collision. Reserved right to rename. See §12.2. |
+| D10 | **Tool input schemas are upstream-faithful** | Each tool's caller schema mirrors its upstream API; no unified-message abstraction. SDK modules perform syntactic adapters (e.g., Anthropic `system` extraction). See §12.3. |
 
 ---
 
@@ -263,6 +266,8 @@ project that consumes `ai-relay` from npm (see `examples/vercel/README.md`).
 
 ## 7. Environment variables
 
+`AI_RELAY_*` keys are interpreted per the provider passed at invocation (`ai-relay <provider>`). A given process serves exactly one provider; running multiple providers on one MCP server is not supported (see §12.1).
+
 | Key | Required | Secret | Description |
 |---|---|---|---|
 | `AI_RELAY_API_KEY` | ✅ | Sensitive | Upstream API key. Recommend separate keys for Production/Preview. |
@@ -350,7 +355,47 @@ Principle: **mock only the OpenAI HTTP boundary** (MSW). Never mock the SDK modu
 - **Observability** — OpenTelemetry traces + Pino NDJSON logs + (optional) Sentry
 - **Progress notifications** — handle `_meta.progressToken` and emit progress messages
 - **Tools/function-calling pass-through** — serialize `tool_calls` results into `structuredContent`
-- **Multi-provider per server** — `ai-relay <provider-a> <provider-b> ...` to register multiple providers' tools on a single MCP server. When introduced, tool names migrate to `<provider>.<api>` namespacing to avoid collisions.
+
+---
+
+## 12. Architectural policies
+
+These policies govern how the SDK expands beyond a single provider. They are load-bearing for issues #91 (Anthropic), #92 (OpenAI Responses), #93 (Google Gemini), and any future provider work.
+
+### 12.1 Env interpretation (D8)
+
+`AI_RELAY_*` env keys retain stable names regardless of which provider is in use. Their meaning is **derived from the provider passed at invocation**:
+
+- `ai-relay openai`     → `AI_RELAY_API_KEY` is the OpenAI key, `AI_RELAY_MODEL` is an OpenAI model id (`gpt-5-mini`).
+- `ai-relay anthropic`  → same keys, interpreted as Anthropic (`claude-sonnet-4-6`, …).
+- `ai-relay google`     → same keys, interpreted as Gemini (`gemini-2.5-pro`).
+
+**Multi-provider-per-server is not supported.** A given process serves exactly one provider; running `openai` and `anthropic` tools on the same MCP server is out of scope. Operators who need multiple providers run multiple processes, each with its own provider invocation and env.
+
+Rationale: avoids env-name explosion (`AI_RELAY_OPENAI_API_KEY` / `AI_RELAY_ANTHROPIC_API_KEY` / …) and matches how operators actually deploy — one container per upstream.
+
+### 12.2 Tool-name namespacing (D9)
+
+MCP tool names stay flat kebab-case while no collision exists:
+
+| Provider   | Tool name           |
+|------------|---------------------|
+| OpenAI     | `chat-completions`  |
+| OpenAI     | `responses`         |
+| Anthropic  | `messages`          |
+| Google     | `generate-content`  |
+
+When a true name collision arises (e.g., a future provider also defining `messages`), tools migrate to `<provider>-<api>` form (`anthropic-messages`, `gemini-messages`, …) in a single coordinated release. **The project reserves the right to rename tools on collision.** Early adopters relying on flat names are warned to expect this migration.
+
+Rationale: namespace decoration before need is premature. Migration cost is small (rename + minor version bump); current cost of always-namespacing is larger (uglier names, breaking change for v0.x consumers already shipping flat names).
+
+### 12.3 Schema policy (D10)
+
+Each MCP tool exposes the **native shape of its upstream API** as input. There is no unified-message abstraction across providers. Where the upstream shape differs from the caller-facing convention, the SDK module performs a **translation** internally — never a normalization that pretends two providers have the same surface.
+
+Concrete example (Anthropic): the caller passes `{ messages: [{ role: 'system' | 'user' | 'assistant', content: string }] }` matching the OpenAI Chat shape. The Anthropic SDK module extracts leading `role: 'system'` entries to Anthropic's top-level `system: string` parameter before calling `client.messages.create(...)`. This is a **syntactic adapter**, not a schema unification: caller schemas for OpenAI Chat and Anthropic Messages remain independently versioned.
+
+Rationale: pretending a unified shape exists creates lies at the schema boundary and rots as providers diverge. Gemini's `contents`/`parts` shape is the closest example of why this matters — a forced normalization would lose information that future provider features may need.
 
 ---
 
