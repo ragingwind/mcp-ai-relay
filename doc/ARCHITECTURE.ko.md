@@ -347,7 +347,7 @@ export function verifyToken(req: Request, bearerToken: string | undefined) {
 
 ## 11. v2+ 백로그
 
-- **Responses API 지원** (`openai_responses` 도구 추가)
+- **Responses API 지원** (`responses` 도구 추가 — §12.2 네이밍 정책 참고)
 - **Embeddings / image** 도구
 - **OAuth 2.1** 인증 (`withMcpAuth`의 토큰 검증기 교체)
 - **Rate limiting** — Upstash Ratelimit (Edge Middleware, IP + 토큰 2단)

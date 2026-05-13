@@ -347,7 +347,7 @@ Principle: **mock only the OpenAI HTTP boundary** (MSW). Never mock the SDK modu
 
 ## 11. Future work (v2+ backlog)
 
-- **Responses API support** (add an `openai_responses` tool)
+- **Responses API support** (add a `responses` tool — see §12.2 naming policy)
 - **Embeddings / image** tools
 - **OAuth 2.1** authentication (swap the `withMcpAuth` token verifier)
 - **Rate limiting** — Upstash Ratelimit (Edge Middleware, IP + token two-tier)
