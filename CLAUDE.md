@@ -102,6 +102,8 @@ Full tree: [`doc/ARCHITECTURE.md` §5](./doc/ARCHITECTURE.md#5-directory-structu
 
 ## 6. Environment / secrets
 
+> All `AI_RELAY_*` keys are interpreted per the invoking provider (see [ARCHITECTURE.md §12.1](./doc/ARCHITECTURE.md#121-env-interpretation-d8)). One process = one provider.
+
 ### Server (consumed by `app/src/env.ts`)
 
 | Key | Required | Source / default |
