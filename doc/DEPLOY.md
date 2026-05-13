@@ -29,7 +29,7 @@ For **Docker** (canonical):
 For **Vercel** (community-supported, see [`examples/vercel/README.md`](../examples/vercel/README.md)):
 - A Vercel account (Pro plan recommended — needed for `maxDuration: 300`).
 - A separate Next.js project that consumes `ai-relay` from npm — this
-  repository is no longer a Next.js app.
+  repository is not a Next.js app.
 - Two OpenAI projects (Production + Preview), each with its own key.
 - Vercel CLI: `npm i -g vercel` (or `pnpm dlx vercel ...`).
 
@@ -163,11 +163,9 @@ The remaining keys (including `AI_RELAY_PORT`, `AI_RELAY_TEMPERATURE`,
 [`ARCHITECTURE.md` §7](./ARCHITECTURE.md#7-environment-variables) for
 defaults.
 
-> **0.10.0 note:** the caller-facing MCP tool input no longer accepts
-> `model` / sampling parameters. Configure them per server instance via
-> the `AI_RELAY_*` env vars above. `AI_RELAY_MAX_OUTPUT_TOKENS` (with its
-> server-side clamp) was removed; `AI_RELAY_MAX_TOKENS` is now forwarded
-> as-is on every upstream call.
+> The caller-facing MCP tool input does not accept `model` / sampling
+> parameters. Configure them per server instance via the `AI_RELAY_*` env
+> vars above. `AI_RELAY_MAX_TOKENS` is forwarded as-is on every upstream call.
 
 ### 3.4 Verification checklist
 
@@ -216,13 +214,13 @@ runtime values are injected via `env_file` / `-e` only.
 
 ## 4. Vercel (community-supported)
 
-This repository is no longer a Next.js app. To deploy on Vercel, build a
+This repository is not a Next.js app. To deploy on Vercel, build a
 thin Next.js project that consumes `ai-relay` from npm. The recipe lives
 at [`examples/vercel/README.md`](../examples/vercel/README.md) — copy the
 `vercel.json` from that directory into your own project and follow the
 template route handler shown in the README.
 
-The Vercel target is no longer covered by this repository's CI or release
+The Vercel target is not covered by this repository's CI or release
 pipeline. Treat it as a reference deployment.
 
 ---

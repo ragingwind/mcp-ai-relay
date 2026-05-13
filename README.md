@@ -8,8 +8,6 @@
 
 ## Quick reference
 
-> **0.10.0 (breaking):** the caller-facing MCP tool now accepts only `{ messages }`. The upstream model and sampling parameters (`model`, `temperature`, `max_tokens`, `top_p`, `stop`) are configured per server instance via env vars or flags. Callers that still send `model` will have the field silently stripped by the MCP-SDK validator — the server-configured value wins. See [`CHANGELOG`](./packages/ai-relay/CHANGELOG.md#0100--2026-05-13).
-
 **1. One-shot CLI** — run a model from the shell:
 
 ```bash
@@ -187,4 +185,4 @@ Full scenario matrix and evidence template: [`doc/QA-MCP-INSPECTOR.md`](./doc/QA
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+MIT LICENSE

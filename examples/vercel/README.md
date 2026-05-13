@@ -15,8 +15,8 @@ shipped before it became framework-agnostic. The interesting parts:
 
 ## How to use it
 
-`ai-relay` is no longer a Next.js project, so you cannot deploy
-this repository directly to Vercel. Instead, build a thin Next.js
+`ai-relay` is not a Next.js project, so you cannot deploy this
+repository directly to Vercel. Instead, build a thin Next.js
 project that consumes the published `ai-relay` SDK:
 
 ```bash
@@ -34,7 +34,6 @@ import { registerOpenAIChat } from "ai-relay/openai";
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 
 // loadConfig reads AI_RELAY_API_KEY + AI_RELAY_MODEL + optional sampling env vars.
-// AI_RELAY_MODEL is required since 0.10.0.
 const config = loadConfig({ env: process.env });
 const provider = config.providers[0]!;
 
@@ -94,7 +93,7 @@ The exact dropped-name list lives in `scripts/smoke.sh`. Ends with
 
 ## Why this is community-supported
 
-The Vercel target is no longer covered by this repository's CI or
+The Vercel target is not covered by this repository's CI or
 release pipeline — the canonical artifact is the multi-arch container
 image. Treat this directory as a reference; report issues but expect
 PRs to take longer.

@@ -92,7 +92,7 @@ Environment variables read by `server.ts`:
 | Var | Required | Notes |
 |---|---|---|
 | `AI_RELAY_API_KEY` | ✅ | OpenAI API key |
-| `AI_RELAY_MODEL` | ✅ | Upstream model id (e.g. `gpt-4o-mini`) — required since 0.10.0 |
+| `AI_RELAY_MODEL` | ✅ | Upstream model id (e.g. `gpt-4o-mini`) |
 | `AI_RELAY_BASE_URL` | ❌ | Override for Azure / vLLM / Ollama / AI Gateway |
 
 `max_tokens`, `temperature`, `top_p`, `stop`, and request timeout are

@@ -15,12 +15,10 @@ production 배포 후에 한 번 실행하세요. v1은 UI가 없기 때문에
 - **수동 5-시나리오** — C4(서버 측 sampling 오버라이드) 또는 C6(취소)이
   범위에 들어올 때, 그리고 모든 production 배포 후에 필요.
 
-> **0.10.0 변경:** 호출자 측 MCP 도구 입력은 이제 `{ messages }` 만 받습니다.
-> `model`, `temperature`, `max_tokens`, `top_p`, `stop` 은 서버 측 구성
-> (Hono 앱의 env 변수, stdio bin의 플래그)입니다. 아래 시나리오는 이에
-> 맞춰 갱신되었습니다 — 이전에 호출자 측 `model` / `max_tokens` 을
-> 단언하던 호출은 이제 서버의 `AI_RELAY_MODEL` / `AI_RELAY_MAX_TOKENS` 에
-> 대해 단언합니다.
+> 호출자 측 MCP 도구 입력은 `{ messages }` 만 받습니다. `model`,
+> `temperature`, `max_tokens`, `top_p`, `stop` 은 서버 측 구성
+> (Hono 앱의 env 변수, stdio bin의 플래그)입니다. 아래 시나리오는
+> 서버의 `AI_RELAY_MODEL` / `AI_RELAY_MAX_TOKENS` 에 대해 단언합니다.
 
 **시간 예산**: 환경 세팅이 끝난 뒤 수동 절차는 ~3분.
 
@@ -56,8 +54,7 @@ evidence-record 블록 출력. 1회당 ~$0.0001 (`gpt-4o-mini` 한 번 호출).
 | `MCP_URL`      | `http://localhost:8787/api/mcp` | 엔드포인트 (Hono `AI_RELAY_PORT` 기본값과 일치) |
 
 C2 happy-path 호출에 사용되는 모델은 실행 중인 서버의 `AI_RELAY_MODEL` 값
-그대로입니다 — `verify.mjs` 는 더 이상 이를 오버라이드하지 않습니다 (호출자
-스키마는 `{ messages }` 뿐).
+그대로입니다 (호출자 스키마는 `{ messages }` 뿐).
 
 `AI_RELAY_AUTH_TOKEN`은 `.env.local`에서 읽음.
 
@@ -89,7 +86,7 @@ pnpm inspect --tool=other_tool --message="..."
 | `--message=` | `MCP_MESSAGE` | `ping` |
 | `--method=`  | —             | `tools/call` (또는 `tools/list`) |
 
-`--model=` 은 더 이상 받지 않습니다 — 모델은 서버 측 구성 (Hono 서버의
+`--model=` 은 받지 않습니다 — 모델은 서버 측 구성 (Hono 서버의
 `AI_RELAY_MODEL` env, stdio bin의 `-m` 플래그) 입니다. 이 스크립트가
 구성하는 tools/call 인자는 `{ messages }` 만 보냅니다.
 

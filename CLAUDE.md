@@ -108,7 +108,7 @@ Full tree: [`doc/ARCHITECTURE.md` §5](./doc/ARCHITECTURE.md#5-directory-structu
 |---|---|---|
 | `AI_RELAY_API_KEY` | ✅ | Container env / orchestrator secret (separate Production/Preview keys) |
 | `AI_RELAY_AUTH_TOKEN` | ✅ | Container env / orchestrator secret (32+ random bytes) |
-| `AI_RELAY_MODEL` | ✅ | Upstream model id forwarded with every `tools/call`. The caller-facing tool input no longer accepts `model` — the server is the single source of truth. |
+| `AI_RELAY_MODEL` | ✅ | Upstream model id forwarded with every `tools/call`. The caller-facing tool input does not accept `model` — the server is the single source of truth. |
 | `AI_RELAY_BASE_URL` | ❌ | Plain env var. Default: SDK built-in. Override to point at Azure OpenAI, vLLM/Ollama, or a mock. |
 | `AI_RELAY_TEMPERATURE` | ❌ | Plain, 0..2. Forwarded with every upstream call when set. |
 | `AI_RELAY_MAX_TOKENS` | ❌ | Plain, positive integer. Forwarded as `max_tokens` upstream. No server ceiling / clamp is applied. |
@@ -123,7 +123,7 @@ Both bins read the same `AI_RELAY_*` env keys as the server (model + sampling pa
 
 | Key | Notes |
 |---|---|
-| `AI_RELAY_MODEL` | Required for `ai-relay <provider>` (MCP stdio launcher) and `ai-relay-cli` (one-shot CLI). Overridden by `-m` / `--model`. The MCP tool input no longer accepts a caller-supplied `model`. |
+| `AI_RELAY_MODEL` | Required for `ai-relay <provider>` (MCP stdio launcher) and `ai-relay-cli` (one-shot CLI). Overridden by `-m` / `--model`. The MCP tool input does not accept a caller-supplied `model`. |
 | `AI_RELAY_TEMPERATURE` / `AI_RELAY_MAX_TOKENS` / `AI_RELAY_TOP_P` / `AI_RELAY_STOP` | Forwarded to every upstream call when set. Overridden by `--temperature` / `--max-tokens` / `--top-p` / `--stop` flags. |
 
 ### Script-only (consumed by `scripts/mcp-inspect.mjs` and `scripts/verify.mjs`)
@@ -136,10 +136,8 @@ These are NOT read by the server. They only set defaults for the verification sc
 | `MCP_TOOL`     | `inspect` | `chat-completions` | `--tool=` |
 | `MCP_MESSAGE`  | `inspect` | `ping` | `--message=` |
 
-> 0.10.0 removed the script-only `MCP_MODEL` and `VERIFY_MODEL` env vars (and the
-> `--model=` flag on `pnpm inspect`). The MCP tool input is `{ messages }` only;
-> the upstream model is read from the server-side `AI_RELAY_MODEL` and surfaced
-> back via `structuredContent.model`.
+> The MCP tool input is `{ messages }` only; the upstream model is read from
+> the server-side `AI_RELAY_MODEL` and surfaced back via `structuredContent.model`.
 
 Local development uses `.env.local` (gitignored). `.env.example` records key names only.
 

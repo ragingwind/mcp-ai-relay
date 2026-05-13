@@ -15,12 +15,10 @@ Two ways to run it:
 - **Manual five-scenario** — required when C4 (server-side sampling override)
   or C6 (cancellation) is in scope, and after every production deploy.
 
-> **0.10.0 change:** the caller-facing MCP tool input now accepts only
-> `{ messages }`. `model`, `temperature`, `max_tokens`, `top_p`, and `stop`
-> are server-side configuration (env vars on the Hono app, flags on the
-> stdio bin). Scenarios below have been updated accordingly — calls that
-> previously asserted caller-side `model` / `max_tokens` are now asserted
-> against `AI_RELAY_MODEL` / `AI_RELAY_MAX_TOKENS` on the server.
+> The caller-facing MCP tool input accepts only `{ messages }`. `model`,
+> `temperature`, `max_tokens`, `top_p`, and `stop` are server-side
+> configuration (env vars on the Hono app, flags on the stdio bin).
+> Scenarios below assert `AI_RELAY_MODEL` / `AI_RELAY_MAX_TOKENS` on the server.
 
 **Time budget**: ~3 minutes for the manual procedure once your env is set up.
 
@@ -56,8 +54,7 @@ Inputs (env-only — `verify.mjs` does not parse flags):
 | `MCP_URL`      | `http://localhost:8787/api/mcp` | endpoint (matches Hono `AI_RELAY_PORT` default) |
 
 The model used for the C2 happy-path call is whatever `AI_RELAY_MODEL` is set
-to on the running server — `verify.mjs` no longer overrides it (the caller
-schema is `{ messages }` only).
+to on the running server (the caller schema is `{ messages }` only).
 
 `AI_RELAY_AUTH_TOKEN` is read from `.env.local`.
 
@@ -90,7 +87,7 @@ Flags (priority: `--flag=` > `process.env` > `.env.local` > default):
 | `--message=` | `MCP_MESSAGE` | `ping` |
 | `--method=`  | —             | `tools/call` (also `tools/list`) |
 
-`--model=` is no longer accepted — the model is server-side configuration
+`--model=` is not accepted — the model is server-side configuration
 (`AI_RELAY_MODEL` env on the Hono server, `-m` flag on the stdio bin). The
 tools/call arguments built by this script send `{ messages }` only.
 

@@ -28,8 +28,8 @@
 
 **Vercel용** (커뮤니티 지원, [`examples/vercel/README.md`](../examples/vercel/README.md) 참고):
 - Vercel 계정 (Pro 플랜 권장 — `maxDuration: 300`에 필요).
-- npm의 `ai-relay`를 소비하는 별도 Next.js 프로젝트 — 이 저장소는 더 이상
-  Next.js 앱이 아님.
+- npm의 `ai-relay`를 소비하는 별도 Next.js 프로젝트 — 이 저장소는 Next.js
+  앱이 아님.
 - OpenAI 프로젝트 2개 (Production + Preview), 각자의 키 보유.
 - Vercel CLI: `npm i -g vercel` (또는 `pnpm dlx vercel ...`).
 
@@ -160,11 +160,9 @@ docker run --rm -p 8787:8787 --env-file .env.production ghcr.io/ragingwind/ai-re
 포함)는 선택 — 기본값은 [`ARCHITECTURE.ko.md` §7](./ARCHITECTURE.ko.md#7-환경변수)
 참고.
 
-> **0.10.0 노트:** 호출자 측 MCP 도구 입력은 더 이상 `model` / sampling
-> 파라미터를 받지 않습니다. 위의 `AI_RELAY_*` env 변수로 서버 인스턴스
-> 단위로 구성하세요. `AI_RELAY_MAX_OUTPUT_TOKENS` (서버 측 클램프 포함)
-> 는 제거되었고, `AI_RELAY_MAX_TOKENS` 가 매 업스트림 호출에 그대로
-> 전달됩니다.
+> 호출자 측 MCP 도구 입력은 `model` / sampling 파라미터를 받지 않습니다.
+> 위의 `AI_RELAY_*` env 변수로 서버 인스턴스 단위로 구성하세요.
+> `AI_RELAY_MAX_TOKENS` 는 매 업스트림 호출에 그대로 전달됩니다.
 
 ### 3.4 검증 체크리스트
 
@@ -213,14 +211,14 @@ docker history ghcr.io/ragingwind/ai-relay:latest --no-trunc \
 
 ## 4. Vercel (커뮤니티 지원)
 
-이 저장소는 더 이상 Next.js 앱이 아닙니다. Vercel에 배포하려면 npm의
+이 저장소는 Next.js 앱이 아닙니다. Vercel에 배포하려면 npm의
 `ai-relay`를 소비하는 얇은 Next.js 프로젝트를 만드세요. 레시피는
 [`examples/vercel/README.md`](../examples/vercel/README.md) 에 있습니다 —
 해당 디렉터리의 `vercel.json` 을 자기 프로젝트로 복사하고 README의 템플릿
 라우트 핸들러를 따르세요.
 
-Vercel 타깃은 더 이상 이 저장소의 CI나 릴리스 파이프라인에서 다루지
-않습니다. 참조용 배포로 간주하세요.
+Vercel 타깃은 이 저장소의 CI나 릴리스 파이프라인에서 다루지 않습니다.
+참조용 배포로 간주하세요.
 
 ---
 

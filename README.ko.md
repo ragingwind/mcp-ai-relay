@@ -8,8 +8,6 @@
 
 ## Quick reference
 
-> **0.10.0 (breaking):** 호출자가 보내는 MCP tool 입력은 `{ messages }`만 받습니다. `model`, `temperature`, `max_tokens`, `top_p`, `stop` 같은 업스트림/샘플링 파라미터는 서버 인스턴스 단위로 env 또는 플래그를 통해 설정합니다. caller(Claude Desktop 등 MCP 호스트)가 `model`을 보내면 MCP-SDK validator가 조용히 떼어내고 서버 설정값이 우선됩니다. 자세한 사항은 [`CHANGELOG`](./packages/ai-relay/CHANGELOG.md#0100--2026-05-13).
-
 **1. 단발 CLI** — 셸에서 모델 호출:
 
 ```bash
@@ -186,4 +184,4 @@ AI_RELAY_API_KEY=sk-... \
 
 ## 라이선스
 
-MIT — [LICENSE](./LICENSE) 참고.
+MIT LICENSE
