@@ -146,6 +146,21 @@ SDK API reference: [`packages/ai-relay/README.md`](./packages/ai-relay/README.md
 
 ---
 
+## 5. Verify with MCP Inspector
+
+Spawn the stdio bin under [`@modelcontextprotocol/inspector --cli`](https://github.com/modelcontextprotocol/inspector) — no HTTP server, no host required:
+
+```bash
+AI_RELAY_API_KEY=sk-... \
+  npx @modelcontextprotocol/inspector --cli npx ai-relay openai -m gpt-4o-mini --method tools/list
+```
+
+For non-default upstreams (Azure / vLLM / Ollama / AI Gateway / your-own-proxy), add `AI_RELAY_BASE_URL=https://your-endpoint.example.com/v1` before `npx`.
+
+Full scenario matrix and evidence template: [`doc/QA-MCP-INSPECTOR.md`](./doc/QA-MCP-INSPECTOR.md) ([한국어](./doc/QA-MCP-INSPECTOR.ko.md)).
+
+---
+
 ## Environment variables
 
 | Variable | Required | Default |
@@ -168,6 +183,7 @@ SDK API reference: [`packages/ai-relay/README.md`](./packages/ai-relay/README.md
 - SDK API + recipes: [`packages/ai-relay/README.md`](./packages/ai-relay/README.md)
 - Architecture: [`doc/ARCHITECTURE.md`](./doc/ARCHITECTURE.md) ([한국어](./doc/ARCHITECTURE.ko.md))
 - Deployment runbook: [`doc/DEPLOY.md`](./doc/DEPLOY.md) ([한국어](./doc/DEPLOY.ko.md))
+- MCP Inspector verification: [`doc/QA-MCP-INSPECTOR.md`](./doc/QA-MCP-INSPECTOR.md) ([한국어](./doc/QA-MCP-INSPECTOR.ko.md))
 
 ## License
 

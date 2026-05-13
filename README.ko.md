@@ -146,6 +146,21 @@ SDK API 레퍼런스: [`packages/ai-relay/README.md`](./packages/ai-relay/README
 
 ---
 
+## 5. MCP Inspector 로 검증
+
+[`@modelcontextprotocol/inspector --cli`](https://github.com/modelcontextprotocol/inspector) 가 stdio bin 을 자식 프로세스로 띄움 — HTTP 서버나 호스트 없이 한 줄로:
+
+```bash
+AI_RELAY_API_KEY=sk-... \
+  npx @modelcontextprotocol/inspector --cli npx ai-relay openai -m gpt-4o-mini --method tools/list
+```
+
+기본이 아닌 업스트림 (Azure / vLLM / Ollama / AI Gateway / 자체 프록시) 을 쓰려면 `npx` 앞에 `AI_RELAY_BASE_URL=https://your-endpoint.example.com/v1` 추가.
+
+전체 시나리오 매트릭스와 evidence 템플릿: [`doc/QA-MCP-INSPECTOR.ko.md`](./doc/QA-MCP-INSPECTOR.ko.md) ([English](./doc/QA-MCP-INSPECTOR.md)).
+
+---
+
 ## 환경 변수
 
 | 변수 | 필수 | 기본값 |
