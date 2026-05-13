@@ -267,7 +267,7 @@ project that consumes `ai-relay` from npm (see `examples/vercel/README.md`).
 |---|---|---|---|
 | `AI_RELAY_API_KEY` | ✅ | Sensitive | Upstream API key. Recommend separate keys for Production/Preview. |
 | `AI_RELAY_AUTH_TOKEN` | ✅ | Sensitive | Bearer token sent by the MCP host. 32+ random bytes. |
-| `AI_RELAY_MODEL` | ✅ | Plain | Upstream model id forwarded on every `tools/call`. The caller-facing tool input no longer accepts `model`. |
+| `AI_RELAY_MODEL` | ✅ | Plain | Upstream model id forwarded on every `tools/call`. The caller-facing tool input does not accept `model`. |
 | `AI_RELAY_BASE_URL` | ❌ | Plain | Override the upstream base URL. Default: SDK built-in. Use to point at Azure OpenAI, a self-hosted vLLM/Ollama gateway, or a local mock. |
 | `AI_RELAY_TEMPERATURE` | ❌ | Plain | Float 0..2. Forwarded as `temperature` to every upstream call when set. |
 | `AI_RELAY_MAX_TOKENS` | ❌ | Plain | Positive integer. Forwarded as `max_tokens` to every upstream call. No server-side clamp is applied — set conservatively. |

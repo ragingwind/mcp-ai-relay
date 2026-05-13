@@ -14,8 +14,6 @@ npm install ai-relay @modelcontextprotocol/sdk openai
 
 ## Quick reference
 
-> **0.10.0 (breaking):** the caller-facing MCP tool `inputSchema` accepts only `{ messages }`. The upstream model and sampling parameters live on the server config (`OpenAIChatConfig` for SDK embeds, env vars for the HTTP server, flags for `ai-relay` / `ai-relay-cli`). `OpenAIChatConfig.model` is now required and the SDK throws at boot when missing. See [`CHANGELOG`](./CHANGELOG.md#0100--2026-05-13).
-
 **1. One-shot CLI** — `ai-relay-cli <provider> <tool> [flags] [input]`:
 
 ```bash
@@ -82,7 +80,7 @@ ai-relay-cli openai chat-completions -m gpt-4o-mini --base-url https://my-azure.
 echo '{"messages":[…]}' | ai-relay-cli openai chat-completions -m gpt-4o-mini
 ```
 
-**Model resolution** (first match wins): `-m`/`--model` flag → `AI_RELAY_MODEL` env. JSON input no longer accepts a `model` field — the caller schema is `{ messages }` only and `.strict()` rejects extra keys.
+**Model resolution** (first match wins): `-m`/`--model` flag → `AI_RELAY_MODEL` env. The caller schema is `{ messages }` only and `.strict()` rejects extra keys, so JSON input cannot include a `model` field.
 
 | Flag | Purpose |
 |---|---|
@@ -243,7 +241,7 @@ interface OpenAIChatConfig {
   description?: string;
   apiKey: string;
   baseURL?: string;
-  model: string;                    // required — caller-facing input no longer accepts model
+  model: string;                    // required — caller-facing input does not accept model
   temperature?: number;             // forwarded as-is to every upstream call
   max_tokens?: number;              // forwarded as-is; no server-side clamp
   top_p?: number;

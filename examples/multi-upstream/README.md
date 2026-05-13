@@ -37,8 +37,8 @@ LOCAL_LLM_BASE_URL=http://localhost:11434/v1 LOCAL_LLM_MODEL=llama3 \
 
 Each upstream needs its own model id; `server.ts` reads `AI_RELAY_MODEL` /
 `AZURE_OPENAI_MODEL` / `LOCAL_LLM_MODEL` and falls back to sensible defaults.
-Since 0.10.0 the caller-facing MCP input is `{ messages }` only — model is
-captured per-registration at server boot.
+The caller-facing MCP input is `{ messages }` only — model is captured
+per-registration at server boot.
 
 The server logs `multi-upstream-relay: registered N tool(s).` to stderr
 on start (so it doesn't pollute the JSON-RPC stdout stream). At least
