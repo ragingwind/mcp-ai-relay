@@ -1,8 +1,19 @@
 # ai-relay
 
-> OpenAI Chat Completions(및 OpenAI 호환 업스트림)를 Model Context Protocol 도구로 노출하는 MCP 릴레이입니다.
+> OpenAI Chat Completions(및 OpenAI 호환 업스트림) 또는 Anthropic Messages를 Model Context Protocol 도구로 노출하는 MCP 릴레이입니다.
 
 > English: [README.md](./README.md)
+
+---
+
+## Providers
+
+| Provider | CLI / bin | SDK 서브패스 | 비고 |
+|---|---|---|---|
+| OpenAI Chat Completions | `ai-relay openai` / `ai-relay-cli openai chat-completions` | [`ai-relay/openai`](./packages/ai-relay/README.md) | OpenAI 호환 업스트림 전반 (Azure, vLLM, Ollama, OpenRouter, AI Gateway) |
+| Anthropic Messages | `ai-relay anthropic` / `ai-relay-cli anthropic messages` | [`ai-relay/anthropic`](./packages/ai-relay/README.md#anthropic-messages) | `max_tokens` 기본 1024, `temperature` 범위 0..1 |
+
+> 배포된 프로세스는 한 번에 하나의 provider만 사용해야 합니다(ADR D8, [`doc/ARCHITECTURE.md`](./doc/ARCHITECTURE.md) 참고). 두 provider를 동시에 노출하려면 ai-relay 프로세스를 두 개 띄우세요.
 
 ---
 
@@ -11,7 +22,11 @@
 **1. 단발 CLI** — 셸에서 모델 호출:
 
 ```bash
+# OpenAI
 AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions -m gpt-4o-mini "ping"
+
+# Anthropic
+AI_RELAY_API_KEY=sk-ant-... npx ai-relay-cli anthropic messages -m claude-sonnet-4-5 "ping"
 ```
 
 (`-m`은 CLI가 이번 호출에 사용할 모델을 서버 측 설정으로 박는 옵션입니다. MCP `tools/call` 인자로 전송되는 값이 **아닙니다**.)

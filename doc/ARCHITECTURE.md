@@ -133,6 +133,38 @@ The caller-facing surface is intentionally minimal — `model` and all sampling 
 - `tool_choice` / `tools` parameters are not supported in v1 — tool calls are not forwarded.
 - If a function/tool call appears in the response, it is not serialized to text; instead the tool surfaces `finish_reason: "tool_calls"` so the host LLM can decide what to do.
 
+### `messages` (Anthropic provider)
+
+Invokes Anthropic Messages once and returns the accumulated assistant text. The caller-facing input/output schemas are identical to `chat-completions` (per D10 — upstream-faithful schema policy).
+
+**Input schema (Zod, `.strict()`)** — identical to `chat-completions`:
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `messages` | `Array<{role: "system"|"user"|"assistant", content: string}>` | ✅ | Leading `system` messages are extracted into Anthropic's top-level `system` field (joined with `\n\n` if multiple); non-leading `system` is rejected with `bad_request` |
+
+**Server-side configuration (`AnthropicMessagesConfig` / `AI_RELAY_*` env)**
+
+| Field | Env | Required | Notes |
+|---|---|---|---|
+| `model` | `AI_RELAY_MODEL` | ✅ | Forwarded as-is to the upstream Messages endpoint |
+| `temperature` | `AI_RELAY_TEMPERATURE` | ❌ | **0..1** (OpenAI uses 0..2); forwarded when set |
+| `max_tokens` | `AI_RELAY_MAX_TOKENS` | ❌ | Positive integer. **Defaults to 1024** when omitted — Anthropic requires this field on every call |
+| `top_p` | `AI_RELAY_TOP_P` | ❌ | 0..1; forwarded when set |
+| `stop` | `AI_RELAY_STOP` | ❌ | Single string or comma-separated list; translated to `stop_sequences: string[]` upstream |
+
+**Output schema** — identical to `chat-completions` (`structuredContent.model`, `usage` with `prompt_tokens` + `completion_tokens` + `total_tokens`, `finish_reason`, `code`, `retryAfter`).
+
+#### Anthropic `stop_reason` → `finish_reason` mapping
+
+| Anthropic `stop_reason` | Surfaced `finish_reason` | Notes |
+|---|---|---|
+| `end_turn` | `stop` | Normal completion |
+| `max_tokens` | `length` | Cap hit |
+| `stop_sequence` | `stop` | One of `stop_sequences` matched |
+| `tool_use` | `tool_calls` | Mirrors OpenAI `tool_calls` (tools not forwarded in v1) |
+| `refusal` | `content_filter` | Also sets `isError: true` and `code: "content_policy"` |
+
 ---
 
 ## 5. Directory structure
@@ -216,14 +248,15 @@ mcp-ai-relay/                              # repo root — pnpm workspace orches
 | MCP handler | `mcp-handler@^1.1` |
 | MCP SDK | `@modelcontextprotocol/sdk@^1.26` |
 | Validation | `zod@^4` |
-| OpenAI SDK | `openai@^6` |
+| OpenAI SDK | `openai@^6` (optional peer dep) |
+| Anthropic SDK | `@anthropic-ai/sdk@^0.96.0` (optional peer dep) |
 | Runtime | Node.js `20.x` (alpine container; multi-arch amd64+arm64) |
 | Language | TypeScript strict, NodeNext ESM, `verbatimModuleSyntax: true` |
 | Package manager | pnpm `^9` (pinned via `packageManager`) |
 | Lint/Format | Biome `^2` |
 | Test | vitest + msw (mock at the HTTP boundary) |
 | Deployment | `ghcr.io/ragingwind/ai-relay` multi-arch image; `compose.yml` for production, `compose.dev.yml` for local builds. Vercel recipe in `examples/vercel/` (community-supported). |
-| SDK build | `tsc -p tsconfig.build.json` → `packages/ai-relay/dist/`; ESM, peerDeps for `@modelcontextprotocol/sdk` and `openai` (optional) |
+| SDK build | `tsc -p tsconfig.build.json` → `packages/ai-relay/dist/`; ESM. peerDeps: `@modelcontextprotocol/sdk` (required); `openai` and `@anthropic-ai/sdk` are optional — install only the SDK for the provider(s) you use |
 | App build | `tsc -p app/tsconfig.json` → `app/dist/`; runtime image uses `pnpm deploy --prod /deploy` to produce a self-contained tree |
 
 ### Container release
@@ -274,8 +307,8 @@ project that consumes `ai-relay` from npm (see `examples/vercel/README.md`).
 | `AI_RELAY_AUTH_TOKEN` | ✅ | Sensitive | Bearer token sent by the MCP host. 32+ random bytes. |
 | `AI_RELAY_MODEL` | ✅ | Plain | Upstream model id forwarded on every `tools/call`. The caller-facing tool input does not accept `model`. |
 | `AI_RELAY_BASE_URL` | ❌ | Plain | Override the upstream base URL. Default: SDK built-in. Use to point at Azure OpenAI, a self-hosted vLLM/Ollama gateway, or a local mock. |
-| `AI_RELAY_TEMPERATURE` | ❌ | Plain | Float 0..2. Forwarded as `temperature` to every upstream call when set. |
-| `AI_RELAY_MAX_TOKENS` | ❌ | Plain | Positive integer. Forwarded as `max_tokens` to every upstream call. No server-side clamp is applied — set conservatively. |
+| `AI_RELAY_TEMPERATURE` | ❌ | Plain | Float. Range depends on provider: **0..2 for `openai`**, **0..1 for `anthropic`**. Forwarded as `temperature` to every upstream call when set. |
+| `AI_RELAY_MAX_TOKENS` | ❌ | Plain | Positive integer. Forwarded as `max_tokens` to every upstream call. No server-side clamp is applied — set conservatively. For `anthropic`: defaults to `1024` when omitted (Anthropic requires this field per call). |
 | `AI_RELAY_TOP_P` | ❌ | Plain | Float 0..1. Forwarded as `top_p` to every upstream call when set. |
 | `AI_RELAY_STOP` | ❌ | Plain | Single value or comma-separated list (`END` or `END,STOP`). Forwarded as `stop` to every upstream call. |
 | `AI_RELAY_REQUEST_TIMEOUT_MS` | ❌ | Plain | Integer. Default `60000`. Upstream call timeout. |

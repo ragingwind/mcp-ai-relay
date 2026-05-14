@@ -1,8 +1,19 @@
 # ai-relay
 
-> An MCP relay that exposes OpenAI Chat Completions (and any OpenAI-compatible upstream) as a Model Context Protocol tool.
+> An MCP relay that exposes OpenAI Chat Completions (and any OpenAI-compatible upstream) **or** Anthropic Messages as a Model Context Protocol tool.
 
 > 한국어: [README.ko.md](./README.ko.md)
+
+---
+
+## Providers
+
+| Provider | CLI / bin | SDK subpath | Notes |
+|---|---|---|---|
+| OpenAI Chat Completions | `ai-relay openai` / `ai-relay-cli openai chat-completions` | [`ai-relay/openai`](./packages/ai-relay/README.md) | Compatible with any OpenAI-shaped upstream: OpenAI, Azure, vLLM, Ollama, OpenRouter, AI Gateway |
+| Anthropic Messages | `ai-relay anthropic` / `ai-relay-cli anthropic messages` | [`ai-relay/anthropic`](./packages/ai-relay/README.md#anthropic-messages) | `max_tokens` defaults to 1024; `temperature` range 0..1 |
+
+> A deployed process MUST run a single provider at a time (ADR D8 in [`doc/ARCHITECTURE.md`](./doc/ARCHITECTURE.md)). Run two ai-relay processes side-by-side to expose both providers to one MCP host.
 
 ---
 
@@ -11,7 +22,11 @@
 **1. One-shot CLI** — run a model from the shell:
 
 ```bash
+# OpenAI
 AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions -m gpt-4o-mini "ping"
+
+# Anthropic
+AI_RELAY_API_KEY=sk-ant-... npx ai-relay-cli anthropic messages -m claude-sonnet-4-5 "ping"
 ```
 
 (`-m` configures the model the CLI uses for this invocation; it is NOT sent in the MCP call arguments.)
