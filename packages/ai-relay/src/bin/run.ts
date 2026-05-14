@@ -234,7 +234,8 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
   const result = await bundle.handler(inputObj);
 
   if (result.isError) {
-    verbose.log("openai-error", {
+    verbose.log("tool-error", {
+      provider: parsed.provider,
       code: result.structuredContent.code,
       retryAfter: result.structuredContent.retryAfter,
     });
