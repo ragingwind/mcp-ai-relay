@@ -10,6 +10,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { registerAnthropicMessages } from "../../src/anthropic/messages.js";
 import { makeOpenAIChatHandler, registerOpenAIChat } from "../../src/openai/chat.js";
 
 const mswServer = setupServer();
@@ -63,6 +64,25 @@ describe("registerOpenAIChat — multi-registration on one McpServer", () => {
         apiKey: "key-local",
         baseURL: "http://localhost:11434/v1",
         model: "llama3",
+      });
+    }).not.toThrow();
+  });
+
+  it("P2: registers OpenAI Chat + Anthropic Messages on the same server (cross-provider type contract)", () => {
+    // NOTE: This is a unit-level type-system check. Per D8 (doc/ARCHITECTURE.md
+    // §1), deployed processes MUST run a single provider at a time — this
+    // test does NOT condone multi-provider production deployments.
+    const server = new McpServer({ name: "cross-provider-test", version: "0.0.1" });
+    expect(() => {
+      registerOpenAIChat(server, {
+        name: "chat-completions",
+        apiKey: "key-openai",
+        model: VALID_MODEL,
+      });
+      registerAnthropicMessages(server, {
+        name: "messages",
+        apiKey: "key-anthropic",
+        model: "claude-sonnet-4-5",
       });
     }).not.toThrow();
   });

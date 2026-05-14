@@ -101,23 +101,30 @@ describe("pack contract — installed-tarball imports", () => {
       join(installDir, "package.json"),
       JSON.stringify({ name: "pack-import-check", private: true, type: "module" }),
     );
-    execFileSync("npm", ["install", "--no-audit", "--no-fund", tarball], {
-      cwd: installDir,
-      stdio: "pipe",
-    });
+    execFileSync(
+      "npm",
+      ["install", "--no-audit", "--no-fund", tarball, "openai@^6", "@anthropic-ai/sdk@^0.96.0"],
+      {
+        cwd: installDir,
+        stdio: "pipe",
+      },
+    );
 
     const script = `
       import * as root from "ai-relay";
       import * as env from "ai-relay/env";
       import * as auth from "ai-relay/auth";
       import * as openai from "ai-relay/openai";
+      import * as anthropic from "ai-relay/anthropic";
       const ok =
         typeof root.verifyBearer === "function" &&
         typeof root.loadConfig === "function" &&
         typeof env.loadConfig === "function" &&
         typeof auth.verifyBearer === "function" &&
         typeof openai.registerOpenAIChat === "function" &&
-        typeof openai.makeOpenAIChatHandler === "function";
+        typeof openai.makeOpenAIChatHandler === "function" &&
+        typeof anthropic.registerAnthropicMessages === "function" &&
+        typeof anthropic.makeAnthropicMessagesHandler === "function";
       console.log(ok ? "EXPORTS_OK" : "EXPORTS_MISSING");
     `;
     const out = execFileSync("node", ["--input-type=module", "-e", script], {
@@ -141,7 +148,16 @@ describe("pack contract — typecheck under bundler + nodenext", () => {
     // ai-relay install as extraneous and prune it.
     execFileSync(
       "npm",
-      ["install", "--no-audit", "--no-fund", "--no-save", tarball, "typescript@^6.0.3"],
+      [
+        "install",
+        "--no-audit",
+        "--no-fund",
+        "--no-save",
+        tarball,
+        "openai@^6",
+        "@anthropic-ai/sdk@^0.96.0",
+        "typescript@^6.0.3",
+      ],
       { cwd: tmp, stdio: "pipe" },
     );
 

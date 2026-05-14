@@ -169,11 +169,15 @@ beforeAll(async () => {
     join(scratchDir, "package.json"),
     JSON.stringify({ name: "bin-tarball-test", private: true, type: "module" }),
   );
-  execFileSync("npm", ["install", "--no-audit", "--no-fund", tarball], {
-    cwd: scratchDir,
-    stdio: "pipe",
-    env: packEnv,
-  });
+  execFileSync(
+    "npm",
+    ["install", "--no-audit", "--no-fund", tarball, "openai@^6", "@anthropic-ai/sdk@^0.96.0"],
+    {
+      cwd: scratchDir,
+      stdio: "pipe",
+      env: packEnv,
+    },
+  );
   mcpBinPath = join(scratchDir, "node_modules", ".bin", "ai-relay");
   cliBinPath = join(scratchDir, "node_modules", ".bin", "ai-relay-cli");
   if (!existsSync(mcpBinPath)) {
@@ -512,12 +516,12 @@ describe("ai-relay bin — installed tarball, MCP stdio mode (openai provider po
   it("C2: unknown provider → exit 2; no upstream call", async () => {
     mock.requests.length = 0;
     const r = await runMcpSession([], {
-      args: ["anthropic"],
+      args: ["gemini"],
       expectStartupFailure: true,
       env: { AI_RELAY_API_KEY: "test-k", AI_RELAY_BASE_URL: mock.baseURL },
     });
     expect(r.status).toBe(2);
-    expect(r.stderr).toContain("unknown provider: anthropic");
+    expect(r.stderr).toContain("unknown provider: gemini");
     expect(mock.requests).toHaveLength(0);
   });
 

@@ -119,6 +119,21 @@ describe("run — usage errors short-circuit", () => {
     expect(cap.stderr.value).toContain("unknown tool for provider openai: messages");
   });
 
+  it("D2c: anthropic + chat-completions cross-product → exit 2", async () => {
+    const cap = makeIO();
+    const code = await run(["anthropic", "chat-completions", "hi"], cap.io);
+    expect(code).toBe(2);
+    expect(cap.stderr.value).toContain("unknown tool for provider anthropic: chat-completions");
+  });
+
+  it("P5: anthropic provider resolves via lazy loader and is listed under known providers", async () => {
+    const cap = makeIO();
+    const code = await run(["anthropic", "unknown-tool", "hi"], cap.io);
+    expect(code).toBe(2);
+    expect(cap.stderr.value).toContain("unknown tool for provider anthropic");
+    expect(cap.stderr.value).toContain("messages");
+  });
+
   it("D3: -h prints usage on stdout, exit 0", async () => {
     const cap = makeIO();
     const code = await run(["-h"], cap.io);
