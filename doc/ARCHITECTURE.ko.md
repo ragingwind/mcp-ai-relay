@@ -132,6 +132,38 @@ OpenAI Chat Completions를 한 번 호출하고 누적된 텍스트를 반환합
 - `tool_choice` / `tools` 파라미터는 v1에서 미지원 — tool call은 전달되지 않습니다.
 - 응답에 function/tool call이 포함되면 텍스트로 직렬화하지 않습니다. 대신 `finish_reason: "tool_calls"`를 노출해 호스트 LLM이 후속 동작을 결정하도록 합니다.
 
+### `messages` (Anthropic provider)
+
+Anthropic Messages를 한 번 호출하고 누적된 어시스턴트 텍스트를 반환합니다. 호출자 측 입력/출력 스키마는 `chat-completions`와 동일합니다(D10 — 업스트림 충실 스키마 정책).
+
+**입력 스키마 (Zod, `.strict()`)** — `chat-completions`와 동일:
+
+| 필드 | 타입 | 필수 | 비고 |
+|---|---|---|---|
+| `messages` | `Array<{role: "system"|"user"|"assistant", content: string}>` | ✅ | 선두의 `system` 메시지는 Anthropic 최상위 `system` 필드로 추출(다수일 경우 `\n\n`으로 결합); 선두가 아닌 `system`은 `bad_request`로 거부 |
+
+**서버 측 구성 (`AnthropicMessagesConfig` / `AI_RELAY_*` env)**
+
+| 필드 | Env | 필수 | 비고 |
+|---|---|---|---|
+| `model` | `AI_RELAY_MODEL` | ✅ | 업스트림 Messages 엔드포인트로 그대로 전달 |
+| `temperature` | `AI_RELAY_TEMPERATURE` | ❌ | **0..1** (OpenAI는 0..2); 설정 시 전달 |
+| `max_tokens` | `AI_RELAY_MAX_TOKENS` | ❌ | 양의 정수. **생략 시 `1024`로 기본값 적용** — Anthropic은 매 호출마다 이 필드를 요구합니다 |
+| `top_p` | `AI_RELAY_TOP_P` | ❌ | 0..1; 설정 시 전달 |
+| `stop` | `AI_RELAY_STOP` | ❌ | 단일 문자열 또는 쉼표로 구분된 목록; 업스트림으로는 `stop_sequences: string[]`로 변환 |
+
+**출력 스키마** — `chat-completions`와 동일 (`structuredContent.model`, `usage`의 `prompt_tokens` + `completion_tokens` + `total_tokens`, `finish_reason`, `code`, `retryAfter`).
+
+#### Anthropic `stop_reason` → `finish_reason` 매핑
+
+| Anthropic `stop_reason` | 노출되는 `finish_reason` | 비고 |
+|---|---|---|
+| `end_turn` | `stop` | 정상 완료 |
+| `max_tokens` | `length` | 상한 도달 |
+| `stop_sequence` | `stop` | `stop_sequences` 중 하나와 매치 |
+| `tool_use` | `tool_calls` | OpenAI `tool_calls`와 동일(v1에서는 tool 전달하지 않음) |
+| `refusal` | `content_filter` | `isError: true` + `code: "content_policy"`도 함께 설정 |
+
 ---
 
 ## 5. 디렉터리 구조
@@ -215,14 +247,15 @@ mcp-ai-relay/                              # 저장소 루트 — pnpm 워크스
 | MCP handler | `mcp-handler@^1.1` |
 | MCP SDK | `@modelcontextprotocol/sdk@^1.26` |
 | Validation | `zod@^4` |
-| OpenAI SDK | `openai@^6` |
+| OpenAI SDK | `openai@^6` (optional peer dep) |
+| Anthropic SDK | `@anthropic-ai/sdk@^0.96.0` (optional peer dep) |
 | Runtime | Node.js `20.x` (alpine 컨테이너; 멀티 아키텍처 amd64+arm64) |
 | Language | TypeScript strict, NodeNext ESM, `verbatimModuleSyntax: true` |
 | Package manager | pnpm `^9` (`packageManager` 필드로 고정) |
 | Lint/Format | Biome `^2` |
 | Test | vitest + msw (HTTP 경계에서만 mock) |
 | Deployment | `ghcr.io/ragingwind/ai-relay` 멀티 아키텍처 이미지; production은 `compose.yml`, 로컬 빌드는 `compose.dev.yml`. Vercel 레시피는 `examples/vercel/`(커뮤니티 지원). |
-| SDK 빌드 | `tsc -p tsconfig.build.json` → `packages/ai-relay/dist/`; ESM, `@modelcontextprotocol/sdk` + `openai`(optional)는 peerDeps |
+| SDK 빌드 | `tsc -p tsconfig.build.json` → `packages/ai-relay/dist/`; ESM. peerDeps: `@modelcontextprotocol/sdk`(필수); `openai`와 `@anthropic-ai/sdk`는 optional — 실제 사용하는 provider의 SDK만 설치 |
 | App 빌드 | `tsc -p app/tsconfig.json` → `app/dist/`; 런타임 이미지는 `pnpm deploy --prod /deploy`로 자체 완결 트리 생성 |
 
 ### 컨테이너 릴리스
@@ -274,8 +307,8 @@ mcp-ai-relay/                              # 저장소 루트 — pnpm 워크스
 | `AI_RELAY_AUTH_TOKEN` | ✅ | Sensitive | MCP 호스트가 보내는 Bearer 토큰. 32바이트 이상 random. |
 | `AI_RELAY_MODEL` | ✅ | Plain | 매 `tools/call`마다 전달되는 업스트림 model id. 호출자 측 도구 입력은 이제 `model`을 받지 않습니다. |
 | `AI_RELAY_BASE_URL` | ❌ | Plain | 업스트림 base URL 오버라이드. 기본: SDK 내장. Azure OpenAI, 셀프 호스팅 vLLM/Ollama 게이트웨이, 로컬 mock을 가리킬 때 사용. |
-| `AI_RELAY_TEMPERATURE` | ❌ | Plain | 0..2 실수. 설정 시 매 업스트림 호출에 `temperature`로 전달. |
-| `AI_RELAY_MAX_TOKENS` | ❌ | Plain | 양의 정수. 매 업스트림 호출에 `max_tokens`로 그대로 전달. 서버 측 클램프 없음 — 보수적으로 설정. |
+| `AI_RELAY_TEMPERATURE` | ❌ | Plain | 실수. 범위는 provider에 따라 다름: **`openai`는 0..2**, **`anthropic`은 0..1**. 설정 시 매 업스트림 호출에 `temperature`로 전달. |
+| `AI_RELAY_MAX_TOKENS` | ❌ | Plain | 양의 정수. 매 업스트림 호출에 `max_tokens`로 그대로 전달. 서버 측 클램프 없음 — 보수적으로 설정. `anthropic`의 경우 생략 시 `1024`가 기본값으로 적용됩니다(Anthropic은 매 호출마다 이 필드를 요구). |
 | `AI_RELAY_TOP_P` | ❌ | Plain | 0..1 실수. 설정 시 매 업스트림 호출에 `top_p`로 전달. |
 | `AI_RELAY_STOP` | ❌ | Plain | 단일 값 또는 쉼표로 구분된 목록(`END` 또는 `END,STOP`). 매 업스트림 호출에 `stop`으로 전달. |
 | `AI_RELAY_REQUEST_TIMEOUT_MS` | ❌ | Plain | 정수. 기본 `60000`. 업스트림 호출 타임아웃. |

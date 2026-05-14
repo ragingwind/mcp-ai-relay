@@ -207,6 +207,24 @@ docker history ghcr.io/ragingwind/ai-relay:latest --no-trunc \
 아무것도 안 나와야 함 — 이미지 빌드는 실제 자격증명을 절대 읽지 않고,
 런타임 값은 `env_file` / `-e` 로만 주입됩니다.
 
+### 3.6 Anthropic provider (stdio bin 전용)
+
+위의 HTTP 컨테이너는 v1에서 OpenAI 전용입니다. Anthropic Messages
+provider를 사용하려면 provider-scoped env를 지정해 stdio bin을 직접
+실행하세요:
+
+```bash
+export AI_RELAY_API_KEY=sk-ant-...          # Anthropic API 키
+export AI_RELAY_MODEL=claude-sonnet-4-6     # Anthropic 모델 id (필수)
+export AI_RELAY_MAX_TOKENS=1024             # Anthropic은 매 호출마다 필수
+export AI_RELAY_TEMPERATURE=0.7             # 선택, 범위 0..1 (0..2 아님)
+ai-relay anthropic                          # stdio MCP 서버
+```
+
+`.mcp.json`을 통해 Claude Desktop / Claude Code에 다른 stdio 서버처럼
+연결하세요. v1에서 `app/`의 HTTP `/api/mcp` 라우트는 단일 provider
+(OpenAI)로 유지되며, multi-provider HTTP는 별도로 추적됩니다.
+
 ---
 
 ## 4. Vercel (커뮤니티 지원)
