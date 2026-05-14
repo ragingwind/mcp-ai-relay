@@ -4,14 +4,13 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import type { OpenAIChatConfig } from "../openai/index.js";
 import { dumpMessages, type VerboseLogger } from "./logger.js";
-import type { ProviderEntry } from "./registry.js";
+import type { AnyProviderConfig, ProviderEntry } from "./registry.js";
 
 export interface StartMcpServerOptions {
   provider: string;
   providerEntry: ProviderEntry;
-  config: OpenAIChatConfig;
+  config: AnyProviderConfig;
   version: string;
   logger?: VerboseLogger;
 }
@@ -19,7 +18,9 @@ export interface StartMcpServerOptions {
 export async function startMcpServer(opts: StartMcpServerOptions): Promise<void> {
   const server = new McpServer({ name: "ai-relay", version: opts.version });
   const logger = opts.logger;
-  const configWithLogger: OpenAIChatConfig = logger ? { ...opts.config, logger } : opts.config;
+  const configWithLogger: AnyProviderConfig = logger
+    ? ({ ...opts.config, logger } as AnyProviderConfig)
+    : opts.config;
   opts.providerEntry.registerOnServer(server, configWithLogger);
 
   const transport = new StdioServerTransport();

@@ -5,6 +5,7 @@
 import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
+import type { AnthropicProviderConfig, OpenAIProviderConfig, Provider } from "../config.js";
 import { loadConfig } from "../config.js";
 import { VERSION } from "../version.js";
 import { parseEnvFile } from "./env-file.js";
@@ -17,7 +18,7 @@ import {
 } from "./logger.js";
 import { startMcpServer } from "./mcp-server.js";
 import { type ParsedMcpInvocation, parseMcpArgv, UsageError } from "./parse.js";
-import { registry, resolveProvider } from "./registry.js";
+import { providerNames, resolveProvider } from "./registry.js";
 
 export { VERSION };
 
@@ -28,7 +29,7 @@ Intended to be spawned by an MCP host (Claude Desktop, Claude Code, Cursor, …)
 — do not run interactively.
 
 Providers:
-  ${Object.keys(registry).join(", ")}
+  ${providerNames.join(", ")}
 
 Required:
   -m, --model <id>        Upstream model id (or set AI_RELAY_MODEL)
@@ -63,7 +64,7 @@ For one-shot CLI invocation (no MCP server), use \`ai-relay-cli\`.
 const USAGE_NO_PROVIDER = `error: <provider> positional is required
 
 usage: ai-relay <provider> [flags]
-providers: ${Object.keys(registry).join(", ")}
+providers: ${providerNames.join(", ")}
 
 For one-shot CLI invocation, use \`ai-relay-cli\`.
 `;
@@ -112,10 +113,10 @@ export async function main(argv: readonly string[], io: AiRelayIO): Promise<numb
     return 2;
   }
 
-  const providerEntry = resolveProvider(parsed.provider);
+  const providerEntry = await resolveProvider(parsed.provider);
   if (providerEntry === undefined) {
     io.stderr.write(
-      `unknown provider: ${parsed.provider}\nknown providers: ${Object.keys(registry).join(", ")}\n`,
+      `unknown provider: ${parsed.provider}\nknown providers: ${providerNames.join(", ")}\n`,
     );
     return 2;
   }
@@ -140,7 +141,7 @@ export async function main(argv: readonly string[], io: AiRelayIO): Promise<numb
 
   const effectiveEnv = { ...io.env, ...envFileMap };
 
-  const args: Record<string, unknown> = { provider: "openai" };
+  const args: Record<string, unknown> = { provider: parsed.provider as Provider };
   if (parsed.flags["api-key"] !== undefined) args.apiKey = parsed.flags["api-key"];
   if (parsed.flags["base-url"] !== undefined) args.baseURL = parsed.flags["base-url"];
   if (parsed.flags.model !== undefined) args.model = parsed.flags.model;
@@ -150,16 +151,7 @@ export async function main(argv: readonly string[], io: AiRelayIO): Promise<numb
   if (parsed.flags.stop !== undefined) args.stop = parsed.flags.stop;
   if (parsed.flags.timeout !== undefined) args.requestTimeoutMs = parsed.flags.timeout;
 
-  let providerConfig: {
-    apiKey: string;
-    baseURL?: string | undefined;
-    model: string;
-    temperature?: number | undefined;
-    max_tokens?: number | undefined;
-    top_p?: number | undefined;
-    stop?: string | string[] | undefined;
-    requestTimeoutMs?: number | undefined;
-  };
+  let providerConfig: OpenAIProviderConfig | AnthropicProviderConfig;
   try {
     const cfg = loadConfig({ env: effectiveEnv, args });
     const first = cfg.providers[0];
