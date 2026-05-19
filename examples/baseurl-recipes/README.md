@@ -2,8 +2,9 @@
 
 `AI_RELAY_BASE_URL` lets you point ai-relay at any OpenAI-compatible Chat Completions
 upstream without code changes. This directory collects per-upstream configuration
-snippets that have been tested at least once with the MCP Inspector CLI workflow
-described in [`doc/QA-MCP-INSPECTOR.md`](../../doc/QA-MCP-INSPECTOR.md).
+snippets describing how to configure each upstream. All recipes are currently
+`untested — community contributions welcome`; see the Status column. To submit a
+verified recipe, follow the [Contributing](#contributing-a-verified-recipe) section below.
 
 The MCP tool shape is unchanged — every recipe still exposes a single
 `chat-completions` tool that accepts `{ messages }`. The upstream model and
@@ -19,7 +20,7 @@ is a config change, not a code change.
 | [DeepSeek](#deepseek) | `https://api.deepseek.com/v1` | API key | `deepseek-chat`, `deepseek-reasoner` | untested |
 | [Mistral](#mistral) | `https://api.mistral.ai/v1` | API key | `mistral-small-latest`, `mistral-large-latest` | untested |
 | [Vercel AI Gateway](#vercel-ai-gateway) | `https://gateway.ai.vercel.app/v1` | Gateway token | `openai:gpt-4o`, `anthropic:claude-3-5-sonnet-20241022` | untested |
-| [OpenRouter](#openrouter) | `https://openrouter.ai/api/v1` | API key | `openai/gpt-4o`, `anthropic/claude-3-5-sonnet`, `google/gemini-2.5-pro-preview` | untested |
+| [OpenRouter](#openrouter) | `https://openrouter.ai/api/v1` | API key | `openai/gpt-4o`, `anthropic/claude-3-5-sonnet`, `google/gemini-2.5-pro` | untested |
 | [Ollama (local)](#ollama-local) | `http://localhost:11434/v1` | none (dummy key) | `llama3.2`, `qwen2.5-coder:7b` | untested |
 | [vLLM (self-hosted)](#vllm-self-hosted) | `http://localhost:8000/v1` | optional (`EMPTY` for keyless) | served model id, e.g. `meta-llama/Llama-3-8B-Instruct` | untested |
 | [LM Studio (local)](#lm-studio-local) | `http://localhost:1234/v1` | none (dummy key) | loaded model id | untested |
@@ -54,12 +55,8 @@ Model examples: `grok-3`, `grok-2-1212`.
 Verify with the MCP Inspector CLI:
 
 ```bash
-# start dev server (from repo root)
-pnpm dev &
-
-# verify with MCP Inspector CLI
-AI_RELAY_API_KEY=xai-... AI_RELAY_BASE_URL=https://api.x.ai/v1 \
-  npx @modelcontextprotocol/inspector --cli \
+# MCP Inspector CLI — stdio transport
+npx @modelcontextprotocol/inspector --cli \
   npx ai-relay openai -m grok-3 \
   --base-url https://api.x.ai/v1 --api-key xai-... \
   --method tools/call --tool-name chat-completions \
@@ -97,12 +94,8 @@ Model examples: `deepseek-chat`, `deepseek-reasoner`.
 Verify with the MCP Inspector CLI:
 
 ```bash
-# start dev server (from repo root)
-pnpm dev &
-
-# verify with MCP Inspector CLI
-AI_RELAY_API_KEY=sk-... AI_RELAY_BASE_URL=https://api.deepseek.com/v1 \
-  npx @modelcontextprotocol/inspector --cli \
+# MCP Inspector CLI — stdio transport
+npx @modelcontextprotocol/inspector --cli \
   npx ai-relay openai -m deepseek-chat \
   --base-url https://api.deepseek.com/v1 --api-key sk-... \
   --method tools/call --tool-name chat-completions \
@@ -141,12 +134,8 @@ Model examples: `mistral-small-latest`, `mistral-large-latest`.
 Verify with the MCP Inspector CLI:
 
 ```bash
-# start dev server (from repo root)
-pnpm dev &
-
-# verify with MCP Inspector CLI
-AI_RELAY_API_KEY=... AI_RELAY_BASE_URL=https://api.mistral.ai/v1 \
-  npx @modelcontextprotocol/inspector --cli \
+# MCP Inspector CLI — stdio transport
+npx @modelcontextprotocol/inspector --cli \
   npx ai-relay openai -m mistral-small-latest \
   --base-url https://api.mistral.ai/v1 --api-key ... \
   --method tools/call --tool-name chat-completions \
@@ -187,12 +176,8 @@ Model examples: `openai:gpt-4o`, `anthropic:claude-3-5-sonnet-20241022`.
 Verify with the MCP Inspector CLI:
 
 ```bash
-# start dev server (from repo root)
-pnpm dev &
-
-# verify with MCP Inspector CLI
-AI_RELAY_API_KEY=vck_... AI_RELAY_BASE_URL=https://gateway.ai.vercel.app/v1 \
-  npx @modelcontextprotocol/inspector --cli \
+# MCP Inspector CLI — stdio transport
+npx @modelcontextprotocol/inspector --cli \
   npx ai-relay openai -m openai:gpt-4o \
   --base-url https://gateway.ai.vercel.app/v1 --api-key vck_... \
   --method tools/call --tool-name chat-completions \
@@ -222,7 +207,7 @@ AI_RELAY_MODEL=openai/gpt-4o
 # AI_RELAY_TOP_P=1.0
 ```
 
-Model examples: `openai/gpt-4o`, `anthropic/claude-3-5-sonnet`, `google/gemini-2.5-pro-preview`.
+Model examples: `openai/gpt-4o`, `anthropic/claude-3-5-sonnet`, `google/gemini-2.5-pro`.
 
 > OpenRouter recommends sending `HTTP-Referer` and `X-Title` headers for
 > attribution. ai-relay does not surface custom headers in v1; OpenRouter will
@@ -231,12 +216,8 @@ Model examples: `openai/gpt-4o`, `anthropic/claude-3-5-sonnet`, `google/gemini-2
 Verify with the MCP Inspector CLI:
 
 ```bash
-# start dev server (from repo root)
-pnpm dev &
-
-# verify with MCP Inspector CLI
-AI_RELAY_API_KEY=sk-or-... AI_RELAY_BASE_URL=https://openrouter.ai/api/v1 \
-  npx @modelcontextprotocol/inspector --cli \
+# MCP Inspector CLI — stdio transport
+npx @modelcontextprotocol/inspector --cli \
   npx ai-relay openai -m openai/gpt-4o \
   --base-url https://openrouter.ai/api/v1 --api-key sk-or-... \
   --method tools/call --tool-name chat-completions \
@@ -277,12 +258,8 @@ Model examples: `llama3.2`, `qwen2.5-coder:7b`.
 Verify with the MCP Inspector CLI:
 
 ```bash
-# start dev server (from repo root)
-pnpm dev &
-
-# verify with MCP Inspector CLI
-AI_RELAY_API_KEY=ollama AI_RELAY_BASE_URL=http://localhost:11434/v1 \
-  npx @modelcontextprotocol/inspector --cli \
+# MCP Inspector CLI — stdio transport
+npx @modelcontextprotocol/inspector --cli \
   npx ai-relay openai -m llama3.2 \
   --base-url http://localhost:11434/v1 --api-key ollama \
   --method tools/call --tool-name chat-completions \
@@ -324,12 +301,8 @@ Model examples: whatever model the vLLM process serves
 Verify with the MCP Inspector CLI:
 
 ```bash
-# start dev server (from repo root)
-pnpm dev &
-
-# verify with MCP Inspector CLI
-AI_RELAY_API_KEY=EMPTY AI_RELAY_BASE_URL=http://localhost:8000/v1 \
-  npx @modelcontextprotocol/inspector --cli \
+# MCP Inspector CLI — stdio transport
+npx @modelcontextprotocol/inspector --cli \
   npx ai-relay openai -m meta-llama/Llama-3-8B-Instruct \
   --base-url http://localhost:8000/v1 --api-key EMPTY \
   --method tools/call --tool-name chat-completions \
@@ -370,12 +343,8 @@ the id LM Studio expects; `GET /v1/models` also lists it).
 Verify with the MCP Inspector CLI:
 
 ```bash
-# start dev server (from repo root)
-pnpm dev &
-
-# verify with MCP Inspector CLI
-AI_RELAY_API_KEY=lm-studio AI_RELAY_BASE_URL=http://localhost:1234/v1 \
-  npx @modelcontextprotocol/inspector --cli \
+# MCP Inspector CLI — stdio transport
+npx @modelcontextprotocol/inspector --cli \
   npx ai-relay openai -m local-model \
   --base-url http://localhost:1234/v1 --api-key lm-studio \
   --method tools/call --tool-name chat-completions \
