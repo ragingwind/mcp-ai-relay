@@ -163,6 +163,7 @@ if ! docker run -d \
   --name="$CONTAINER_NAME" \
   -e AI_RELAY_API_KEY=smoke-key \
   -e AI_RELAY_AUTH_TOKEN="$SMOKE_BEARER" \
+  -e AI_RELAY_MODEL=gpt-4o-mini \
   -e AI_RELAY_BASE_URL="http://host.docker.internal:${mock_port}/v1" \
   --add-host=host.docker.internal:host-gateway \
   -p "${SMOKE_HOST_PORT}:8787" \
