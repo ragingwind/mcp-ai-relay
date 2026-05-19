@@ -11,12 +11,12 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 
-export type Provider = "openai";
-export type Capability = "chat";
+export type Provider = "openai" | "anthropic";
+export type Capability = "chat" | "messages";
 
 const stopSchema = z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]);
 
-const providerConfigSchema = z
+const openaiConfigSchema = z
   .object({
     id: z.string().min(1).optional(),
     provider: z.literal("openai"),
@@ -33,12 +33,36 @@ const providerConfigSchema = z
   })
   .strict();
 
+const anthropicConfigSchema = z
+  .object({
+    id: z.string().min(1).optional(),
+    provider: z.literal("anthropic"),
+    capability: z.literal("messages").default("messages"),
+    apiKey: z.string().min(1),
+    baseURL: z.string().url().optional(),
+    model: z.string().min(1),
+    temperature: z.number().min(0).max(1).optional(),
+    max_tokens: z.number().int().positive().optional(),
+    top_p: z.number().min(0).max(1).optional(),
+    stop: stopSchema.optional(),
+    requestTimeoutMs: z.number().int().positive().optional(),
+    description: z.string().optional(),
+  })
+  .strict();
+
+const providerConfigSchema = z.discriminatedUnion("provider", [
+  openaiConfigSchema,
+  anthropicConfigSchema,
+]);
+
 const relayConfigSchema = z
   .object({
     providers: z.array(providerConfigSchema).min(1),
   })
   .strict();
 
+export type OpenAIProviderConfig = z.infer<typeof openaiConfigSchema>;
+export type AnthropicProviderConfig = z.infer<typeof anthropicConfigSchema>;
 export type ProviderConfig = z.infer<typeof providerConfigSchema>;
 export type RelayConfig = z.infer<typeof relayConfigSchema>;
 
@@ -104,8 +128,10 @@ function parseStopList(value: string | undefined): string | string[] | undefined
   return parts;
 }
 
-function envOpenAIPartial(env: EnvSource): Partial<ProviderConfig> {
-  const out: Partial<ProviderConfig> = {};
+type EnvPartial = Partial<Record<string, unknown>>;
+
+function envCommonPartial(env: EnvSource): EnvPartial {
+  const out: EnvPartial = {};
   if (env.AI_RELAY_API_KEY) out.apiKey = env.AI_RELAY_API_KEY;
   if (env.AI_RELAY_BASE_URL && env.AI_RELAY_BASE_URL.trim().length > 0) {
     out.baseURL = env.AI_RELAY_BASE_URL;
@@ -113,8 +139,6 @@ function envOpenAIPartial(env: EnvSource): Partial<ProviderConfig> {
   if (env.AI_RELAY_MODEL && env.AI_RELAY_MODEL.length > 0) {
     out.model = env.AI_RELAY_MODEL;
   }
-  const temperature = parseFloatInRange(env.AI_RELAY_TEMPERATURE, 0, 2);
-  if (temperature !== undefined) out.temperature = temperature;
   const maxTokens = parsePositiveInt(env.AI_RELAY_MAX_TOKENS);
   if (maxTokens !== undefined) out.max_tokens = maxTokens;
   const topP = parseFloatInRange(env.AI_RELAY_TOP_P, 0, 1);
@@ -124,6 +148,29 @@ function envOpenAIPartial(env: EnvSource): Partial<ProviderConfig> {
   const timeoutMs = parsePositiveInt(env.AI_RELAY_REQUEST_TIMEOUT_MS);
   if (timeoutMs !== undefined) out.requestTimeoutMs = timeoutMs;
   return out;
+}
+
+function envOpenAIPartial(env: EnvSource): EnvPartial {
+  const out = envCommonPartial(env);
+  const temperature = parseFloatInRange(env.AI_RELAY_TEMPERATURE, 0, 2);
+  if (temperature !== undefined) out.temperature = temperature;
+  return out;
+}
+
+function envAnthropicPartial(env: EnvSource): EnvPartial {
+  const out = envCommonPartial(env);
+  const temperature = parseFloatInRange(env.AI_RELAY_TEMPERATURE, 0, 1);
+  if (temperature !== undefined) out.temperature = temperature;
+  return out;
+}
+
+const envPartialByProvider: Record<Provider, (env: EnvSource) => EnvPartial> = {
+  openai: envOpenAIPartial,
+  anthropic: envAnthropicPartial,
+};
+
+function defaultCapability(provider: Provider): Capability {
+  return provider === "anthropic" ? "messages" : "chat";
 }
 
 function materialiseId(p: ProviderConfig): ProviderConfig {
@@ -139,9 +186,9 @@ function withDefaults(p: ProviderConfig): ProviderConfig {
 }
 
 function buildFromArgsAndEnv(args: ArgsSource, env: EnvSource): RelayConfig {
-  const envPartial = envOpenAIPartial(env);
-  const provider = args.provider ?? "openai";
-  const capability = args.capability ?? "chat";
+  const provider: Provider = args.provider ?? "openai";
+  const envPartial = envPartialByProvider[provider](env);
+  const capability: Capability = args.capability ?? defaultCapability(provider);
   const merged: Record<string, unknown> = {
     provider,
     capability,
@@ -165,7 +212,7 @@ function buildFromArgsAndEnv(args: ArgsSource, env: EnvSource): RelayConfig {
 }
 
 function buildFromEnvOnly(env: EnvSource): RelayConfig {
-  const envPartial = envOpenAIPartial(env);
+  const envPartial = envPartialByProvider.openai(env);
   const merged = {
     provider: "openai" as const,
     capability: "chat" as const,
@@ -219,15 +266,15 @@ function buildFromFile(
   const parsed = relayConfigSchema.safeParse(json);
   if (!parsed.success) throw redactZodError(`Invalid config file ${file}`, parsed.error);
 
-  const envPartial = env ? envOpenAIPartial(env) : {};
   const filled = parsed.data.providers.map((p) => {
+    const envPartial = env ? envPartialByProvider[p.provider](env) : {};
     const withEnv: ProviderConfig = {
       ...p,
       apiKey: p.apiKey,
       ...(p.baseURL
         ? { baseURL: p.baseURL }
         : envPartial.baseURL
-          ? { baseURL: envPartial.baseURL }
+          ? { baseURL: envPartial.baseURL as string }
           : {}),
     };
     const merged = args ? applyArgsOverrides(withEnv, args) : withEnv;

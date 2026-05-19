@@ -210,6 +210,23 @@ docker history ghcr.io/ragingwind/ai-relay:latest --no-trunc \
 Should return nothing — the image build never reads real credentials, and
 runtime values are injected via `env_file` / `-e` only.
 
+### 3.6 Anthropic provider (stdio bin only)
+
+The HTTP container above is OpenAI-only in v1. To use the Anthropic Messages
+provider, launch the stdio bin directly with provider-scoped env:
+
+```bash
+export AI_RELAY_API_KEY=sk-ant-...          # Anthropic API key
+export AI_RELAY_MODEL=claude-sonnet-4-6     # Anthropic model id (required)
+export AI_RELAY_MAX_TOKENS=1024             # required by Anthropic per call
+export AI_RELAY_TEMPERATURE=0.7             # optional, range 0..1 (not 0..2)
+ai-relay anthropic                          # stdio MCP server
+```
+
+Wire it into Claude Desktop / Claude Code via `.mcp.json` like any other
+stdio server. The HTTP `/api/mcp` route in `app/` stays single-provider
+(OpenAI) for v1 — multi-provider HTTP is tracked separately.
+
 ---
 
 ## 4. Vercel (community-supported)

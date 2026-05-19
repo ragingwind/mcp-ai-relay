@@ -1,14 +1,21 @@
 # ai-relay
 
-Provider-agnostic MCP relay SDK. Embed OpenAI Chat Completions (and any OpenAI-compatible upstream — Azure, vLLM, Ollama, AI Gateway) as MCP tools.
+Provider-agnostic MCP relay SDK. Embed OpenAI Chat Completions (and any OpenAI-compatible upstream — Azure, vLLM, Ollama, AI Gateway) or Anthropic Messages as MCP tools.
 
 ## Install
 
 ```bash
+# OpenAI provider
 npm install ai-relay @modelcontextprotocol/sdk openai
+
+# Anthropic provider
+npm install ai-relay @modelcontextprotocol/sdk @anthropic-ai/sdk
+
+# Both providers (one process per provider; D8)
+npm install ai-relay @modelcontextprotocol/sdk openai @anthropic-ai/sdk
 ```
 
-`@modelcontextprotocol/sdk` and `openai` are peer dependencies — the consumer controls their versions. Requires **Node.js 20+** (or any runtime with `node:async_hooks` compatibility — Bun, Deno, Cloudflare Workers with `nodejs_compat`).
+`@modelcontextprotocol/sdk` is required. `openai` and `@anthropic-ai/sdk` are **optional** peer dependencies — install only the SDK for the provider(s) you use. Requires **Node.js 20+** (or any runtime with `node:async_hooks` compatibility — Bun, Deno, Cloudflare Workers with `nodejs_compat`).
 
 ---
 
@@ -17,7 +24,11 @@ npm install ai-relay @modelcontextprotocol/sdk openai
 **1. One-shot CLI** — `ai-relay-cli <provider> <tool> [flags] [input]`:
 
 ```bash
+# OpenAI
 AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions -m gpt-4o-mini "ping"
+
+# Anthropic
+AI_RELAY_API_KEY=sk-ant-... npx ai-relay-cli anthropic messages -m claude-sonnet-4-5 "ping"
 ```
 
 **2. stdio MCP server** — `ai-relay <provider>`, register in any MCP host:
@@ -25,16 +36,21 @@ AI_RELAY_API_KEY=sk-... npx ai-relay-cli openai chat-completions -m gpt-4o-mini 
 ```json
 {
   "mcpServers": {
-    "ai-relay": {
+    "ai-relay-openai": {
       "command": "npx",
       "args": ["-y", "ai-relay", "openai", "-m", "gpt-4o-mini"],
       "env": { "AI_RELAY_API_KEY": "sk-..." }
+    },
+    "ai-relay-anthropic": {
+      "command": "npx",
+      "args": ["-y", "ai-relay", "anthropic", "-m", "claude-sonnet-4-5"],
+      "env": { "AI_RELAY_API_KEY": "sk-ant-..." }
     }
   }
 }
 ```
 
-**3. SDK embed** — `registerOpenAIChat(server, config)`:
+**3. SDK embed** — `registerOpenAIChat(server, config)` or `registerAnthropicMessages(server, config)`:
 
 ```ts
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -47,6 +63,16 @@ registerOpenAIChat(server, {
   model: "gpt-4o-mini",
 });
 await server.connect(new StdioServerTransport());
+```
+
+```ts
+import { registerAnthropicMessages } from "ai-relay/anthropic";
+
+registerAnthropicMessages(server, {
+  apiKey: process.env.AI_RELAY_API_KEY!,
+  model: "claude-sonnet-4-5",
+  // max_tokens defaults to 1024 when omitted (Anthropic requires this field)
+});
 ```
 
 **4. Multi-upstream** — one server, multiple `registerOpenAIChat` calls with distinct `name` values (each call captures its own `model`):
@@ -274,13 +300,42 @@ createOpenAIClient(config): OpenAI;                                       // low
 }
 ```
 
+## Anthropic Messages
+
+The Anthropic provider mirrors the OpenAI provider shape: same caller schema (`{ messages }` only), same result shape (`content` + `structuredContent`), same registrar pattern. Differences are confined to upstream semantics:
+
+- **`max_tokens` is required upstream** — defaults to 1024 when the config omits it.
+- **`temperature` range is 0..1** (OpenAI accepts 0..2).
+- **`system` messages** at the start of the `messages` array are extracted into Anthropic's top-level `system` field; non-leading `system` messages are rejected with `bad_request` (Anthropic has no interleaved-system representation).
+- **`stop` → `stop_sequences`** — a single string is wrapped in an array; empty/whitespace entries are filtered.
+- **`stop_reason` → `finish_reason`** mapping: `end_turn` → `stop`, `max_tokens` → `length`, `stop_sequence` → `stop`, `tool_use` → `tool_calls`, `refusal` → `content_filter` (also sets `isError: true` and `code: "content_policy"`).
+
+### SDK embed
+
+```ts
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { registerAnthropicMessages } from "ai-relay/anthropic";
+
+const server = new McpServer({ name: "anthropic-relay", version: "0.1.0" });
+registerAnthropicMessages(server, {
+  apiKey: process.env.AI_RELAY_API_KEY!,
+  model: "claude-sonnet-4-5",
+  max_tokens: 4096,
+});
+await server.connect(new StdioServerTransport());
+```
+
+`@anthropic-ai/sdk` is an **optional** peer dependency — install it explicitly when using this provider: `npm install @anthropic-ai/sdk`.
+
 ## Compatibility
 
 | Dependency | Version |
 |---|---|
 | Node.js | 20+ |
 | `@modelcontextprotocol/sdk` | `^1.26` |
-| `openai` | `^6` |
+| `openai` (optional) | `^6` |
+| `@anthropic-ai/sdk` (optional) | `^0.96.0` |
 | `mcp-handler` (optional) | `^1.1` |
 
 ESM-only (`"type": "module"`). Only `node:` import is `node:async_hooks`.

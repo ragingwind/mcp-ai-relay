@@ -119,6 +119,21 @@ describe("run — usage errors short-circuit", () => {
     expect(cap.stderr.value).toContain("unknown tool for provider openai: messages");
   });
 
+  it("D2c: anthropic + chat-completions cross-product → exit 2", async () => {
+    const cap = makeIO();
+    const code = await run(["anthropic", "chat-completions", "hi"], cap.io);
+    expect(code).toBe(2);
+    expect(cap.stderr.value).toContain("unknown tool for provider anthropic: chat-completions");
+  });
+
+  it("P5: anthropic provider resolves via lazy loader and is listed under known providers", async () => {
+    const cap = makeIO();
+    const code = await run(["anthropic", "unknown-tool", "hi"], cap.io);
+    expect(code).toBe(2);
+    expect(cap.stderr.value).toContain("unknown tool for provider anthropic");
+    expect(cap.stderr.value).toContain("messages");
+  });
+
   it("D3: -h prints usage on stdout, exit 0", async () => {
     const cap = makeIO();
     const code = await run(["-h"], cap.io);
@@ -623,7 +638,7 @@ describe("run — verbose stderr", () => {
     expect(cap.stderr.value).toContain('"role"');
   });
 
-  it("D4: upstream error path emits openai-error stage", async () => {
+  it("D4: upstream error path emits tool-error stage with provider field", async () => {
     server.use(
       http.post(ENDPOINT, () =>
         HttpResponse.json({ error: { message: "no auth" } }, { status: 401 }),
@@ -632,7 +647,27 @@ describe("run — verbose stderr", () => {
     const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
     const code = await run(["openai", "chat-completions", "-v", "-m", "gpt-4o-mini", "hi"], cap.io);
     expect(code).toBe(1);
-    expect(cap.stderr.value).toContain("] openai-error:");
+    expect(cap.stderr.value).toContain("] tool-error:");
+    expect(cap.stderr.value).toContain('"provider": "openai"');
+  });
+
+  it("D4b: anthropic upstream error emits tool-error stage with provider=anthropic", async () => {
+    server.use(
+      http.post("https://api.anthropic.com/v1/messages", () =>
+        HttpResponse.json(
+          { error: { type: "authentication_error", message: "no auth" } },
+          { status: 401 },
+        ),
+      ),
+    );
+    const cap = makeIO({ env: { AI_RELAY_API_KEY: "k" } });
+    const code = await run(
+      ["anthropic", "messages", "-v", "-m", "claude-sonnet-4-5", "hi"],
+      cap.io,
+    );
+    expect(code).toBe(1);
+    expect(cap.stderr.value).toContain("] tool-error:");
+    expect(cap.stderr.value).toContain('"provider": "anthropic"');
   });
 });
 

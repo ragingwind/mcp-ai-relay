@@ -6,6 +6,50 @@ the project adheres to [Semantic Versioning](https://semver.org/) once
 v1.0 ships. Pre-v1.0 minor bumps may include breaking changes — read
 this file before upgrading.
 
+## [0.11.0] — 2026-05-14
+
+### Added
+
+- **Anthropic Messages provider** under the new `./anthropic` subpath
+  (`ai-relay/anthropic`). Exposes `registerAnthropicMessages`,
+  `registerAnthropicProvider`, `anthropicMessagesTool`,
+  `makeAnthropicMessagesHandler`, `mapAnthropicError`, and the matching
+  types. The caller-facing input/output schemas are identical to the
+  OpenAI Chat Completions provider (`{ messages }` only, same result
+  shape) — internal differences (leading `system` extraction, `stop` →
+  `stop_sequences` translation, `stop_reason` → `finish_reason` mapping,
+  `max_tokens` default of 1024) are confined to the registrar.
+- `ai-relay anthropic` and `ai-relay-cli anthropic messages` bin
+  invocations. The MCP tool name defaults to `messages`. Provider names
+  are listed in `--help` output and the unknown-provider error message.
+- Default `max_tokens: 1024` is applied at handler-build time when the
+  Anthropic config omits it (Anthropic requires `max_tokens` on every
+  call). The default is logged as `anthropic-max-tokens-default` under
+  `--verbose`.
+
+### Changed
+
+- `peerDependencies` now declares both `openai` (`^6`) and
+  `@anthropic-ai/sdk` (`^0.96.0`) as **optional** via
+  `peerDependenciesMeta`. Existing OpenAI consumers see no install-time
+  change; Anthropic consumers must install `@anthropic-ai/sdk` themselves.
+
+### Refactor (internal — public API stable)
+
+- `config.ts` — `providerConfigSchema` is now a `discriminatedUnion` over
+  `provider`. The Anthropic branch enforces `temperature` range 0..1
+  (vs OpenAI's 0..2) and `capability: "messages"`. `materialiseId` now
+  produces `openai_chat` / `anthropic_messages` ids accordingly.
+- `bin/registry.ts` — provider entries are loaded lazily via
+  `import("../<provider>/index.js")`. `resolveProvider` and
+  `resolveProviderTool` return promises. The eager `registry` const is
+  replaced by a `providerNames: readonly ProviderName[]` export used for
+  usage strings.
+- `bin/run.ts` and `bin/ai-relay.ts` — the hardcoded
+  `args.provider = "openai"` is replaced with the resolved
+  `parsed.provider`, fixing a latent bug where a non-default provider
+  selected on the CLI would still be passed as `openai` to `loadConfig`.
+
 ## [0.10.0] — 2026-05-13
 
 ### Changed (breaking)

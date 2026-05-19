@@ -134,6 +134,7 @@ async function main() {
     env: {
       ...process.env,
       AI_RELAY_API_KEY: "test",
+      AI_RELAY_MODEL: "gpt-4o-mini",
       AI_RELAY_BASE_URL: baseURL,
     },
     cwd: exampleDir,

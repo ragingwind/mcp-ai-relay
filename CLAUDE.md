@@ -44,10 +44,13 @@ lint:     pnpm lint          # biome check .
 test:     pnpm test          # vitest run
 test:unit: pnpm test:unit    # vitest run packages/ai-relay/tests/unit
 test:integration: pnpm test:integration  # vitest run --project integration
+test:runtime: pnpm test:runtime  # pack tarball + run smoke fixtures (Node/Bun/CJS). Catches "consumer install without peer SDK" failures that vitest workspace-resolution masks.
 dev:      pnpm dev           # Hono dev server (port 8787)
 verify:   pnpm verify        # smoke against a running dev server
 inspect:  pnpm inspect       # ad-hoc tools/call via MCP Inspector CLI (see doc/QA-MCP-INSPECTOR.md)
 ```
+
+> **`test:runtime` rationale**: workspace-mode `pnpm test` resolves peer SDKs (`openai`, `@anthropic-ai/sdk`) via pnpm's symlinked `node_modules/.pnpm` tree, regardless of whether they are declared as required vs optional peers. The `runtime-matrix` smoke fixtures simulate a real `npm install <tarball>` install — only declared `dependencies` are present. Provider-SDK packaging regressions (missing peer dep, broken subpath import) surface here, not in `pnpm test`. Run before opening a PR that touches `peerDependencies` or `peerDependenciesMeta`.
 
 ### Evidence policy
 - `evidence-mode: none` — this project has no UI (API/MCP server only). Browser screenshot/video evidence gates auto-pass.

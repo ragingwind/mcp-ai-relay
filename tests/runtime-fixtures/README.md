@@ -14,6 +14,22 @@ script.
 | `typecheck-bundler/` | Publish-contract test (`packages/ai-relay/tests/integration/pack-contract.test.ts`) | `ai-relay` types resolve under `moduleResolution: "bundler"` for every documented subpath. |
 | `typecheck-nodenext/` | Publish-contract test | `ai-relay` types resolve under `moduleResolution: "nodenext"` for every documented subpath. |
 
+## Provider SDK dependencies
+
+`smoke-node/` and `smoke-bun/` simulate an **OpenAI consumer**: they declare
+`openai` in their `package.json` `dependencies` so `npm install <tarball>`
+pulls in the SDK alongside `ai-relay` exactly as a real OpenAI consumer
+would. Without this, the optional `peerDependenciesMeta.openai` entry in
+`ai-relay/package.json` leaves the consumer with `ai-relay/dist/openai/chat.js`
+unable to resolve `openai` → `ERR_MODULE_NOT_FOUND`.
+
+When adding a new provider fixture (e.g., `smoke-node-anthropic/`), declare
+the corresponding peer SDK explicitly in its `package.json` so the fixture
+maps to a single consumer shape.
+
+`cjs-require/` only `require()`s the root `ai-relay` entry (not the
+provider subpaths) so it does not need any provider SDK declared.
+
 ## smoke duplication
 
 `smoke-node/smoke.mjs` and `smoke-bun/smoke.mjs` are byte-for-byte

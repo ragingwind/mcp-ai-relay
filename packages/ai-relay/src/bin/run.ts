@@ -3,8 +3,8 @@
 
 import { readFile } from "node:fs/promises";
 import type { Readable } from "node:stream";
+import type { AnthropicProviderConfig, OpenAIProviderConfig, Provider } from "../config.js";
 import { loadConfig } from "../config.js";
-import type { OpenAIChatConfig, OpenAIChatHandlerBundle } from "../openai/index.js";
 import { VERSION } from "../version.js";
 import { parseEnvFile } from "./env-file.js";
 import {
@@ -14,9 +14,16 @@ import {
   redactArgv,
   redactSecret,
   snapshotRelayEnv,
+  type VerboseLogger,
 } from "./logger.js";
 import { type ParsedInvocation, parseArgv, UsageError } from "./parse.js";
-import { type AnyTool, registry, resolveProvider, resolveProviderTool } from "./registry.js";
+import {
+  type AnyProviderConfig,
+  type AnyTool,
+  providerNames,
+  resolveProvider,
+  resolveProviderTool,
+} from "./registry.js";
 
 export { VERSION };
 
@@ -26,7 +33,7 @@ Positionals:
   <provider>              Upstream provider (e.g. openai)
   <tool>                  Tool name within the provider (e.g. chat-completions)
 
-Providers: ${Object.keys(registry).join(", ")}
+Providers: ${providerNames.join(", ")}
 
 Inputs (exactly one of):
   positional <input>      JSON object {"messages":[...]} or plain text
@@ -104,14 +111,14 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
   });
   verbose.log("env-snapshot", snapshotRelayEnv(io.env));
 
-  const providerEntry = resolveProvider(parsed.provider);
+  const providerEntry = await resolveProvider(parsed.provider);
   if (!providerEntry) {
     io.stderr.write(
-      `unknown provider: ${parsed.provider}\nknown providers: ${Object.keys(registry).join(", ")}\n`,
+      `unknown provider: ${parsed.provider}\nknown providers: ${providerNames.join(", ")}\n`,
     );
     return 2;
   }
-  const tool = resolveProviderTool(parsed.provider, parsed.tool);
+  const tool = await resolveProviderTool(parsed.provider, parsed.tool);
   if (!tool) {
     io.stderr.write(
       `unknown tool for provider ${parsed.provider}: ${parsed.tool}\nknown tools: ${Object.keys(providerEntry.tools).join(", ")}\n`,
@@ -179,7 +186,7 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
 
   const effectiveEnv = { ...io.env, ...envFileMap };
 
-  const args: Record<string, unknown> = { provider: "openai" };
+  const args: Record<string, unknown> = { provider: parsed.provider as Provider };
   if (parsed.flags["api-key"] !== undefined) args.apiKey = parsed.flags["api-key"];
   if (parsed.flags["base-url"] !== undefined) args.baseURL = parsed.flags["base-url"];
   if (parsed.flags.model !== undefined) args.model = parsed.flags.model;
@@ -189,16 +196,7 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
   if (parsed.flags.stop !== undefined) args.stop = parsed.flags.stop;
   if (parsed.flags.timeout !== undefined) args.requestTimeoutMs = parsed.flags.timeout;
 
-  let providerConfig: {
-    apiKey: string;
-    baseURL?: string | undefined;
-    model: string;
-    temperature?: number | undefined;
-    max_tokens?: number | undefined;
-    top_p?: number | undefined;
-    stop?: string | string[] | undefined;
-    requestTimeoutMs?: number | undefined;
-  };
+  let providerConfig: OpenAIProviderConfig | AnthropicProviderConfig;
   try {
     const cfg = loadConfig({ env: effectiveEnv, args });
     const first = cfg.providers[0];
@@ -220,28 +218,24 @@ export async function run(argv: readonly string[], io: RunIO): Promise<number> {
     requestTimeoutMs: providerConfig.requestTimeoutMs ?? "(default)",
   });
 
-  const toolConfig: OpenAIChatConfig = {
-    apiKey: providerConfig.apiKey,
-    ...(providerConfig.baseURL !== undefined ? { baseURL: providerConfig.baseURL } : {}),
-    model: providerConfig.model,
-    ...(providerConfig.temperature !== undefined
-      ? { temperature: providerConfig.temperature }
-      : {}),
-    ...(providerConfig.max_tokens !== undefined ? { max_tokens: providerConfig.max_tokens } : {}),
-    ...(providerConfig.top_p !== undefined ? { top_p: providerConfig.top_p } : {}),
-    ...(providerConfig.stop !== undefined ? { stop: providerConfig.stop } : {}),
-    ...(providerConfig.requestTimeoutMs !== undefined
-      ? { requestTimeoutMs: providerConfig.requestTimeoutMs }
-      : {}),
-    ...(verbose.enabled ? { logger: verbose } : {}),
-  };
+  const toolConfig = buildToolConfig(parsed.provider as Provider, providerConfig, verbose);
 
-  const bundle: OpenAIChatHandlerBundle = tool.makeHandler(toolConfig);
+  const bundle = tool.makeHandler(toolConfig) as {
+    handler: (
+      rawInput: unknown,
+      extra?: { signal?: AbortSignal },
+    ) => Promise<{
+      content: Array<{ type: "text"; text: string }>;
+      structuredContent: { code?: string; retryAfter?: number };
+      isError: boolean;
+    }>;
+  };
 
   const result = await bundle.handler(inputObj);
 
   if (result.isError) {
-    verbose.log("openai-error", {
+    verbose.log("tool-error", {
+      provider: parsed.provider,
       code: result.structuredContent.code,
       retryAfter: result.structuredContent.retryAfter,
     });
@@ -298,6 +292,25 @@ function coerceInput(
     throw new UsageError(`tool ${tool.name} does not accept plain text input; pass JSON`);
   }
   return tool.desugar(raw, opts);
+}
+
+function buildToolConfig(
+  _provider: Provider,
+  cfg: OpenAIProviderConfig | AnthropicProviderConfig,
+  verbose: VerboseLogger,
+): AnyProviderConfig {
+  const common = {
+    apiKey: cfg.apiKey,
+    ...(cfg.baseURL !== undefined ? { baseURL: cfg.baseURL } : {}),
+    model: cfg.model,
+    ...(cfg.temperature !== undefined ? { temperature: cfg.temperature } : {}),
+    ...(cfg.max_tokens !== undefined ? { max_tokens: cfg.max_tokens } : {}),
+    ...(cfg.top_p !== undefined ? { top_p: cfg.top_p } : {}),
+    ...(cfg.stop !== undefined ? { stop: cfg.stop } : {}),
+    ...(cfg.requestTimeoutMs !== undefined ? { requestTimeoutMs: cfg.requestTimeoutMs } : {}),
+    ...(verbose.enabled ? { logger: verbose } : {}),
+  };
+  return common as AnyProviderConfig;
 }
 
 type StdinResult = { kind: "tty" } | { kind: "text"; value: string } | { kind: "empty-pipe" };

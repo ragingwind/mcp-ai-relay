@@ -85,9 +85,9 @@ describe("ai-relay — usage / registry errors", () => {
 
   it("D2: unknown provider → exit 2 + 'unknown provider' on stderr", async () => {
     const cap = makeIO({ AI_RELAY_API_KEY: "k" });
-    const code = await main(["anthropic"], cap.io);
+    const code = await main(["gemini"], cap.io);
     expect(code).toBe(2);
-    expect(cap.stderr.value).toContain("unknown provider: anthropic");
+    expect(cap.stderr.value).toContain("unknown provider: gemini");
     expect(cap.stderr.value).toContain("openai");
   });
 

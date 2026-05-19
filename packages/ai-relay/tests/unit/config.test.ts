@@ -316,6 +316,63 @@ describe("loadConfig — error paths", () => {
   });
 });
 
+describe("loadConfig — anthropic provider", () => {
+  it("P1: args provider=anthropic resolves to capability=messages with default id", () => {
+    const cfg = loadConfig({
+      args: {
+        provider: "anthropic",
+        apiKey: "k",
+        model: "claude-sonnet-4-5",
+        max_tokens: 1024,
+      },
+    });
+    const p = cfg.providers[0];
+    if (!p) throw new Error("provider missing");
+    expect(p.provider).toBe("anthropic");
+    expect(p.capability).toBe("messages");
+    expect(p.model).toBe("claude-sonnet-4-5");
+    expect(p.max_tokens).toBe(1024);
+    expect(p.id).toBe("anthropic_messages");
+  });
+
+  it("P2: env-resolved AI_RELAY_TEMPERATURE=0.5 accepted for anthropic", () => {
+    const cfg = loadConfig({
+      env: {
+        AI_RELAY_API_KEY: "k",
+        AI_RELAY_MODEL: "claude-sonnet-4-5",
+        AI_RELAY_TEMPERATURE: "0.5",
+      },
+      args: { provider: "anthropic" },
+    });
+    expect(cfg.providers[0]?.temperature).toBe(0.5);
+  });
+
+  it("D1: AI_RELAY_TEMPERATURE=1.5 rejected for anthropic (range 0..1)", () => {
+    const err = expectThrow(() =>
+      loadConfig({
+        env: {
+          AI_RELAY_API_KEY: "k",
+          AI_RELAY_MODEL: "claude-sonnet-4-5",
+          AI_RELAY_TEMPERATURE: "1.5",
+        },
+        args: { provider: "anthropic" },
+      }),
+    );
+    expect(err.message).toContain("range");
+  });
+
+  it("N1: AI_RELAY_TEMPERATURE=1.5 accepted for openai (range 0..2 — regression check)", () => {
+    const cfg = loadConfig({
+      env: {
+        AI_RELAY_API_KEY: "k",
+        AI_RELAY_MODEL: "gpt-4o-mini",
+        AI_RELAY_TEMPERATURE: "1.5",
+      },
+    });
+    expect(cfg.providers[0]?.temperature).toBe(1.5);
+  });
+});
+
 describe("loadConfig — secret redaction", () => {
   it("D1: apiKey value never appears in error message", () => {
     const sentinel = "leak-marker-apikey-1234567890";
